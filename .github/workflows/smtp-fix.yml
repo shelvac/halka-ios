@@ -1,0 +1,95 @@
+# Supabase → Resend SMTP bağlantısını onarır ve uçtan uca test eder.
+# Resend'in kendisi çalışıyor (doğrudan gönderim "delivered"); sorun Supabase'in
+# SMTP bağlantısında. En sık sebep port: 465 (implicit TLS) yerine 587 (STARTTLS).
+name: SMTP Onar + Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      port:
+        description: "SMTP portu"
+        required: true
+        default: "587"
+      to:
+        description: "Sıfırlama isteği gönderilecek adres"
+        required: true
+        default: "simgehelvaci@gmail.com"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    env:
+      API: https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph
+    steps:
+      - name: Onar ve test et
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          RESEND: ${{ secrets.RESEND_API_KEY }}
+          PORT: ${{ inputs.port }}
+          TO: ${{ inputs.to }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set +e
+          echo "## SMTP onarım · port \`$PORT\`" > r.md
+          echo "" >> r.md
+
+          # 1) Önceki auth logları (SMTP hatası var mı?)
+          echo "### 1) Değişiklik öncesi auth logları" >> r.md
+          SQL='select cast(timestamp as string) as ts, event_message from auth_logs order by timestamp desc limit 15'
+          curl -s -G -H "Authorization: Bearer $TOKEN" \
+            --data-urlencode "sql=$SQL" \
+            "$API/analytics/endpoints/logs.all" -o before.json
+          echo '```json' >> r.md
+          head -c 1800 before.json >> r.md
+          echo "" >> r.md
+          echo '```' >> r.md
+
+          # 2) SMTP ayarlarını yeniden yaz
+          echo "" >> r.md
+          echo "### 2) SMTP ayarları yeniden yazıldı" >> r.md
+          BODY=$(jq -n --arg pass "$RESEND" --arg port "$PORT" '{
+            smtp_admin_email: "onboarding@resend.dev",
+            smtp_host: "smtp.resend.com",
+            smtp_port: $port,
+            smtp_user: "resend",
+            smtp_pass: $pass,
+            smtp_sender_name: "halka",
+            smtp_max_frequency: 1
+          }')
+          CODE=$(curl -s -o cfg.json -w "%{http_code}" -X PATCH \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            "$API/config/auth" -d "$BODY")
+          echo "- PATCH HTTP \`$CODE\`" >> r.md
+          curl -s -H "Authorization: Bearer $TOKEN" "$API/config/auth" -o now.json
+          jq -r 'to_entries[] | select(.key | test("^smtp_")) | "- `\(.key)` = `\(.value)`"' now.json >> r.md
+
+          # 3) Gerçek şifre sıfırlama isteği
+          echo "" >> r.md
+          echo "### 3) Gerçek sıfırlama isteği" >> r.md
+          curl -s -H "Authorization: Bearer $TOKEN" "$API/api-keys?reveal=true" -o keys.json
+          ANON=$(jq -r '[.[] | select(.name == "anon")][0].api_key' keys.json)
+          CODE=$(curl -s -o rec.json -w "%{http_code}" -X POST \
+            "https://urrjkubdngoszkttpeph.supabase.co/auth/v1/recover?redirect_to=halka://reset-password" \
+            -H "apikey: $ANON" -H "Content-Type: application/json" \
+            -d "{\"email\":\"$TO\"}")
+          echo "- HTTP \`$CODE\` → \`$(head -c 200 rec.json | tr -d '\n')\`" >> r.md
+
+          # 4) 40 sn sonra loglara tekrar bak
+          echo "" >> r.md
+          echo "### 4) İstek sonrası auth logları" >> r.md
+          sleep 40
+          curl -s -G -H "Authorization: Bearer $TOKEN" \
+            --data-urlencode "sql=$SQL" \
+            "$API/analytics/endpoints/logs.all" -o after.json
+          echo '```json' >> r.md
+          head -c 2500 after.json >> r.md
+          echo "" >> r.md
+          echo '```' >> r.md
+
+          cat r.md
+          gh issue comment 30 --repo "$REPO" --body-file r.md
