@@ -1,0 +1,92 @@
+# Tek seferlik Supabase kurulumu (US-001/US-002 tamamlayıcısı).
+# Manuel tetiklenir; SUPABASE_ACCESS_TOKEN repo secret'ını kullanır:
+#   1. 0001_init.sql migration'ını çalıştırır (14 tablo + RLS)
+#   2. Storage bucket'larını oluşturur
+#   3. "Confirm email"i kapatır (dev kolaylığı — lansmandan önce açılacak)
+#   4. anon public anahtarını SupabaseService.swift'e yazıp commit'ler
+name: Supabase Setup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  REF: urrjkubdngoszkttpeph
+  API: https://api.supabase.com/v1
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Migration (0001_init.sql)
+        run: |
+          BODY=$(jq -Rs '{query: .}' supabase/migrations/0001_init.sql)
+          CODE=$(curl -s -o /tmp/out.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "$API/projects/$REF/database/query" -d "$BODY")
+          echo "HTTP $CODE"; cat /tmp/out.json | head -c 500
+          if [ "$CODE" != "200" ] && [ "$CODE" != "201" ]; then
+            if grep -q "already exists" /tmp/out.json; then
+              echo "::warning::Şema (kısmen) zaten uygulanmış — devam ediliyor"
+            else
+              exit 1
+            fi
+          fi
+
+      - name: Storage bucket'ları
+        run: |
+          BODY=$(jq -n '{query: "insert into storage.buckets (id, name, public) values ('"'"'meal-photos'"'"','"'"'meal-photos'"'"',false),('"'"'blood-pdfs'"'"','"'"'blood-pdfs'"'"',false),('"'"'avatars'"'"','"'"'avatars'"'"',true) on conflict (id) do nothing;"}')
+          CODE=$(curl -s -o /tmp/out.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "$API/projects/$REF/database/query" -d "$BODY")
+          echo "HTTP $CODE"; cat /tmp/out.json | head -c 300
+          [ "$CODE" = "200" ] || [ "$CODE" = "201" ]
+
+      - name: Confirm email'i kapat (dev)
+        run: |
+          CODE=$(curl -s -o /tmp/out.json -w "%{http_code}" -X PATCH \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "$API/projects/$REF/config/auth" -d '{"mailer_autoconfirm": true}')
+          echo "HTTP $CODE"
+          [ "$CODE" = "200" ]
+
+      - name: anon key'i koda yaz
+        run: |
+          CODE=$(curl -s -o /tmp/keys.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ACCESS_TOKEN }}" \
+            "$API/projects/$REF/api-keys?reveal=true")
+          echo "HTTP $CODE"
+          [ "$CODE" = "200" ]
+          ANON=$(jq -r '[.[] | select(.name == "anon")][0].api_key' /tmp/keys.json)
+          if [ -z "$ANON" ] || [ "$ANON" = "null" ]; then
+            echo "anon key bulunamadı"; jq '[.[].name]' /tmp/keys.json; exit 1
+          fi
+          python3 - "$ANON" <<'PY'
+          import sys
+          path = "Halka/Services/SupabaseService.swift"
+          src = open(path).read()
+          key = sys.argv[1]
+          if f'anonKey = "{key}"' in src:
+              print("anon key zaten yazılı")
+          else:
+              needle = 'static let anonKey = ""'
+              assert needle in src, "anonKey satırı bulunamadı"
+              open(path, "w").write(src.replace(needle, f'static let anonKey = "{key}"'))
+              print("anon key yazıldı")
+          PY
+
+      - name: Commit + push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Halka/Services/SupabaseService.swift
+          git diff --cached --quiet && echo "değişiklik yok" && exit 0
+          git commit -m "Supabase kurulumu: anon key eklendi (otomatik — supabase-setup workflow)"
+          git push
