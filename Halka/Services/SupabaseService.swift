@@ -10,7 +10,7 @@ enum SupabaseConfig {
     static let url = "https://urrjkubdngoszkttpeph.supabase.co"
     /// Dashboard → Project Settings → API → "anon public" anahtarını buraya yapıştır.
     /// Boş bırakılırsa uygulama demo modunda çalışır (giriş düğmeleri eski davranış).
-    static let anonKey = ""
+    static let anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVycmprdWJkbmdvc3prdHRwZXBoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwMDA2MTcsImV4cCI6MjEwMTU3NjYxN30.Iy-48jUSh4ku-9ZRAPx6T0vDtINY3SKeunJRRA9qyd8"
 }
 
 /// Supabase istemcisi + auth ve profil operasyonları (US-002, US-010…US-016).
