@@ -22,7 +22,7 @@ struct ProfileView: View {
             // Identity card
             VStack(spacing: 0) {
                 MeAvatar(size: 76)
-                Text("Simge Helvacı")
+                Text(model.userFullName)
                     .font(.h(20))
                     .foregroundStyle(Color.ink)
                     .kerning(-0.4)

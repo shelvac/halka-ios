@@ -25,6 +25,8 @@ struct RootView: View {
                 LoginView().transition(.opacity)
             case .register:
                 RegisterView().transition(.opacity)
+            case .forgot:
+                ForgotPasswordView().transition(.opacity)
             case .premium:
                 PaywallView().transition(.opacity)
             case .app:

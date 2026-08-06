@@ -29,7 +29,7 @@ struct HomeView: View {
                 Text("5 Ağustos, Çarşamba")
                     .font(.h(13, .bold))
                     .foregroundStyle(Color.sub)
-                Text("Merhaba, Simge")
+                Text("Merhaba, \(model.userName)")
                     .font(.h(26))
                     .foregroundStyle(Color.ink)
                     .kerning(-0.5)

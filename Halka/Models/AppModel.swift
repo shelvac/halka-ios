@@ -13,6 +13,14 @@ final class AppModel {
     var tab: Tab = .home
     var homeSegment: HomeSegment = .today
 
+    // MARK: Auth state (Sprint 1)
+    var authBusy = false
+    var authError: String? = nil
+    var authInfo: String? = nil
+    var forgotSent = false
+    var userName = "Simge"            // selamlamada görünen ad (buluttan güncellenir)
+    var userFullName = "Simge Helvacı"
+
     // MARK: Rings (demo day: 5 Ağustos 2026, Çarşamba)
     var water = 1250                  // ml
     var exerciseBase = 24             // minutes logged before app interactions
@@ -159,10 +167,6 @@ final class AppModel {
 
     // MARK: Auth actions
 
-    func splashFinished() {
-        if screen == .splash { screen = .login }
-    }
-
     func login() {
         if loginRole == .dietitian {
             screen = .premium
@@ -184,11 +188,16 @@ final class AppModel {
     }
 
     func logout() {
+        Task { await SupabaseService.shared.signOut() }
         screen = .login
         role = .user
         tab = .home
         homeSegment = .today
         healthPane = .body
+        authError = nil
+        authInfo = nil
+        userName = "Simge"
+        userFullName = "Simge Helvacı"
     }
 
     // MARK: Shared helpers

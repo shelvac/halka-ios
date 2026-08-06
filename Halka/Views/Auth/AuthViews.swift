@@ -34,8 +34,8 @@ struct SplashView: View {
         .contentShape(Rectangle())
         .onTapGesture { model.screen = .login }
         .task {
-            try? await Task.sleep(for: .seconds(2.6))
-            model.splashFinished()
+            try? await Task.sleep(for: .seconds(1.4))
+            await model.finishSplash()
         }
     }
 }
@@ -108,18 +108,41 @@ struct LoginView: View {
                     AuthField(placeholder: "Şifre", text: $password, secure: true)
                 }
 
-                Text("Şifremi unuttum")
-                    .font(.h(12))
-                    .foregroundStyle(Color.coralDark)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.top, 10)
-                    .padding(.bottom, 18)
+                Button {
+                    model.forgotSent = false
+                    model.authError = nil
+                    model.screen = .forgot
+                } label: {
+                    Text("Şifremi unuttum")
+                        .font(.h(12))
+                        .foregroundStyle(Color.coralDark)
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.top, 10)
+                .padding(.bottom, 18)
 
-                Button { model.login() } label: {
-                    Text("Giriş Yap").frame(maxWidth: .infinity)
+                if let info = model.authInfo {
+                    AuthBanner(text: info, isError: false)
+                        .padding(.bottom, 10)
+                }
+                if let error = model.authError {
+                    AuthBanner(text: error, isError: true)
+                        .padding(.bottom, 10)
+                }
+
+                Button {
+                    Task { await model.signIn(email: email, password: password) }
+                } label: {
+                    if model.authBusy {
+                        ProgressView().tint(.white).frame(maxWidth: .infinity)
+                    } else {
+                        Text("Giriş Yap").frame(maxWidth: .infinity)
+                    }
                 }
                 .buttonStyle(.plain)
                 .coralButton()
+                .disabled(model.authBusy)
 
                 Button { model.login() } label: {
                     Text("\u{F8FF} Apple ile devam et")
@@ -184,7 +207,7 @@ struct RegisterView: View {
     @State private var name = ""
     @State private var email = ""
     @State private var password = ""
-    @State private var kvkkAccepted = true
+    @State private var kvkkAccepted = false
 
     var body: some View {
         ZStack {
@@ -236,13 +259,24 @@ struct RegisterView: View {
                 .padding(.top, 14)
                 .padding(.bottom, 18)
 
-                Button { model.login() } label: {
-                    Text("Kayıt Ol").frame(maxWidth: .infinity)
+                if let error = model.authError {
+                    AuthBanner(text: error, isError: true)
+                        .padding(.bottom, 10)
+                }
+
+                Button {
+                    Task { await model.signUp(name: name, email: email, password: password) }
+                } label: {
+                    if model.authBusy {
+                        ProgressView().tint(.white).frame(maxWidth: .infinity)
+                    } else {
+                        Text("Kayıt Ol").frame(maxWidth: .infinity)
+                    }
                 }
                 .buttonStyle(.plain)
                 .coralButton()
                 .opacity(kvkkAccepted ? 1 : 0.5)
-                .disabled(!kvkkAccepted)
+                .disabled(!kvkkAccepted || model.authBusy)
 
                 HStack(spacing: 4) {
                     Text("Zaten hesabın var mı?")
@@ -366,6 +400,107 @@ struct PaywallView: View {
                 .padding(.top, 70)
                 .padding(.bottom, 40)
             }
+        }
+    }
+}
+
+
+// MARK: - Shared auth banner
+
+struct AuthBanner: View {
+    var text: String
+    var isError: Bool
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: isError ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(isError ? Color.coralDark : Color.greenDark)
+            Text(text)
+                .font(.h(12, .semibold))
+                .foregroundStyle(isError ? Color.coralDark : Color.greenDark)
+                .lineSpacing(2)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(isError ? Color.coralBg : Color.greenBg)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+// MARK: - Şifremi Unuttum (US-013)
+
+struct ForgotPasswordView: View {
+    @Environment(AppModel.self) private var model
+    @State private var email = ""
+
+    var body: some View {
+        ZStack {
+            Color.bgApp.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 0) {
+                Button {
+                    model.authError = nil
+                    model.screen = .login
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .bold))
+                        Text("Girişe dön").font(.h(13))
+                    }
+                    .foregroundStyle(Color.coral)
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 26)
+
+                Text("Şifreni sıfırla")
+                    .font(.h(27))
+                    .foregroundStyle(Color.ink)
+                    .kerning(-0.6)
+                Text("E-posta adresini gir — sıfırlama bağlantısını gönderelim.")
+                    .font(.h(13, .semibold))
+                    .foregroundStyle(Color.sub)
+                    .padding(.top, 4)
+                    .padding(.bottom, 22)
+
+                if model.forgotSent {
+                    AuthBanner(
+                        text: "Bağlantı gönderildi — gelen kutunu (ve spam klasörünü) kontrol et. E-postadaki bağlantıyla yeni şifreni belirleyebilirsin.",
+                        isError: false)
+
+                    Button {
+                        model.forgotSent = false
+                        model.screen = .login
+                    } label: {
+                        Text("Girişe dön").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.plain)
+                    .coralButton()
+                    .padding(.top, 18)
+                } else {
+                    AuthField(placeholder: "E-posta", text: $email)
+
+                    if let error = model.authError {
+                        AuthBanner(text: error, isError: true)
+                            .padding(.top, 10)
+                    }
+
+                    Button {
+                        Task { await model.sendPasswordReset(email: email) }
+                    } label: {
+                        if model.authBusy {
+                            ProgressView().tint(.white).frame(maxWidth: .infinity)
+                        } else {
+                            Text("Sıfırlama Bağlantısı Gönder").frame(maxWidth: .infinity)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .coralButton()
+                    .disabled(model.authBusy)
+                    .padding(.top, 18)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 28)
         }
     }
 }

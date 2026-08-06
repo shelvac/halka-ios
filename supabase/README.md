@@ -38,15 +38,18 @@ Dashboard → Storage → New bucket:
   (Apple Developer hesabı geldikten sonra Services ID + key eklenecek — Sprint 1).
 - Email provider varsayılan açık; şimdilik yeterli.
 
-## 5. iOS tarafı (sonraki adım — ben yapacağım)
+## 5. iOS bağlantısı (✅ kod hazır — tek eksik anon key)
 
-- Xcode'da SPM paketi: `https://github.com/supabase/supabase-swift`
-- `Halka/Services/DataStore.swift` içindeki `DataStore` protokolünün
-  `SupabaseDataStore` implementasyonu yazılacak; URL + anon key
-  `Config.xcconfig`'ten okunacak (anahtar repoya girmez).
+- supabase-swift SPM paketi projeye ekli; Xcode ilk açılışta paketi indirir.
+- **Anon key'i yapıştır:** Dashboard → Project Settings → API → **anon public**
+  değerini kopyala → `Halka/Services/SupabaseService.swift` içindeki
+  `SupabaseConfig.anonKey = ""` satırına yapıştır → commit/push edebilirsin.
+  - `anon` anahtarı istemciye açık bir anahtardır (uygulama paketine gömülür);
+    güvenlik RLS politikalarındadır. **`service_role` anahtarını ise asla**
+    hiçbir yere yapıştırma — o tam yetkilidir.
+- Anahtar boşken uygulama **demo modunda** çalışır (giriş düğmeleri eski davranış).
+- **Geliştirme kolaylığı (önerilir):** Dashboard → Authentication → Sign In / Up →
+  Email → **"Confirm email" kapat** → kayıt sonrası doğrulama e-postası beklemeden
+  otomatik giriş yapılır. (Lansmandan önce tekrar açılır.)
 - AI çağrıları (ADR-003) Claude API'ye **doğrudan istemciden gitmez**:
-  `halka-backend` reposundaki Supabase Edge Function proxy'si üzerinden.
-
-Sen 1–3. adımları yapıp bana "Supabase hazır, URL şu" dediğinde
-Swift entegrasyonuna başlarım (anon anahtarı sohbete yazmana gerek yok;
-`Config.xcconfig` dosyasına lokalde kendin yapıştıracaksın).
+  `halka-backend` reposundaki Supabase Edge Function proxy'si üzerinden (sonraki sprint).
