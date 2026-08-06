@@ -103,9 +103,6 @@ struct LoginView: View {
                     .padding(.top, 4)
                     .padding(.bottom, 16)
 
-                roleSegment
-                    .padding(.bottom, 16)
-
                 VStack(spacing: 10) {
                     AuthField(placeholder: "E-posta", text: $email)
                     AuthField(placeholder: "Şifre", text: $password, secure: true)
@@ -211,30 +208,6 @@ struct LoginView: View {
         }
     }
 
-    private var roleSegment: some View {
-        HStack(spacing: 4) {
-            roleButton("Kullanıcı · Ücretsiz", role: .user, activeColor: .ink)
-            roleButton("Diyetisyen · Premium", role: .dietitian, activeColor: .goldDark)
-        }
-        .padding(4)
-        .background(Color.bgSand)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-
-    private func roleButton(_ title: String, role: Role, activeColor: Color) -> some View {
-        let active = model.loginRole == role
-        return Button { model.loginRole = role } label: {
-            Text(title)
-                .font(.h(12))
-                .foregroundStyle(active ? activeColor : Color.sub)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 9)
-                .background(active ? Color.white : .clear)
-                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-                .shadow(color: active ? Color.ink.opacity(0.09) : .clear, radius: 3, y: 1)
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 // MARK: - Register
