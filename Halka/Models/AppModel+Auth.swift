@@ -18,7 +18,7 @@ extension AppModel {
                 return
             }
             // Doğrulanmamış hesap: içeri alma, doğrulama ekranına yönlendir.
-            pendingEmail = SupabaseService.shared.currentEmail ?? ""
+            pendingEmail = await SupabaseService.shared.currentEmail() ?? ""
             screen = .verifyEmail
             return
         }

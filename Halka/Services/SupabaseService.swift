@@ -45,7 +45,15 @@ final class SupabaseService {
         return session.user.emailConfirmedAt != nil
     }
 
-    var currentEmail: String? { client?.currentUser?.email }
+    /// Oturumdaki kullanıcı (session üzerinden — sürümler arası en güvenli yol).
+    private func currentUser() async -> User? {
+        guard let client, let session = try? await client.auth.session else { return nil }
+        return session.user
+    }
+
+    func currentEmail() async -> String? {
+        await currentUser()?.email
+    }
 
     func signIn(email: String, password: String) async throws {
         guard let client else { return }
@@ -76,7 +84,7 @@ final class SupabaseService {
 
     /// KVKK aydınlatma + sağlık verisi açık rızası zaman damgaları (US-011).
     func markConsents() async throws {
-        guard let client, let user = client.currentUser else { return }
+        guard let client, let user = await currentUser() else { return }
         let now = ISO8601DateFormatter().string(from: Date())
         try await client.from("users")
             .update(["kvkk_accepted_at": now, "health_consent_at": now])
@@ -125,7 +133,7 @@ final class SupabaseService {
     }
 
     func fetchFullName() async -> String? {
-        guard let client, let user = client.currentUser else { return nil }
+        guard let client, let user = await currentUser() else { return nil }
         let row: ProfileRow? = try? await client.from("users")
             .select("full_name")
             .eq("id", value: user.id.uuidString)
@@ -137,7 +145,7 @@ final class SupabaseService {
     }
 
     func updateFullName(_ name: String) async throws {
-        guard let client, let user = client.currentUser else { return }
+        guard let client, let user = await currentUser() else { return }
         try await client.from("users")
             .update(["full_name": name])
             .eq("id", value: user.id.uuidString)
@@ -146,7 +154,7 @@ final class SupabaseService {
 
     /// SSO ile gelen kullanıcıda profil adı boşsa sağlayıcıdan gelen adı yazar.
     func syncProviderProfile() async -> String? {
-        guard let client, let user = client.currentUser else { return nil }
+        guard let user = await currentUser() else { return nil }
         if let existing = await fetchFullName() { return existing }
         let metadata = user.userMetadata
         let name = (metadata["full_name"]?.stringValue
