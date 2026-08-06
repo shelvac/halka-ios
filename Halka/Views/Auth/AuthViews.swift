@@ -173,7 +173,10 @@ struct LoginView: View {
                     Task { await model.signInWithProvider(.google) }
                 } label: {
                     HStack(spacing: 8) {
-                        GoogleGlyph(size: 18)
+                        Image("GoogleLogo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 18, height: 18)
                         Text("Google ile devam et").font(.h(13))
                     }
                     .foregroundStyle(Color.ink)
@@ -345,47 +348,6 @@ struct RegisterView: View {
     }
 }
 
-/// Google'ın dört renkli "G" işareti — halka biçiminde dört yay + mavi çubuk.
-struct GoogleGlyph: View {
-    var size: CGFloat = 18
-
-    // Yay aralıkları (0 = saat 12, saat yönünde kesir)
-    private static let blue = (0.06, 0.37)
-    private static let green = (0.37, 0.62)
-    private static let yellow = (0.62, 0.84)
-    private static let redA = (0.84, 1.0)
-    private static let redB = (0.0, 0.06)
-
-    var body: some View {
-        let ring = size * 0.78          // yay çemberinin çapı
-        let width = size * 0.22         // kalınlık
-
-        ZStack {
-            arc(Self.blue, Color(hex: 0x4285F4), ring, width)
-            arc(Self.green, Color(hex: 0x34A853), ring, width)
-            arc(Self.yellow, Color(hex: 0xFBBC05), ring, width)
-            arc(Self.redA, Color(hex: 0xEA4335), ring, width)
-            arc(Self.redB, Color(hex: 0xEA4335), ring, width)
-
-            // Mavi yatay çubuk — merkezden sağ kenara
-            Rectangle()
-                .fill(Color(hex: 0x4285F4))
-                .frame(width: size * 0.46, height: width)
-                .offset(x: size * 0.27, y: size * 0.06)
-        }
-        .frame(width: size, height: size)
-    }
-
-    private func arc(_ range: (Double, Double), _ color: Color,
-                     _ diameter: CGFloat, _ width: CGFloat) -> some View {
-        Circle()
-            .trim(from: range.0, to: range.1)
-            .stroke(color, style: StrokeStyle(lineWidth: width))
-            .rotationEffect(.degrees(-90))
-            .frame(width: diameter, height: diameter)
-    }
-}
-
 // MARK: - Premium paywall (dietitian)
 
 struct PaywallView: View {
@@ -552,8 +514,10 @@ struct ForgotPasswordView: View {
                     .padding(.bottom, 22)
 
                 if model.forgotSent {
+                    // Jenerik onay: adresin kayıtlı olup olmadığı sızdırılmaz
+                    // (user enumeration koruması).
                     AuthBanner(
-                        text: "Bağlantı gönderildi — gelen kutunu (ve spam klasörünü) kontrol et. E-postadaki bağlantıyla yeni şifreni belirleyebilirsin.",
+                        text: "Bu adres sistemimizde kayıtlıysa şifre sıfırlama bağlantısı gönderildi. Gelen kutunu ve spam klasörünü kontrol et.",
                         isError: false)
 
                     Button {

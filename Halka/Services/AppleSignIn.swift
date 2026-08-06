@@ -38,3 +38,13 @@ enum AppleNonce {
             .joined()
     }
 }
+
+/// Kimlik akışlarında kullanıcıya yansıtılmayan hataların kaydı.
+/// (Sprint 6'da Sentry'ye bağlanacak — şimdilik konsol.)
+enum AuthLog {
+    static func warn(_ context: String, _ error: Error) {
+        #if DEBUG
+        print("⚠️ auth/\(context): \(error.localizedDescription)")
+        #endif
+    }
+}

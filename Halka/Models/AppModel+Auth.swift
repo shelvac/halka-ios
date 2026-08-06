@@ -59,8 +59,26 @@ extension AppModel {
                 await enterApp()
             }
         } catch {
-            authError = Self.authMessage(error)
+            authError = await Self.signInMessage(error, email: email)
         }
+    }
+
+    /// Giriş hatasını ayrıştırır: Supabase güvenlik gereği "yanlış şifre" ile
+    /// "hesap yok"u aynı mesajla döndürür; ürün kararı olarak bunları ayırıyoruz.
+    static func signInMessage(_ error: Error, email: String) async -> String {
+        let text = error.localizedDescription.lowercased()
+        guard text.contains("invalid login credentials") else {
+            return authMessage(error)
+        }
+        if let status = await SupabaseService.shared.accountStatus(email: email) {
+            if !status.exists {
+                return "Bu e-posta adresiyle kayıtlı bir hesap bulunamadı."
+            }
+            if status.isOAuthOnly {
+                return "Bu hesap \(status.providerLabel) ile açılmış — o düğmeyle giriş yap."
+            }
+        }
+        return "E-posta veya şifre hatalı."
     }
 
     /// US-011 — Kayıt + KVKK açık rızası. Doğrulama e-postası beklenir,
@@ -86,7 +104,7 @@ extension AppModel {
                 fullName: trimmedName, email: email, password: password)
             switch result {
             case .alreadyRegistered:
-                authError = "Bu e-posta zaten kayıtlı — giriş yapmayı dene."
+                authError = "Bu e-posta zaten kullanımda, lütfen giriş yapın."
             case .signedIn:
                 pendingEmail = email
                 applyFullName(trimmedName)
@@ -126,19 +144,13 @@ extension AppModel {
         authBusy = true
         defer { authBusy = false }
         if supabaseReady {
-            // Hesap durumunu kontrol et: kayıtlı değilse ya da yalnızca
-            // Apple/Google ile açıldıysa kullanıcıya net söyle.
-            if let status = await SupabaseService.shared.accountStatus(email: email) {
-                guard status.exists else {
-                    authError = "Bu e-posta ile kayıtlı bir hesap yok — önce kayıt ol."
-                    return
-                }
-                if status.isOAuthOnly {
-                    authError = "Bu hesap \(status.providerLabel) ile açılmış — şifre yerine o düğmeyle giriş yap."
-                    return
-                }
+            do {
+                try await SupabaseService.shared.resetPassword(email: email)
+            } catch {
+                // Hata kullanıcıya YANSITILMAZ: adresin kayıtlı olup olmadığı
+                // sızmasın (user enumeration). Yalnızca loglanır.
+                AuthLog.warn("resetPassword", error)
             }
-            try? await SupabaseService.shared.resetPassword(email: email)
         }
         forgotSent = true
     }
@@ -296,8 +308,13 @@ extension AppModel {
         if text.contains("password") && (text.contains("least") || text.contains("short")) {
             return "Şifre çok kısa — en az 8 karakter kullan."
         }
-        if text.contains("expired") || text.contains("invalid token") {
+        if text.contains("expired") || text.contains("invalid token")
+            || text.contains("token has expired") || text.contains("otp_expired") {
             return "Bağlantının süresi dolmuş — yeni bir bağlantı iste."
+        }
+        if text.contains("rate limit") || text.contains("too many requests")
+            || text.contains("over_request_rate_limit") {
+            return "Çok fazla deneme yapıldı — birkaç dakika sonra tekrar dene."
         }
         return "Bir şeyler ters gitti: \(error.localizedDescription)"
     }
