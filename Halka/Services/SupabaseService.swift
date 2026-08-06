@@ -60,9 +60,15 @@ final class SupabaseService {
         try await client.auth.signIn(email: email, password: password)
     }
 
-    /// Kayıt olur. Doğrulama e-postası bekleniyorsa (Confirm email açık) `false` döner.
-    func signUp(fullName: String, email: String, password: String) async throws -> Bool {
-        guard let client else { return false }
+    enum SignUpResult { case signedIn, needsVerification, alreadyRegistered }
+
+    /// Kayıt olur.
+    /// - `signedIn`: doğrulama kapalı, oturum açıldı
+    /// - `needsVerification`: doğrulama e-postası gönderildi
+    /// - `alreadyRegistered`: e-posta zaten kayıtlı (Supabase, hesap varlığını
+    ///   sızdırmamak için hata yerine boş `identities` döndürür)
+    func signUp(fullName: String, email: String, password: String) async throws -> SignUpResult {
+        guard let client else { return .needsVerification }
         let response = try await client.auth.signUp(
             email: email,
             password: password,
@@ -70,9 +76,23 @@ final class SupabaseService {
             redirectTo: SupabaseConfig.loginCallback)
         if response.session != nil {
             try? await markConsents()
-            return true
+            return .signedIn
         }
-        return false
+        if let identities = response.user.identities, identities.isEmpty {
+            return .alreadyRegistered
+        }
+        return .needsVerification
+    }
+
+    /// Supabase'de etkin olan sosyal sağlayıcılar (tarayıcı açmadan kontrol için).
+    func enabledProviders() async -> Set<String> {
+        guard let url = URL(string: SupabaseConfig.url + "/auth/v1/settings") else { return [] }
+        var request = URLRequest(url: url)
+        request.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+        guard let (data, _) = try? await URLSession.shared.data(for: request),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let external = json["external"] as? [String: Any] else { return [] }
+        return Set(external.compactMap { key, value in (value as? Bool) == true ? key : nil })
     }
 
     /// Doğrulama e-postasını yeniden gönderir (US-017).

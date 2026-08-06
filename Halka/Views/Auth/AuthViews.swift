@@ -173,7 +173,7 @@ struct LoginView: View {
                     Task { await model.signInWithProvider(.google) }
                 } label: {
                     HStack(spacing: 8) {
-                        GoogleGlyph()
+                        GoogleGlyph(size: 18)
                         Text("Google ile devam et").font(.h(13))
                     }
                     .foregroundStyle(Color.ink)
@@ -345,18 +345,44 @@ struct RegisterView: View {
     }
 }
 
-/// Google'ın çok renkli "G" işareti (SF Symbols'ta yok).
+/// Google'ın dört renkli "G" işareti — halka biçiminde dört yay + mavi çubuk.
 struct GoogleGlyph: View {
+    var size: CGFloat = 18
+
+    // Yay aralıkları (0 = saat 12, saat yönünde kesir)
+    private static let blue = (0.06, 0.37)
+    private static let green = (0.37, 0.62)
+    private static let yellow = (0.62, 0.84)
+    private static let redA = (0.84, 1.0)
+    private static let redB = (0.0, 0.06)
+
     var body: some View {
+        let ring = size * 0.78          // yay çemberinin çapı
+        let width = size * 0.22         // kalınlık
+
         ZStack {
-            Circle().stroke(Color(hex: 0x4285F4), lineWidth: 2.6)
-                .frame(width: 15, height: 15)
-            Rectangle().fill(Color.white).frame(width: 9, height: 8)
-                .offset(x: 4, y: 2)
-            Rectangle().fill(Color(hex: 0x4285F4)).frame(width: 7, height: 2.6)
-                .offset(x: 3.5, y: 0)
+            arc(Self.blue, Color(hex: 0x4285F4), ring, width)
+            arc(Self.green, Color(hex: 0x34A853), ring, width)
+            arc(Self.yellow, Color(hex: 0xFBBC05), ring, width)
+            arc(Self.redA, Color(hex: 0xEA4335), ring, width)
+            arc(Self.redB, Color(hex: 0xEA4335), ring, width)
+
+            // Mavi yatay çubuk — merkezden sağ kenara
+            Rectangle()
+                .fill(Color(hex: 0x4285F4))
+                .frame(width: size * 0.46, height: width)
+                .offset(x: size * 0.27, y: size * 0.06)
         }
-        .frame(width: 17, height: 17)
+        .frame(width: size, height: size)
+    }
+
+    private func arc(_ range: (Double, Double), _ color: Color,
+                     _ diameter: CGFloat, _ width: CGFloat) -> some View {
+        Circle()
+            .trim(from: range.0, to: range.1)
+            .stroke(color, style: StrokeStyle(lineWidth: width))
+            .rotationEffect(.degrees(-90))
+            .frame(width: diameter, height: diameter)
     }
 }
 

@@ -81,14 +81,18 @@ extension AppModel {
         authBusy = true
         defer { authBusy = false }
         do {
-            let signedIn = try await SupabaseService.shared.signUp(
+            let result = try await SupabaseService.shared.signUp(
                 fullName: trimmedName, email: email, password: password)
-            pendingEmail = email
-            applyFullName(trimmedName)
-            if signedIn {
-                // Doğrulama kapalıysa (dev) doğrudan içeri.
-                await enterApp()
-            } else {
+            switch result {
+            case .alreadyRegistered:
+                authError = "Bu e-posta zaten kayıtlı — giriş yapmayı dene."
+            case .signedIn:
+                pendingEmail = email
+                applyFullName(trimmedName)
+                await enterApp()      // doğrulama kapalıysa (dev) doğrudan içeri
+            case .needsVerification:
+                pendingEmail = email
+                applyFullName(trimmedName)
                 screen = .verifyEmail
             }
         } catch {
@@ -155,6 +159,13 @@ extension AppModel {
         guard supabaseReady else { login(); return }
         authBusy = true
         defer { authBusy = false }
+        let enabled = await SupabaseService.shared.enabledProviders()
+        guard enabled.contains(provider == .apple ? "apple" : "google") else {
+            authError = provider == .apple
+                ? "Apple ile giriş henüz etkin değil — Apple Developer hesabı bağlanınca açılacak."
+                : "Google ile giriş henüz etkin değil — kurulum tamamlanınca açılacak."
+            return
+        }
         do {
             try await SupabaseService.shared.signInWithProvider(provider)
             // Sağlayıcı e-postaları doğrulanmış sayılır.
@@ -163,7 +174,8 @@ extension AppModel {
             }
             await enterApp()
         } catch {
-            authError = Self.providerMessage(error, provider: provider)
+            let message = Self.providerMessage(error, provider: provider)
+            authError = message.isEmpty ? nil : message
         }
     }
 
@@ -236,6 +248,9 @@ extension AppModel {
 
     static func providerMessage(_ error: Error, provider: Provider) -> String {
         let name = provider == .apple ? "Apple" : "Google"
+        let ns = error as NSError
+        // ASWebAuthenticationSession: 1 = kullanıcı vazgeçti / oturum kapandı
+        if ns.domain.contains("AuthenticationServices") && ns.code == 1 { return "" }
         let text = error.localizedDescription.lowercased()
         if text.contains("cancel") { return "" }   // kullanıcı vazgeçti — sessiz
         if text.contains("provider is not enabled") || text.contains("unsupported provider") {
