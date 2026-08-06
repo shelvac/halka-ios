@@ -8,12 +8,15 @@ import Supabase
 /// ASLA buraya konulmayacak olan: `service_role` anahtarı (Dashboard'da "secret").
 enum SupabaseConfig {
     static let url = "https://urrjkubdngoszkttpeph.supabase.co"
-    /// Dashboard → Project Settings → API → "anon public" anahtarını buraya yapıştır.
-    /// Boş bırakılırsa uygulama demo modunda çalışır (giriş düğmeleri eski davranış).
     static let anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVycmprdWJkbmdvc3prdHRwZXBoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwMDA2MTcsImV4cCI6MjEwMTU3NjYxN30.Iy-48jUSh4ku-9ZRAPx6T0vDtINY3SKeunJRRA9qyd8"
+
+    /// E-posta bağlantıları ve OAuth dönüşleri uygulamaya bu şemayla döner
+    /// (Halka-Info.plist'te kayıtlı, Supabase Redirect URLs listesinde tanımlı).
+    static let loginCallback = URL(string: "halka://login-callback")!
+    static let resetCallback = URL(string: "halka://reset-password")!
 }
 
-/// Supabase istemcisi + auth ve profil operasyonları (US-002, US-010…US-016).
+/// Supabase istemcisi + auth ve profil operasyonları (US-002, US-010…US-017).
 final class SupabaseService {
     static let shared = SupabaseService()
     let client: SupabaseClient?
@@ -30,26 +33,33 @@ final class SupabaseService {
 
     // MARK: Oturum
 
-    /// Kayıtlı oturum var mı? (`auth.session` gerekiyorsa token'ı da yeniler — US-010)
+    /// Kayıtlı oturum var mı? (gerekiyorsa token'ı da yeniler — US-010)
     func hasValidSession() async -> Bool {
         guard let client else { return false }
         return (try? await client.auth.session) != nil
     }
+
+    /// Oturumdaki kullanıcının e-postası doğrulanmış mı? (US-011 · isEmailVerified)
+    func isEmailVerified() async -> Bool {
+        guard let client, let session = try? await client.auth.session else { return false }
+        return session.user.emailConfirmedAt != nil
+    }
+
+    var currentEmail: String? { client?.currentUser?.email }
 
     func signIn(email: String, password: String) async throws {
         guard let client else { return }
         try await client.auth.signIn(email: email, password: password)
     }
 
-    /// Kayıt olur; oturum hemen açıldıysa true döner
-    /// (Supabase'te "Confirm email" kapalıysa). Açıksa kullanıcı önce
-    /// e-postasını doğrulamalıdır ve false döner.
+    /// Kayıt olur. Doğrulama e-postası bekleniyorsa (Confirm email açık) `false` döner.
     func signUp(fullName: String, email: String, password: String) async throws -> Bool {
         guard let client else { return false }
         let response = try await client.auth.signUp(
             email: email,
             password: password,
-            data: ["full_name": .string(fullName)])
+            data: ["full_name": .string(fullName)],
+            redirectTo: SupabaseConfig.loginCallback)
         if response.session != nil {
             try? await markConsents()
             return true
@@ -57,9 +67,16 @@ final class SupabaseService {
         return false
     }
 
+    /// Doğrulama e-postasını yeniden gönderir (US-017).
+    func resendConfirmation(email: String) async throws {
+        guard let client else { return }
+        try await client.auth.resend(email: email, type: .signup,
+                                     emailRedirectTo: SupabaseConfig.loginCallback)
+    }
+
     /// KVKK aydınlatma + sağlık verisi açık rızası zaman damgaları (US-011).
     func markConsents() async throws {
-        guard let client, let user = client.auth.currentUser else { return }
+        guard let client, let user = client.currentUser else { return }
         let now = ISO8601DateFormatter().string(from: Date())
         try await client.from("users")
             .update(["kvkk_accepted_at": now, "health_consent_at": now])
@@ -69,11 +86,36 @@ final class SupabaseService {
 
     func resetPassword(email: String) async throws {
         guard let client else { return }
-        try await client.auth.resetPasswordForEmail(email)
+        try await client.auth.resetPasswordForEmail(email, redirectTo: SupabaseConfig.resetCallback)
+    }
+
+    /// Şifre sıfırlama akışının son adımı (US-013).
+    func updatePassword(_ newPassword: String) async throws {
+        guard let client else { return }
+        try await client.auth.update(user: UserAttributes(password: newPassword))
     }
 
     func signOut() async {
         try? await client?.auth.signOut()
+    }
+
+    // MARK: SSO (US-018 · Google · Apple)
+
+    /// Sağlayıcıyla giriş — ASWebAuthenticationSession üzerinden, dönüşte
+    /// `halka://login-callback` ile uygulamaya geri gelir.
+    func signInWithProvider(_ provider: Provider) async throws {
+        guard let client else { return }
+        try await client.auth.signInWithOAuth(
+            provider: provider,
+            redirectTo: SupabaseConfig.loginCallback)
+    }
+
+    /// E-posta bağlantısı / OAuth dönüşündeki kodu oturuma çevirir.
+    @discardableResult
+    func session(from url: URL) async throws -> Bool {
+        guard let client else { return false }
+        try await client.auth.session(from: url)
+        return true
     }
 
     // MARK: Profil (US-016)
@@ -83,7 +125,7 @@ final class SupabaseService {
     }
 
     func fetchFullName() async -> String? {
-        guard let client, let user = client.auth.currentUser else { return nil }
+        guard let client, let user = client.currentUser else { return nil }
         let row: ProfileRow? = try? await client.from("users")
             .select("full_name")
             .eq("id", value: user.id.uuidString)
@@ -95,10 +137,23 @@ final class SupabaseService {
     }
 
     func updateFullName(_ name: String) async throws {
-        guard let client, let user = client.auth.currentUser else { return }
+        guard let client, let user = client.currentUser else { return }
         try await client.from("users")
             .update(["full_name": name])
             .eq("id", value: user.id.uuidString)
             .execute()
+    }
+
+    /// SSO ile gelen kullanıcıda profil adı boşsa sağlayıcıdan gelen adı yazar.
+    func syncProviderProfile() async -> String? {
+        guard let client, let user = client.currentUser else { return nil }
+        if let existing = await fetchFullName() { return existing }
+        let metadata = user.userMetadata
+        let name = (metadata["full_name"]?.stringValue
+                    ?? metadata["name"]?.stringValue
+                    ?? "").trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return nil }
+        try? await updateFullName(name)
+        return name
     }
 }

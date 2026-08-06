@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Navigation
 
-enum Screen { case splash, login, register, forgot, premium, app }
+enum Screen { case splash, login, register, verifyEmail, forgot, newPassword, premium, app }
 enum Role { case user, dietitian }
 enum Tab { case home, coach, meal, workout, health }
 enum HomeSegment: CaseIterable { case today, calendar, social, dietitian

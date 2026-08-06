@@ -1,6 +1,7 @@
 import Foundation
+import Supabase
 
-// MARK: - Gerçek kimlik akışları (Sprint 1: US-010…US-014, US-016)
+// MARK: - Gerçek kimlik akışları (Sprint 1: US-010…US-018)
 // Supabase yapılandırılmamışsa (anon key boş) her akış demo davranışına düşer;
 // uygulama backend'siz de çalışmaya devam eder.
 
@@ -8,19 +9,30 @@ extension AppModel {
 
     var supabaseReady: Bool { SupabaseService.shared.isConfigured }
 
-    /// US-010 — Splash: geçerli oturum varsa doğrudan ana ekrana.
+    /// US-010 — Splash: geçerli **ve doğrulanmış** oturum varsa doğrudan ana ekrana.
     func finishSplash() async {
         guard screen == .splash else { return }
         if supabaseReady, await SupabaseService.shared.hasValidSession() {
-            await loadProfile()
-            role = .user
-            screen = .app
-        } else {
-            screen = .login
+            if await SupabaseService.shared.isEmailVerified() {
+                await enterApp()
+                return
+            }
+            // Doğrulanmamış hesap: içeri alma, doğrulama ekranına yönlendir.
+            pendingEmail = SupabaseService.shared.currentEmail ?? ""
+            screen = .verifyEmail
+            return
         }
+        screen = .login
     }
 
-    /// US-012 — E-posta ile giriş.
+    /// Oturum hazır — profil bilgisini yükleyip uygulamayı aç.
+    func enterApp() async {
+        await loadProfile()
+        role = .user
+        screen = .app
+    }
+
+    /// US-012 — E-posta ile giriş (doğrulama kontrollü).
     func signIn(email: String, password: String) async {
         authError = nil
         authInfo = nil
@@ -33,19 +45,25 @@ extension AppModel {
         defer { authBusy = false }
         do {
             try await SupabaseService.shared.signIn(email: email, password: password)
-            await loadProfile()
+            guard await SupabaseService.shared.isEmailVerified() else {
+                pendingEmail = email
+                await SupabaseService.shared.signOut()
+                screen = .verifyEmail
+                return
+            }
             if loginRole == .dietitian {
+                await loadProfile()
                 screen = .premium
             } else {
-                role = .user
-                screen = .app
+                await enterApp()
             }
         } catch {
             authError = Self.authMessage(error)
         }
     }
 
-    /// US-011 — Kayıt + KVKK açık rızası.
+    /// US-011 — Kayıt + KVKK açık rızası. Doğrulama e-postası beklenir,
+    /// kullanıcı doğrudan içeri alınmaz.
     func signUp(name: String, email: String, password: String) async {
         authError = nil
         authInfo = nil
@@ -65,22 +83,35 @@ extension AppModel {
         do {
             let signedIn = try await SupabaseService.shared.signUp(
                 fullName: trimmedName, email: email, password: password)
+            pendingEmail = email
+            applyFullName(trimmedName)
             if signedIn {
-                applyFullName(trimmedName)
-                role = .user
-                screen = .app
+                // Doğrulama kapalıysa (dev) doğrudan içeri.
+                await enterApp()
             } else {
-                // "Confirm email" açık: önce e-posta doğrulaması gerekiyor.
-                authInfo = "Doğrulama e-postası gönderildi — gelen kutunu kontrol et, sonra giriş yap."
-                screen = .login
+                screen = .verifyEmail
             }
         } catch {
             authError = Self.authMessage(error)
         }
     }
 
-    /// US-013 — Şifre sıfırlama. Güvenlik gereği e-posta kayıtlı olsun olmasın
-    /// aynı onay gösterilir (hesap varlığı sızdırılmaz).
+    /// US-017 — Doğrulama e-postasını yeniden gönder.
+    func resendVerification() async {
+        authError = nil
+        authInfo = nil
+        authBusy = true
+        defer { authBusy = false }
+        do {
+            try await SupabaseService.shared.resendConfirmation(email: pendingEmail)
+            authInfo = "Doğrulama e-postası tekrar gönderildi."
+        } catch {
+            authError = Self.authMessage(error)
+        }
+    }
+
+    /// US-013 — Şifre sıfırlama isteği. Güvenlik gereği e-posta kayıtlı olsun
+    /// olmasın aynı onay gösterilir (hesap varlığı sızdırılmaz).
     func sendPasswordReset(email: String) async {
         authError = nil
         guard !email.trimmingCharacters(in: .whitespaces).isEmpty else {
@@ -93,6 +124,68 @@ extension AppModel {
             try? await SupabaseService.shared.resetPassword(email: email)
         }
         forgotSent = true
+    }
+
+    /// US-013 — E-postadaki bağlantıdan gelen kullanıcı yeni şifresini belirler.
+    func setNewPassword(_ password: String, confirm: String) async {
+        authError = nil
+        guard password.count >= 8 else {
+            authError = "Şifre en az 8 karakter olmalı."
+            return
+        }
+        guard password == confirm else {
+            authError = "Şifreler eşleşmiyor."
+            return
+        }
+        authBusy = true
+        defer { authBusy = false }
+        do {
+            try await SupabaseService.shared.updatePassword(password)
+            authInfo = "Şifren güncellendi."
+            await enterApp()
+        } catch {
+            authError = Self.authMessage(error)
+        }
+    }
+
+    /// US-018 — Google / Apple ile giriş.
+    func signInWithProvider(_ provider: Provider) async {
+        authError = nil
+        authInfo = nil
+        guard supabaseReady else { login(); return }
+        authBusy = true
+        defer { authBusy = false }
+        do {
+            try await SupabaseService.shared.signInWithProvider(provider)
+            // Sağlayıcı e-postaları doğrulanmış sayılır.
+            if let name = await SupabaseService.shared.syncProviderProfile() {
+                applyFullName(name)
+            }
+            await enterApp()
+        } catch {
+            authError = Self.providerMessage(error, provider: provider)
+        }
+    }
+
+    /// `halka://` ile açılan bağlantılar: e-posta doğrulama ve şifre sıfırlama.
+    func handleDeepLink(_ url: URL) {
+        guard supabaseReady else { return }
+        let isReset = url.absoluteString.contains("reset-password")
+        Task {
+            do {
+                try await SupabaseService.shared.session(from: url)
+                if isReset {
+                    authError = nil
+                    screen = .newPassword
+                } else {
+                    authInfo = nil
+                    await enterApp()
+                }
+            } catch {
+                authError = "Bağlantı geçersiz veya süresi dolmuş — tekrar dene."
+                screen = isReset ? .forgot : .login
+            }
+        }
     }
 
     /// US-016 (kısmi) — Profil adını buluttan yükle; selamlama gerçek isme döner.
@@ -129,9 +222,25 @@ extension AppModel {
         if text.contains("email not confirmed") {
             return "E-postan henüz doğrulanmamış — gelen kutundaki bağlantıya tıkla."
         }
+        if text.contains("same as the old") || text.contains("should be different") {
+            return "Yeni şifre eskisinden farklı olmalı."
+        }
         if text.contains("password") && (text.contains("least") || text.contains("short")) {
             return "Şifre çok kısa — en az 8 karakter kullan."
         }
+        if text.contains("expired") || text.contains("invalid token") {
+            return "Bağlantının süresi dolmuş — yeni bir bağlantı iste."
+        }
         return "Bir şeyler ters gitti: \(error.localizedDescription)"
+    }
+
+    static func providerMessage(_ error: Error, provider: Provider) -> String {
+        let name = provider == .apple ? "Apple" : "Google"
+        let text = error.localizedDescription.lowercased()
+        if text.contains("cancel") { return "" }   // kullanıcı vazgeçti — sessiz
+        if text.contains("provider is not enabled") || text.contains("unsupported provider") {
+            return "\(name) ile giriş henüz etkin değil — kurulum tamamlanınca açılacak."
+        }
+        return authMessage(error)
     }
 }

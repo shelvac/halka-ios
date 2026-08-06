@@ -25,8 +25,12 @@ struct RootView: View {
                 LoginView().transition(.opacity)
             case .register:
                 RegisterView().transition(.opacity)
+            case .verifyEmail:
+                VerifyEmailView().transition(.opacity)
             case .forgot:
                 ForgotPasswordView().transition(.opacity)
+            case .newPassword:
+                NewPasswordView().transition(.opacity)
             case .premium:
                 PaywallView().transition(.opacity)
             case .app:
@@ -39,6 +43,7 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: model.screen)
         .preferredColorScheme(.light)
+        .onOpenURL { url in model.handleDeepLink(url) }
     }
 }
 

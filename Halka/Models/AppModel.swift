@@ -18,6 +18,7 @@ final class AppModel {
     var authError: String? = nil
     var authInfo: String? = nil
     var forgotSent = false
+    var pendingEmail = ""        // doğrulama bekleyen hesap
     var userName = "Simge"            // selamlamada görünen ad (buluttan güncellenir)
     var userFullName = "Simge Helvacı"
 
@@ -198,6 +199,7 @@ final class AppModel {
         authInfo = nil
         userName = "Simge"
         userFullName = "Simge Helvacı"
+        pendingEmail = ""
     }
 
     // MARK: Shared helpers

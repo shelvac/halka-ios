@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 // MARK: - Splash
 
@@ -144,16 +145,49 @@ struct LoginView: View {
                 .coralButton()
                 .disabled(model.authBusy)
 
-                Button { model.login() } label: {
-                    Text("\u{F8FF} Apple ile devam et")
-                        .font(.h(13))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 15)
-                        .background(Color.ink)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                HStack(spacing: 10) {
+                    Rectangle().fill(Color.dashBorder).frame(height: 1)
+                    Text("veya").font(.h(11, .bold)).foregroundStyle(Color.faint)
+                    Rectangle().fill(Color.dashBorder).frame(height: 1)
+                }
+                .padding(.vertical, 16)
+
+                // US-018 — SSO. Apple, Google sunulduğunda App Store kuralı gereği zorunlu.
+                Button {
+                    Task { await model.signInWithProvider(.apple) }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "apple.logo").font(.system(size: 15, weight: .medium))
+                        Text("Apple ile devam et").font(.h(13))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+                    .background(Color.ink)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .disabled(model.authBusy)
+
+                Button {
+                    Task { await model.signInWithProvider(.google) }
+                } label: {
+                    HStack(spacing: 8) {
+                        GoogleGlyph()
+                        Text("Google ile devam et").font(.h(13))
+                    }
+                    .foregroundStyle(Color.ink)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(Color.dashBorder, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(model.authBusy)
                 .padding(.top, 10)
 
                 HStack(spacing: 4) {
@@ -208,6 +242,7 @@ struct RegisterView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var kvkkAccepted = false
+    @State private var showLegal = false
 
     var body: some View {
         ZStack {
@@ -249,12 +284,24 @@ struct RegisterView: View {
                     .buttonStyle(.plain)
                     .padding(.top, 1)
 
-                    (Text("Sağlık verilerimin uygulama içinde işlenmesine ilişkin ")
-                     + Text("KVKK aydınlatma metnini").font(.h(11)).foregroundColor(.coralDark)
-                     + Text(" okudum, onaylıyorum."))
-                        .font(.h(11, .semibold))
-                        .foregroundStyle(Color.sub)
-                        .lineSpacing(3)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Sağlık verilerimin uygulama içinde işlenmesine ilişkin")
+                            .font(.h(11, .semibold))
+                            .foregroundStyle(Color.sub)
+                        HStack(spacing: 4) {
+                            Button { showLegal = true } label: {
+                                Text("KVKK aydınlatma metnini")
+                                    .font(.h(11))
+                                    .foregroundStyle(Color.coralDark)
+                                    .underline()
+                            }
+                            .buttonStyle(.plain)
+                            Text("okudum, onaylıyorum.")
+                                .font(.h(11, .semibold))
+                                .foregroundStyle(Color.sub)
+                        }
+                    }
+                    .lineSpacing(3)
                 }
                 .padding(.top, 14)
                 .padding(.bottom, 18)
@@ -294,6 +341,22 @@ struct RegisterView: View {
             }
             .padding(.horizontal, 28)
         }
+        .sheet(isPresented: $showLegal) { LegalSheet() }
+    }
+}
+
+/// Google'ın çok renkli "G" işareti (SF Symbols'ta yok).
+struct GoogleGlyph: View {
+    var body: some View {
+        ZStack {
+            Circle().stroke(Color(hex: 0x4285F4), lineWidth: 2.6)
+                .frame(width: 15, height: 15)
+            Rectangle().fill(Color.white).frame(width: 9, height: 8)
+                .offset(x: 4, y: 2)
+            Rectangle().fill(Color(hex: 0x4285F4)).frame(width: 7, height: 2.6)
+                .offset(x: 3.5, y: 0)
+        }
+        .frame(width: 17, height: 17)
     }
 }
 
@@ -498,6 +561,137 @@ struct ForgotPasswordView: View {
                     .disabled(model.authBusy)
                     .padding(.top, 18)
                 }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 28)
+        }
+    }
+}
+
+// MARK: - E-posta doğrulama bekleme ekranı (US-011 / US-017)
+
+struct VerifyEmailView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        ZStack {
+            Color.bgApp.ignoresSafeArea()
+            VStack(spacing: 0) {
+                Circle()
+                    .fill(Color.coralBg)
+                    .frame(width: 76, height: 76)
+                    .overlay(
+                        Image(systemName: "envelope.badge")
+                            .font(.system(size: 30, weight: .medium))
+                            .foregroundStyle(Color.coral)
+                    )
+                    .padding(.bottom, 20)
+
+                Text("E-postanı doğrula")
+                    .font(.h(24))
+                    .foregroundStyle(Color.ink)
+                    .kerning(-0.5)
+
+                Text(model.pendingEmail)
+                    .font(.h(13))
+                    .foregroundStyle(Color.coralDark)
+                    .padding(.top, 6)
+
+                Text("adresine bir doğrulama bağlantısı gönderdik. Bağlantıya dokununca uygulama açılacak ve hesabın hazır olacak.")
+                    .font(.h(13, .semibold))
+                    .foregroundStyle(Color.sub)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .padding(.top, 10)
+                    .padding(.horizontal, 8)
+
+                if let info = model.authInfo {
+                    AuthBanner(text: info, isError: false).padding(.top, 18)
+                }
+                if let error = model.authError {
+                    AuthBanner(text: error, isError: true).padding(.top, 18)
+                }
+
+                Button {
+                    Task { await model.resendVerification() }
+                } label: {
+                    if model.authBusy {
+                        ProgressView().tint(.white).frame(maxWidth: .infinity)
+                    } else {
+                        Text("E-postayı tekrar gönder").frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.plain)
+                .coralButton()
+                .disabled(model.authBusy)
+                .padding(.top, 24)
+
+                Button {
+                    model.authError = nil
+                    model.authInfo = nil
+                    model.screen = .login
+                } label: {
+                    Text("Girişe dön")
+                        .font(.h(12.5))
+                        .foregroundStyle(Color.sub)
+                        .padding(10)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 6)
+
+                Text("E-posta gelmediyse spam klasörünü kontrol et.")
+                    .font(.h(11, .semibold))
+                    .foregroundStyle(Color.faint)
+                    .padding(.top, 4)
+            }
+            .padding(.horizontal, 28)
+        }
+    }
+}
+
+// MARK: - Yeni şifre belirleme (US-013, deep link ile açılır)
+
+struct NewPasswordView: View {
+    @Environment(AppModel.self) private var model
+    @State private var password = ""
+    @State private var confirm = ""
+
+    var body: some View {
+        ZStack {
+            Color.bgApp.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Yeni şifreni belirle")
+                    .font(.h(27))
+                    .foregroundStyle(Color.ink)
+                    .kerning(-0.6)
+                Text("En az 8 karakter kullan.")
+                    .font(.h(13, .semibold))
+                    .foregroundStyle(Color.sub)
+                    .padding(.top, 4)
+                    .padding(.bottom, 22)
+
+                VStack(spacing: 10) {
+                    AuthField(placeholder: "Yeni şifre", text: $password, secure: true)
+                    AuthField(placeholder: "Yeni şifre (tekrar)", text: $confirm, secure: true)
+                }
+
+                if let error = model.authError {
+                    AuthBanner(text: error, isError: true).padding(.top, 12)
+                }
+
+                Button {
+                    Task { await model.setNewPassword(password, confirm: confirm) }
+                } label: {
+                    if model.authBusy {
+                        ProgressView().tint(.white).frame(maxWidth: .infinity)
+                    } else {
+                        Text("Şifreyi Güncelle").frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.plain)
+                .coralButton()
+                .disabled(model.authBusy)
+                .padding(.top, 20)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 28)
