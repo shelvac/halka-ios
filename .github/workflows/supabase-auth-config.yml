@@ -2,8 +2,10 @@
 #   - E-posta doğrulaması AÇIK (kayıt → doğrulama maili → uygulamaya dönüş)
 #   - Site URL + redirect'ler halka:// deep link şemasına yönlendirilir
 #   - E-posta şablonları Türkçeleştirilir
-# Her ayar tek tek uygulanır; sonuç issue #19'a yorum olarak yazılır
-# (Actions loglarına dışarıdan erişilemediği için teşhis böyle yapılır).
+# Sonuç issue #19'a yorum olarak yazılır (Actions loglarına dışarıdan
+# erişilemediği için teşhis böyle yapılır).
+# Not: istekler curl ile atılır — Supabase'in önündeki Cloudflare, Python
+# urllib user-agent'ını 1010 ile reddediyor.
 name: Supabase Auth Config
 
 on:
@@ -15,67 +17,51 @@ permissions:
 jobs:
   configure:
     runs-on: ubuntu-latest
+    env:
+      URL: https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph/config/auth
     steps:
       - name: Ayarları uygula ve raporla
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
-          python3 - <<'PY' > report.md
-          import json, os, urllib.request, urllib.error
+          set -u
+          echo "## Supabase Auth Config sonucu" > report.md
+          echo "" >> report.md
+          OK=0; FAIL=0
 
-          TOKEN = os.environ["SUPABASE_ACCESS_TOKEN"]
-          URL = "https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph/config/auth"
+          apply() {   # $1 = etiket, $2 = json gövde
+            CODE=$(curl -s -o /tmp/resp.json -w "%{http_code}" -X PATCH \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              "$URL" -d "$2")
+            if [ "$CODE" = "200" ]; then
+              echo "- ✅ $1" >> report.md; OK=$((OK+1))
+            else
+              DETAIL=$(head -c 250 /tmp/resp.json | tr -d '\n')
+              echo "- ❌ $1 — \`$CODE: $DETAIL\`" >> report.md; FAIL=$((FAIL+1))
+            fi
+          }
 
-          def patch(payload):
-              req = urllib.request.Request(URL, method="PATCH", data=json.dumps(payload).encode(),
-                  headers={"Authorization": "Bearer " + TOKEN, "Content-Type": "application/json"})
-              try:
-                  with urllib.request.urlopen(req) as r:
-                      return True, str(r.status)
-              except urllib.error.HTTPError as e:
-                  return False, f"{e.code}: {e.read().decode()[:300]}"
-              except Exception as e:  # ağ vb.
-                  return False, str(e)[:300]
+          apply "E-posta doğrulaması açık" '{"mailer_autoconfirm": false}'
+          apply "Site URL (halka://)" '{"site_url": "halka://login-callback"}'
+          apply "Redirect allow list" '{"uri_allow_list": "halka://login-callback,halka://reset-password,halka://*"}'
+          apply "Doğrulama e-postası konusu" '{"mailer_subjects_confirmation": "halka — e-posta adresini doğrula"}'
+          apply "Sıfırlama e-postası konusu" '{"mailer_subjects_recovery": "halka — şifreni sıfırla"}'
+          apply "Doğrulama e-postası içeriği" "$(jq -n '{mailer_templates_confirmation_content: "<h2>halka'"'"'ya hoş geldin</h2><p>Hesabını doğrulamak ve uygulamaya dönmek için:</p><p><a href=\"{{ .ConfirmationURL }}\">E-postamı doğrula</a></p><p>Bu kaydı sen yapmadıysan bu e-postayı yok sayabilirsin.</p>"}')"
+          apply "Sıfırlama e-postası içeriği" "$(jq -n '{mailer_templates_recovery_content: "<h2>Şifreni sıfırla</h2><p>halka hesabın için yeni şifre belirlemek üzere:</p><p><a href=\"{{ .ConfirmationURL }}\">Şifremi sıfırla</a></p><p>Bu isteği sen yapmadıysan bu e-postayı yok sayabilirsin.</p>"}')"
 
-          steps = [
-              ("E-posta doğrulaması açık", {"mailer_autoconfirm": False}),
-              ("Site URL (halka://)", {"site_url": "halka://login-callback"}),
-              ("Redirect allow list", {"uri_allow_list": "halka://login-callback,halka://reset-password,halka://*"}),
-              ("Doğrulama e-postası konusu", {"mailer_subjects_confirmation": "halka — e-posta adresini doğrula"}),
-              ("Sıfırlama e-postası konusu", {"mailer_subjects_recovery": "halka — şifreni sıfırla"}),
-              ("Doğrulama e-postası içeriği", {"mailer_templates_confirmation_content":
-                  "<h2>halka'ya hoş geldin</h2><p>Hesabını doğrulamak ve uygulamaya dönmek için:</p>"
-                  "<p><a href=\"{{ .ConfirmationURL }}\">E-postamı doğrula</a></p>"
-                  "<p>Bu kaydı sen yapmadıysan bu e-postayı yok sayabilirsin.</p>"}),
-              ("Sıfırlama e-postası içeriği", {"mailer_templates_recovery_content":
-                  "<h2>Şifreni sıfırla</h2><p>halka hesabın için yeni şifre belirlemek üzere:</p>"
-                  "<p><a href=\"{{ .ConfirmationURL }}\">Şifremi sıfırla</a></p>"
-                  "<p>Bu isteği sen yapmadıysan bu e-postayı yok sayabilirsin.</p>"}),
-          ]
+          echo "" >> report.md
+          echo "**Doğrulama:**" >> report.md
+          curl -s -H "Authorization: Bearer $TOKEN" "$URL" -o /tmp/cfg.json
+          for K in mailer_autoconfirm site_url uri_allow_list external_google_enabled external_apple_enabled; do
+            V=$(jq -r --arg k "$K" '.[$k] // "yok"' /tmp/cfg.json)
+            echo "- \`$K\` = \`$V\`" >> report.md
+          done
+          echo "" >> report.md
+          echo "_${OK}/$((OK+FAIL)) ayar uygulandı._" >> report.md
 
-          print("## Supabase Auth Config sonucu\n")
-          failed = 0
-          for label, payload in steps:
-              ok, detail = patch(payload)
-              if not ok:
-                  failed += 1
-              print(f"- {'✅' if ok else '❌'} {label}" + ("" if ok else f" — `{detail}`"))
-
-          # Son durumu oku
-          req = urllib.request.Request(URL, headers={"Authorization": "Bearer " + TOKEN})
-          try:
-              with urllib.request.urlopen(req) as r:
-                  cfg = json.load(r)
-              print("\n**Doğrulama:**")
-              for k in ("mailer_autoconfirm", "site_url", "uri_allow_list",
-                        "external_google_enabled", "external_apple_enabled"):
-                  print(f"- `{k}` = `{cfg.get(k)}`")
-          except Exception as e:
-              print(f"\nDurum okunamadı: `{str(e)[:200]}`")
-
-          print(f"\n_{len(steps) - failed}/{len(steps)} ayar uygulandı._")
-          PY
           cat report.md
           gh issue comment 19 --repo "$REPO" --body-file report.md
+          [ "$FAIL" = "0" ]
