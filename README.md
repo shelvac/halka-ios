@@ -1,7 +1,22 @@
 # halka — native iOS app (SwiftUI)
 
+![CI](https://github.com/shelvac/halka-ios/actions/workflows/ci.yml/badge.svg)
+
 Native SwiftUI implementation of the **Sağlık App** design exported from Claude Design
 (prototype: `Saglik App.dc.html`).
+
+## Yol haritası durumu (Sprint 1 açıldı)
+
+| İş | Durum |
+| --- | --- |
+| Tüm UI ekranları (demo veri) | ✅ |
+| CI: lint → test → build (`.github/workflows/ci.yml`) | ✅ |
+| Unit test temeli (`HalkaTests/`, 14 test) | ✅ |
+| Supabase şeması + RLS (`supabase/migrations/0001_init.sql`) | ✅ SQL hazır — proje açılınca uygulanacak |
+| Repository katmanı iskeleti (`Halka/Services/DataStore.swift`) | ✅ protokol + in-memory |
+| HealthKit okuma (adım/egzersiz/uyku/enerji + izin akışı) | ✅ Profil → "Bağlan" |
+| Sprint 0 kuruluş rehberi (`docs/Sprint0-Rehber.md`) | ✅ — D-U-N-S ilk gün! |
+| Supabase auth + gerçek veri senkronizasyonu | ⏳ Supabase projesi açılınca |
 
 ## Requirements
 

@@ -17,7 +17,7 @@ final class AppModel {
     var water = 1250                  // ml
     var exerciseBase = 24             // minutes logged before app interactions
     var extraExerciseMin = 0          // added by workouts + Health imports
-    let sleepHours = 6.5
+    var sleepHours = 6.5              // overwritten by HealthKit when data exists
     var waterUndoVisible = false
     private var waterUndoToken = 0
     var selectedCalendarDay = 5
@@ -97,6 +97,33 @@ final class AppModel {
 
     var selectedProgram: WorkoutProgram? {
         programs.first { $0.id == selectedProgramID }
+    }
+
+    // MARK: HealthKit (Sprint 4)
+    var hkConnected = false
+    var hkSteps = 0
+    var hkActiveEnergy = 0
+
+    /// İzin diyaloğunu tetikler (Profil'deki "Bağlan" düğmesi).
+    func connectHealthKit() {
+        guard HealthKitService.shared.isAvailable else { return }
+        Task { [weak self] in
+            try? await HealthKitService.shared.requestAuthorization()
+            await self?.refreshFromHealthKit()
+        }
+    }
+
+    /// Sessiz senkronizasyon: izin zaten verilmişse veriyi halkalara işler,
+    /// verilmemişse hiçbir diyalog göstermeden demo değerlerde kalır.
+    func refreshFromHealthKit() async {
+        guard HealthKitService.shared.isAvailable else { return }
+        let snapshot = await HealthKitService.shared.fetchToday()
+        guard snapshot.hasAnyData else { return }
+        hkConnected = true
+        hkSteps = snapshot.steps
+        hkActiveEnergy = snapshot.activeEnergy
+        if snapshot.exerciseMinutes > 0 { exerciseBase = snapshot.exerciseMinutes }
+        if snapshot.sleepHours > 0 { sleepHours = snapshot.sleepHours }
     }
 
     // MARK: Health

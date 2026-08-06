@@ -1,0 +1,19 @@
+# Sprint 1 başlangıç seti: önce CI'ı yeşil tutan yumuşak kurallar,
+# sonraki sprintlerde sıkılaştırılır (manifesto §6.2).
+included:
+  - Halka
+  - HalkaTests
+
+disabled_rules:
+  - line_length
+  - identifier_name
+  - function_body_length
+  - type_body_length
+  - file_length
+  - cyclomatic_complexity
+  - large_tuple
+  - nesting
+  - todo
+  - trailing_comma
+  - multiple_closures_with_trailing_closure
+  - for_where

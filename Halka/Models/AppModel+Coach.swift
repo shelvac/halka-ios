@@ -20,7 +20,7 @@ extension AppModel {
         }
     }
 
-    private func coachReply(to text: String) -> CoachMessage {
+    func coachReply(to text: String) -> CoachMessage {
         let lower = text.lowercased(with: Locale(identifier: "tr"))
 
         switch pending {
@@ -71,8 +71,8 @@ extension AppModel {
             text: "Anladım. Verilerine göre bugünkü önceliğin: su (+750 ml) ve 30 dk hareket. İstersen sana antrenman planı ya da öğün önerisi hazırlayayım.")
     }
 
-    /// "8 13 16:30 20" or "09:00 · 13:30 · …" → four HH:mm strings.
-    private func parseTimes(_ text: String) -> [String] {
+    /// Exposed for unit tests. "8 13 16:30 20" or "09:00 · 13:30 · …" → four HH:mm strings.
+    func parseTimes(_ text: String) -> [String] {
         var times: [String] = []
         if let regex = try? NSRegularExpression(pattern: "\\d{1,2}[:.]\\d{2}") {
             let range = NSRange(text.startIndex..., in: text)

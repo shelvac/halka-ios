@@ -61,6 +61,7 @@ struct MainTabView: View {
 
             FloatingTabBar()
         }
+        .task { await model.refreshFromHealthKit() }
     }
 }
 

@@ -102,22 +102,38 @@ struct ProfileView: View {
     private var appleHealthCard: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Circle().fill(Color.green).frame(width: 10, height: 10)
+                Circle()
+                    .fill(model.hkConnected ? Color.green : Color.faint)
+                    .frame(width: 10, height: 10)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Apple Health bağlı")
+                    Text(model.hkConnected ? "Apple Health bağlı" : "Apple Health bağlı değil")
                         .font(.h(13))
                         .foregroundStyle(Color.ink)
-                    Text("Adım, egzersiz, uyku otomatik senkronize")
+                    Text(model.hkConnected
+                         ? "Bugün \(model.hkSteps) adım · \(model.hkActiveEnergy) kcal aktif enerji"
+                         : "Adım, egzersiz ve uyku halkalara otomatik işlensin")
                         .font(.h(10.5, .semibold))
                         .foregroundStyle(Color.sub)
                 }
                 Spacer()
-                Text("Aktif")
-                    .font(.h(11))
-                    .foregroundStyle(Color.greenDark)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(Color.greenBg))
+                if model.hkConnected {
+                    Text("Aktif")
+                        .font(.h(11))
+                        .foregroundStyle(Color.greenDark)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color.greenBg))
+                } else {
+                    Button { model.connectHealthKit() } label: {
+                        Text("Bağlan")
+                            .font(.h(11))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.coral))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
             // Screenshot fallback → AI Koç parses activity data
