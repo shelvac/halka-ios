@@ -1,0 +1,35 @@
+# Resend üzerinden son gönderilen e-postaları listeler (SMTP dahil).
+# Sonuç issue #30'a yorum olarak yazılır.
+name: Resend Son Mailler
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Son mailleri listele
+        env:
+          RESEND: ${{ secrets.RESEND_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set +e
+          echo "## Resend son gönderimler" > r.md
+          echo "" >> r.md
+          curl -s --max-time 30 -H "Authorization: Bearer $RESEND" \
+            "https://api.resend.com/emails" -o list.json
+          echo '```' >> r.md
+          jq -r '.data[]? | "\(.created_at) | \(.last_event // "?") | \(.subject) | to: \(.to | join(","))"' list.json 2>/dev/null | head -20 >> r.md
+          if ! jq -e '.data' list.json > /dev/null 2>&1; then
+            head -c 1500 list.json >> r.md
+          fi
+          echo '```' >> r.md
+          cat r.md
+          gh issue comment 30 --repo "$REPO" --body-file r.md
