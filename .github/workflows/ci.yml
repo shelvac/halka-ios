@@ -3,10 +3,11 @@
 # main'e push ve PR'larda çalışır.
 name: CI
 
+# macOS runner dakikaları 10 kat sayılır ve kuyruğu tıkar; bu yüzden CI
+# her push'ta değil, yalnızca PR'larda ve elle tetiklendiğinde çalışır.
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   build-and-test:
