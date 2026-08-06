@@ -112,6 +112,32 @@ final class SupabaseService {
             .execute()
     }
 
+    /// Bir e-postanın kayıtlı olup olmadığı ve hangi yöntemle açıldığı (US-013).
+    struct AccountStatus: Decodable {
+        let exists: Bool
+        let has_password: Bool
+        let providers: String
+
+        var isOAuthOnly: Bool { exists && !has_password && !providers.isEmpty }
+        var providerLabel: String {
+            let names = providers.split(separator: ",").map(String.init)
+            if names.contains("apple") && names.contains("google") { return "Apple veya Google" }
+            if names.contains("apple") { return "Apple" }
+            if names.contains("google") { return "Google" }
+            return "sosyal hesap"
+        }
+    }
+
+    /// Sunucudaki `account_status` fonksiyonunu çağırır. Fonksiyon henüz
+    /// uygulanmadıysa veya ağ hatası olursa `nil` döner (akış eskisi gibi sürer).
+    func accountStatus(email: String) async -> AccountStatus? {
+        guard let client else { return nil }
+        return try? await client
+            .rpc("account_status", params: ["p_email": email])
+            .execute()
+            .value
+    }
+
     func resetPassword(email: String) async throws {
         guard let client else { return }
         try await client.auth.resetPasswordForEmail(email, redirectTo: SupabaseConfig.resetCallback)

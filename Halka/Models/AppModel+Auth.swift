@@ -126,6 +126,18 @@ extension AppModel {
         authBusy = true
         defer { authBusy = false }
         if supabaseReady {
+            // Hesap durumunu kontrol et: kayıtlı değilse ya da yalnızca
+            // Apple/Google ile açıldıysa kullanıcıya net söyle.
+            if let status = await SupabaseService.shared.accountStatus(email: email) {
+                guard status.exists else {
+                    authError = "Bu e-posta ile kayıtlı bir hesap yok — önce kayıt ol."
+                    return
+                }
+                if status.isOAuthOnly {
+                    authError = "Bu hesap \(status.providerLabel) ile açılmış — şifre yerine o düğmeyle giriş yap."
+                    return
+                }
+            }
             try? await SupabaseService.shared.resetPassword(email: email)
         }
         forgotSent = true
