@@ -1,14 +1,18 @@
-# E-posta teşhisi: Resend anahtarı çalışıyor mu, Supabase SMTP'ye bağlı mı,
-# hangi limitler geçerli? Sonuç issue #30'a yorum olarak yazılır.
+# E-posta teşhisi: Resend teslim durumu + Supabase recover çağrısının gerçek yanıtı.
+# Sonuç issue #30'a yorum olarak yazılır.
 name: E-posta Teşhis
 
 on:
   workflow_dispatch:
     inputs:
       test_to:
-        description: "Test e-postasının gideceği adres"
+        description: "Test edilecek adres (hesabın kayıtlı olduğu e-posta)"
         required: true
         default: "simgehelvaci@gmail.com"
+      previous_email_id:
+        description: "Önceki test mailinin Resend ID'si (durumu sorgulanır)"
+        required: false
+        default: "f12bdd36-ecb4-406e-b16a-5485167161fd"
 
 permissions:
   contents: read
@@ -23,54 +27,62 @@ jobs:
           TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           RESEND: ${{ secrets.RESEND_API_KEY }}
           TO: ${{ inputs.test_to }}
+          PREV: ${{ inputs.previous_email_id }}
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
           set -u
-          echo "## E-posta teşhis raporu" > r.md
+          echo "## E-posta teşhis #2" > r.md
           echo "" >> r.md
 
-          # 1) Supabase SMTP ayarları + limitler
-          echo "### Supabase Auth ayarları" >> r.md
+          # 0) anon key (recover çağrısı için)
           curl -s -H "Authorization: Bearer $TOKEN" \
-            "https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph/config/auth" -o cfg.json
-          jq -r 'to_entries[] | select(.key | test("smtp_(host|port|user|admin_email|sender_name|max_frequency)$|rate_limit_email|mailer_autoconfirm|external_(apple|google)_client_id")) | "- `\(.key)` = `\(.value)`"' cfg.json >> r.md
-          if jq -e '.smtp_host != null' cfg.json > /dev/null; then
-            echo "- ✅ Custom SMTP tanımlı" >> r.md
-          else
-            echo "- ❌ Custom SMTP tanımlı DEĞİL (varsayılan sağlayıcı, saatlik limit çok düşük)" >> r.md
+            "https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph/api-keys?reveal=true" -o keys.json
+          ANON=$(jq -r '[.[] | select(.name == "anon")][0].api_key' keys.json)
+
+          # 1) Önceki test mailinin teslim durumu
+          echo "### Önceki test mailinin teslim durumu" >> r.md
+          if [ -n "$PREV" ]; then
+            curl -s -H "Authorization: Bearer $RESEND" "https://api.resend.com/emails/$PREV" -o prev.json
+            echo "- \`to\` = \`$(jq -r '.to // "?" | if type=="array" then join(",") else . end' prev.json)\`" >> r.md
+            echo "- \`last_event\` = **\`$(jq -r '.last_event // "?"' prev.json)\`**" >> r.md
+            jq -e '.message' prev.json > /dev/null && echo "- hata: \`$(jq -r .message prev.json)\`" >> r.md || true
           fi
 
-          # 2) Resend anahtarı geçerli mi + alan adı durumu
+          # 2) Supabase recover çağrısı — gerçek yanıtı gör
           echo "" >> r.md
-          echo "### Resend hesabı" >> r.md
-          CODE=$(curl -s -o dom.json -w "%{http_code}" -H "Authorization: Bearer $RESEND" https://api.resend.com/domains)
-          echo "- API anahtarı: HTTP \`$CODE\`" >> r.md
-          if [ "$CODE" = "200" ]; then
-            COUNT=$(jq '(.data // []) | length' dom.json)
-            echo "- Doğrulanmış alan adı sayısı: \`$COUNT\`" >> r.md
-            jq -r '(.data // [])[] | "  - `\(.name)` → \(.status)"' dom.json >> r.md
-            [ "$COUNT" = "0" ] && echo "  - ⚠️ Alan adı yok → yalnızca **Resend hesabının kendi adresine** gönderim yapılabilir" >> r.md
+          echo "### Supabase şifre sıfırlama isteği" >> r.md
+          CODE=$(curl -s -o rec.json -w "%{http_code}" -X POST \
+            "https://urrjkubdngoszkttpeph.supabase.co/auth/v1/recover?redirect_to=halka://reset-password" \
+            -H "apikey: $ANON" -H "Content-Type: application/json" \
+            -d "$(jq -n --arg e "$TO" '{email: $e}')")
+          echo "- HTTP \`$CODE\` → \`$(head -c 300 rec.json | tr -d '\n')\`" >> r.md
+          [ "$CODE" = "200" ] && echo "- ✅ Supabase isteği kabul etti (mail kuyruğa girdi)" >> r.md \
+                              || echo "- ❌ Supabase reddetti (sebep üstte)" >> r.md
+
+          # 3) Bu adreste hesap var mı? (auth.users kontrolü)
+          echo "" >> r.md
+          echo "### Bu adreste hesap var mı" >> r.md
+          Q=$(jq -n --arg e "$TO" '{query: ("select email, (encrypted_password is not null) as has_password, email_confirmed_at is not null as confirmed, (select string_agg(provider, \x27,\x27) from auth.identities i where i.user_id = u.id) as providers from auth.users u where email = " + ($e|@sh))}')
+          curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            "https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph/database/query" -d "$Q" -o u.json
+          if jq -e 'type == "array" and length > 0' u.json > /dev/null; then
+            jq -r '.[] | "- `\(.email)` · şifreli hesap: **\(.has_password)** · doğrulanmış: \(.confirmed) · sağlayıcılar: `\(.providers // "-")`"' u.json >> r.md
           else
-            echo "- ❌ Anahtar geçersiz veya yetkisiz: \`$(head -c 200 dom.json)\`" >> r.md
+            echo "- ⚠️ Bu adreste **hesap yok** → Supabase güvenlik gereği e-posta göndermez" >> r.md
+            echo "- ham yanıt: \`$(head -c 200 u.json | tr -d '\n')\`" >> r.md
           fi
 
-          # 3) Doğrudan Resend üzerinden test e-postası
+          # 4) 20 sn bekleyip Resend'de son gönderimleri kontrol et
           echo "" >> r.md
-          echo "### Doğrudan gönderim testi (Resend API)" >> r.md
-          BODY=$(jq -n --arg to "$TO" '{
-            from: "halka <onboarding@resend.dev>",
-            to: [$to],
-            subject: "halka — e-posta altyapısı testi",
-            html: "<p>Bu e-posta Resend üzerinden doğrudan gönderildi. Bunu aldıysan anahtar ve teslimat çalışıyor demektir.</p>"
-          }')
-          CODE=$(curl -s -o send.json -w "%{http_code}" -X POST https://api.resend.com/emails \
-            -H "Authorization: Bearer $RESEND" -H "Content-Type: application/json" -d "$BODY")
-          echo "- Gönderim: HTTP \`$CODE\` → \`$(head -c 250 send.json | tr -d '\n')\`" >> r.md
+          echo "### Resend son gönderimler" >> r.md
+          sleep 20
+          CODE=$(curl -s -o list.json -w "%{http_code}" -H "Authorization: Bearer $RESEND" "https://api.resend.com/emails?limit=5")
           if [ "$CODE" = "200" ]; then
-            echo "- ✅ Resend kabul etti — gelen kutusunu kontrol et" >> r.md
+            jq -r '(.data // [])[] | "- `\(.created_at)` → `\(.to | if type==\"array\" then join(\",\") else . end)` · \(.subject // \"?\") · **\(.last_event // \"?\")**"' list.json >> r.md
+            [ "$(jq '(.data // []) | length' list.json)" = "0" ] && echo "- (kayıt yok)" >> r.md
           else
-            echo "- ❌ Resend reddetti (üstteki mesaj sebebi açıklar)" >> r.md
+            echo "- listeleme desteklenmiyor (HTTP \`$CODE\`)" >> r.md
           fi
 
           cat r.md
