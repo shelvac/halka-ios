@@ -1,0 +1,72 @@
+# Resend teslim durumu teşhisi — sade ve kırılgan olmayan.
+# Sonuç issue #30'a yorum olarak yazılır.
+name: Resend Kontrol
+
+on:
+  workflow_dispatch:
+    inputs:
+      to:
+        description: "Test edilecek adres"
+        required: true
+        default: "simgehelvaci@gmail.com"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resend teşhisi
+        env:
+          RESEND: ${{ secrets.RESEND_API_KEY }}
+          TO: ${{ inputs.to }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set +e
+          {
+            echo "## Resend teşhisi — \`$TO\`"
+            echo ""
+          } > r.md
+
+          # 1) Önceki test mailinin durumu
+          echo "### 1) Önceki test maili (f12bdd36…)" >> r.md
+          curl -s -H "Authorization: Bearer $RESEND" \
+            "https://api.resend.com/emails/f12bdd36-ecb4-406e-b16a-5485167161fd" -o p.json
+          echo '```json' >> r.md
+          head -c 900 p.json >> r.md
+          echo "" >> r.md
+          echo '```' >> r.md
+
+          # 2) Yeni test maili gönder
+          echo "" >> r.md
+          echo "### 2) Yeni test maili" >> r.md
+          curl -s -X POST https://api.resend.com/emails \
+            -H "Authorization: Bearer $RESEND" -H "Content-Type: application/json" \
+            -d "{\"from\":\"halka <onboarding@resend.dev>\",\"to\":[\"$TO\"],\"subject\":\"halka teslim testi\",\"html\":\"<p>Teslim testi.</p>\"}" \
+            -o s.json
+          echo '```json' >> r.md
+          head -c 400 s.json >> r.md
+          echo "" >> r.md
+          echo '```' >> r.md
+
+          ID=$(grep -o '"id":"[^"]*"' s.json | head -1 | cut -d'"' -f4)
+
+          # 3) 45 sn sonra teslim durumu
+          echo "" >> r.md
+          echo "### 3) 45 sn sonraki durum" >> r.md
+          if [ -n "$ID" ]; then
+            sleep 45
+            curl -s -H "Authorization: Bearer $RESEND" "https://api.resend.com/emails/$ID" -o n.json
+            echo '```json' >> r.md
+            head -c 900 n.json >> r.md
+            echo "" >> r.md
+            echo '```' >> r.md
+          else
+            echo "- Gönderim ID alınamadı" >> r.md
+          fi
+
+          cat r.md
+          gh issue comment 30 --repo "$REPO" --body-file r.md
