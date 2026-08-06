@@ -54,7 +54,7 @@ jobs:
           SMTP=$(jq -n --arg pass "$RESEND" --arg sender "$SENDER" '{
             smtp_admin_email: $sender,
             smtp_host: "smtp.resend.com",
-            smtp_port: 465,
+            smtp_port: "465",
             smtp_user: "resend",
             smtp_pass: $pass,
             smtp_sender_name: "halka",
