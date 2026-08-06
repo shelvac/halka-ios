@@ -1,5 +1,6 @@
 import Foundation
 import Supabase
+import AuthenticationServices
 
 // MARK: - Gerçek kimlik akışları (Sprint 1: US-010…US-018)
 // Supabase yapılandırılmamışsa (anon key boş) her akış demo davranışına düşer;
@@ -176,6 +177,49 @@ extension AppModel {
         } catch {
             let message = Self.providerMessage(error, provider: provider)
             authError = message.isEmpty ? nil : message
+        }
+    }
+
+    /// US-015 — Native Sign in with Apple sonucu.
+    func handleAppleSignIn(_ result: Result<ASAuthorization, Error>, nonce: String?) {
+        authError = nil
+        authInfo = nil
+        switch result {
+        case .failure(let error):
+            // Kullanıcı vazgeçtiyse sessiz kal
+            if (error as NSError).code == ASAuthorizationError.canceled.rawValue { return }
+            authError = Self.authMessage(error)
+
+        case .success(let authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let tokenData = credential.identityToken,
+                  let idToken = String(data: tokenData, encoding: .utf8),
+                  let nonce else {
+                authError = "Apple girişi tamamlanamadı — tekrar dene."
+                return
+            }
+            // Ad yalnızca ilk girişte gelir; sonraki girişlerde boştur.
+            let appleName = [credential.fullName?.givenName, credential.fullName?.familyName]
+                .compactMap { $0 }
+                .joined(separator: " ")
+                .trimmingCharacters(in: .whitespaces)
+
+            Task {
+                authBusy = true
+                defer { authBusy = false }
+                do {
+                    try await SupabaseService.shared.signInWithApple(idToken: idToken, nonce: nonce)
+                    if !appleName.isEmpty {
+                        try? await SupabaseService.shared.updateFullName(appleName)
+                        applyFullName(appleName)
+                    } else if let name = await SupabaseService.shared.syncProviderProfile() {
+                        applyFullName(name)
+                    }
+                    await enterApp()
+                } catch {
+                    authError = Self.authMessage(error)
+                }
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 import SwiftUI
 import Supabase
+import AuthenticationServices
 
 // MARK: - Splash
 
@@ -74,6 +75,7 @@ struct LoginView: View {
     @Environment(AppModel.self) private var model
     @State private var email = ""
     @State private var password = ""
+    @State private var appleNonce: String? = nil
 
     var body: some View {
         ZStack {
@@ -152,21 +154,19 @@ struct LoginView: View {
                 }
                 .padding(.vertical, 16)
 
-                // US-018 — SSO. Apple, Google sunulduğunda App Store kuralı gereği zorunlu.
-                Button {
-                    Task { await model.signInWithProvider(.apple) }
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "apple.logo").font(.system(size: 15, weight: .medium))
-                        Text("Apple ile devam et").font(.h(13))
-                    }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 15)
-                    .background(Color.ink)
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                // US-015 — Native Sign in with Apple (tarayıcı açmaz).
+                // Google sunulduğu için App Store Guideline 4.8 gereği zorunlu.
+                SignInWithAppleButton(.continue) { request in
+                    let nonce = AppleNonce.random()
+                    appleNonce = nonce
+                    request.requestedScopes = [.fullName, .email]
+                    request.nonce = AppleNonce.sha256(nonce)
+                } onCompletion: { result in
+                    model.handleAppleSignIn(result, nonce: appleNonce)
                 }
-                .buttonStyle(.plain)
+                .signInWithAppleButtonStyle(.black)
+                .frame(height: 50)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .disabled(model.authBusy)
 
                 Button {

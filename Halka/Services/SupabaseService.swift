@@ -138,6 +138,14 @@ final class SupabaseService {
             redirectTo: SupabaseConfig.loginCallback)
     }
 
+    /// Native Sign in with Apple — Apple'ın verdiği identity token'ı Supabase
+    /// oturumuna çevirir (tarayıcı açılmaz).
+    func signInWithApple(idToken: String, nonce: String) async throws {
+        guard let client else { return }
+        try await client.auth.signInWithIdToken(
+            credentials: OpenIDConnectCredentials(provider: .apple, idToken: idToken, nonce: nonce))
+    }
+
     /// E-posta bağlantısı / OAuth dönüşündeki kodu oturuma çevirir.
     @discardableResult
     func session(from url: URL) async throws -> Bool {
