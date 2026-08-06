@@ -76,7 +76,7 @@ final class HealthKitService {
             predicate: .quantitySample(type: HKQuantityType(identifier), predicate: predicate),
             options: .cumulativeSum)
         guard let statistics = try? await descriptor.result(for: store),
-              let quantity = statistics?.sumQuantity() else { return 0 }
+              let quantity = statistics.sumQuantity() else { return 0 }
         return Int(quantity.doubleValue(for: unit).rounded())
     }
 }
