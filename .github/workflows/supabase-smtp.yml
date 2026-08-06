@@ -5,7 +5,10 @@
 #      birkaç e-posta gönderir — doğrulama/sıfırlama mailleri "gelmiyor".
 #   2. Şablon özelleştirme yalnızca custom SMTP ile açılır.
 #
-# Gerekli secret: RESEND_API_KEY  (Resend → API Keys → Create)
+# Şablonlar `supabase/emails/*.html` dosyalarından okunur — tasarımı değiştirmek
+# için dosyayı düzenleyip bu workflow'u yeniden çalıştırmak yeterli.
+#
+# Gerekli secret'lar: SUPABASE_ACCESS_TOKEN, RESEND_API_KEY
 name: Supabase SMTP + Şablonlar
 
 on:
@@ -25,6 +28,8 @@ jobs:
     env:
       URL: https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph/config/auth
     steps:
+      - uses: actions/checkout@v4
+
       - name: SMTP + şablonları uygula
         env:
           TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -38,7 +43,7 @@ jobs:
           echo "" >> report.md
           OK=0; FAIL=0
 
-          apply() {
+          apply() {   # $1 = etiket, $2 = json gövde
             CODE=$(curl -s -o /tmp/resp.json -w "%{http_code}" -X PATCH \
               -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
               "$URL" -d "$2")
@@ -51,7 +56,7 @@ jobs:
           }
 
           # 1) SMTP bağlantısı (Resend)
-          SMTP=$(jq -n --arg pass "$RESEND" --arg sender "$SENDER" '{
+          apply "Resend SMTP bağlantısı" "$(jq -n --arg pass "$RESEND" --arg sender "$SENDER" '{
             smtp_admin_email: $sender,
             smtp_host: "smtp.resend.com",
             smtp_port: "465",
@@ -59,24 +64,37 @@ jobs:
             smtp_pass: $pass,
             smtp_sender_name: "halka",
             smtp_max_frequency: 5
-          }')
-          apply "Resend SMTP bağlantısı" "$SMTP"
+          }')"
 
-          # 2) Marka şablonları — halka mercan paleti, Türkçe
-          BODY_HEAD='<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#F7F4EF;padding:32px 16px"><div style="max-width:480px;margin:0 auto;background:#fff;border-radius:20px;padding:32px 28px;box-shadow:0 2px 14px rgba(38,34,27,.06)"><div style="font-size:26px;font-weight:800;color:#26221B;letter-spacing:-1px">halka</div><div style="font-size:12px;font-weight:700;color:#96907F;margin-top:2px">Her gün %1 daha iyi</div><div style="height:1px;background:#F3EEE5;margin:22px 0"></div>'
-          BODY_FOOT='<div style="height:1px;background:#F3EEE5;margin:24px 0"></div><div style="font-size:11px;color:#B4AC9C;line-height:1.6">Bu e-postayı beklemiyorsan görmezden gelebilirsin — hesabında hiçbir değişiklik olmaz.<br>halka · sağlık ve beslenme takibi</div></div></div>'
-          BTN_OPEN='<a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#E45C49;color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:14px 28px;border-radius:14px">'
+          # 2) Şablonlar — supabase/emails/*.html dosyalarından
+          apply "Doğrulama e-postası" "$(jq -n --rawfile c supabase/emails/confirmation.html \
+            '{mailer_subjects_confirmation: "halka — e-posta adresini doğrula",
+              mailer_templates_confirmation_content: $c}')"
 
-          CONFIRM="${BODY_HEAD}<div style=\"font-size:20px;font-weight:800;color:#26221B\">Hoş geldin!</div><div style=\"font-size:14px;color:#4A453B;line-height:1.6;margin:12px 0 24px\">halka hesabını tamamlamak için e-posta adresini doğrula. Bağlantıya dokunduğunda uygulama açılacak ve halkaların seni bekliyor olacak.</div>${BTN_OPEN}E-postamı doğrula</a>${BODY_FOOT}"
-          RECOVER="${BODY_HEAD}<div style=\"font-size:20px;font-weight:800;color:#26221B\">Şifreni sıfırla</div><div style=\"font-size:14px;color:#4A453B;line-height:1.6;margin:12px 0 24px\">halka hesabın için yeni bir şifre belirlemek üzere aşağıdaki bağlantıya <b>telefonundan</b> dokun — uygulama açılıp yeni şifre ekranına götürecek.</div>${BTN_OPEN}Şifremi sıfırla</a>${BODY_FOOT}"
+          apply "Şifre sıfırlama e-postası" "$(jq -n --rawfile c supabase/emails/recovery.html \
+            '{mailer_subjects_recovery: "halka — şifreni sıfırla",
+              mailer_templates_recovery_content: $c}')"
 
-          apply "Doğrulama e-postası (konu + içerik)" "$(jq -n --arg c "$CONFIRM" '{mailer_subjects_confirmation: "halka — e-posta adresini doğrula", mailer_templates_confirmation_content: $c}')"
-          apply "Sıfırlama e-postası (konu + içerik)" "$(jq -n --arg c "$RECOVER" '{mailer_subjects_recovery: "halka — şifreni sıfırla", mailer_templates_recovery_content: $c}')"
+          apply "Giriş bağlantısı e-postası" "$(jq -n --rawfile c supabase/emails/magic_link.html \
+            '{mailer_subjects_magic_link: "halka — giriş bağlantın",
+              mailer_templates_magic_link_content: $c}')"
+
+          apply "E-posta değişikliği" "$(jq -n --rawfile c supabase/emails/email_change.html \
+            '{mailer_subjects_email_change: "halka — yeni e-posta adresini onayla",
+              mailer_templates_email_change_content: $c}')"
+
+          # 3) Diğer bildirim konularını da Türkçeleştir
+          apply "Bildirim konuları (TR)" "$(jq -n '{
+            mailer_subjects_password_changed_notification: "halka — şifren değiştirildi",
+            mailer_subjects_email_changed_notification: "halka — e-posta adresin değişti",
+            mailer_subjects_identity_linked_notification: "halka — hesabına yeni giriş yöntemi eklendi",
+            mailer_subjects_identity_unlinked_notification: "halka — bir giriş yöntemi kaldırıldı"
+          }')"
 
           echo "" >> report.md
           echo "**Doğrulama:**" >> report.md
           curl -s -H "Authorization: Bearer $TOKEN" "$URL" -o /tmp/cfg.json
-          jq -r 'to_entries[] | select(.key | test("smtp_host|smtp_admin_email|smtp_sender_name|mailer_subjects")) | "- `\(.key)` = `\(.value)`"' /tmp/cfg.json >> report.md
+          jq -r 'to_entries[] | select(.key | test("smtp_host|smtp_admin_email|smtp_sender_name|mailer_subjects_(confirmation|recovery|magic_link|email_change)$")) | "- `\(.key)` = `\(.value)`"' /tmp/cfg.json >> report.md
           echo "" >> report.md
           echo "_${OK}/$((OK+FAIL)) adım uygulandı._" >> report.md
 
