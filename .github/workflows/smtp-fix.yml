@@ -22,6 +22,7 @@ permissions:
 jobs:
   fix:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
     env:
       API: https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph
     steps:
@@ -41,7 +42,7 @@ jobs:
           # 1) Önceki auth logları (SMTP hatası var mı?)
           echo "### 1) Değişiklik öncesi auth logları" >> r.md
           SQL='select cast(timestamp as string) as ts, event_message from auth_logs order by timestamp desc limit 15'
-          curl -s -G -H "Authorization: Bearer $TOKEN" \
+          curl -s --max-time 45 -G -H "Authorization: Bearer $TOKEN" \
             --data-urlencode "sql=$SQL" \
             "$API/analytics/endpoints/logs.all" -o before.json
           echo '```json' >> r.md
@@ -61,19 +62,19 @@ jobs:
             smtp_sender_name: "halka",
             smtp_max_frequency: 1
           }')
-          CODE=$(curl -s -o cfg.json -w "%{http_code}" -X PATCH \
+          CODE=$(curl -s --max-time 45 -o cfg.json -w "%{http_code}" -X PATCH \
             -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
             "$API/config/auth" -d "$BODY")
           echo "- PATCH HTTP \`$CODE\`" >> r.md
-          curl -s -H "Authorization: Bearer $TOKEN" "$API/config/auth" -o now.json
+          curl -s --max-time 45 -H "Authorization: Bearer $TOKEN" "$API/config/auth" -o now.json
           jq -r 'to_entries[] | select(.key | test("^smtp_")) | "- `\(.key)` = `\(.value)`"' now.json >> r.md
 
           # 3) Gerçek şifre sıfırlama isteği
           echo "" >> r.md
           echo "### 3) Gerçek sıfırlama isteği" >> r.md
-          curl -s -H "Authorization: Bearer $TOKEN" "$API/api-keys?reveal=true" -o keys.json
+          curl -s --max-time 45 -H "Authorization: Bearer $TOKEN" "$API/api-keys?reveal=true" -o keys.json
           ANON=$(jq -r '[.[] | select(.name == "anon")][0].api_key' keys.json)
-          CODE=$(curl -s -o rec.json -w "%{http_code}" -X POST \
+          CODE=$(curl -s --max-time 45 -o rec.json -w "%{http_code}" -X POST \
             "https://urrjkubdngoszkttpeph.supabase.co/auth/v1/recover?redirect_to=halka://reset-password" \
             -H "apikey: $ANON" -H "Content-Type: application/json" \
             -d "{\"email\":\"$TO\"}")
@@ -83,7 +84,7 @@ jobs:
           echo "" >> r.md
           echo "### 4) İstek sonrası auth logları" >> r.md
           sleep 40
-          curl -s -G -H "Authorization: Bearer $TOKEN" \
+          curl -s --max-time 45 -G -H "Authorization: Bearer $TOKEN" \
             --data-urlencode "sql=$SQL" \
             "$API/analytics/endpoints/logs.all" -o after.json
           echo '```json' >> r.md
