@@ -1,7 +1,6 @@
 # Auth yapılandırması (US-011/US-013/US-018):
 #   - E-posta doğrulaması AÇIK (kayıt → doğrulama maili → uygulamaya dönüş)
 #   - Site URL + redirect'ler halka:// deep link şemasına yönlendirilir
-#   - E-posta şablonları Türkçeleştirilir
 # Sonuç issue #19'a yorum olarak yazılır (Actions loglarına dışarıdan
 # erişilemediği için teşhis böyle yapılır).
 # Not: istekler curl ile atılır — Supabase'in önündeki Cloudflare, Python
@@ -47,18 +46,11 @@ jobs:
           apply "E-posta doğrulaması açık" '{"mailer_autoconfirm": false}'
           apply "Site URL (halka://)" '{"site_url": "halka://login-callback"}'
           apply "Redirect allow list" '{"uri_allow_list": "halka://login-callback,halka://reset-password,halka://*"}'
-          apply "Doğrulama e-postası konusu" '{"mailer_subjects_confirmation": "halka — e-posta adresini doğrula"}'
-          apply "Sıfırlama e-postası konusu" '{"mailer_subjects_recovery": "halka — şifreni sıfırla"}'
-          apply "Doğrulama e-postası içeriği" "$(jq -n '{mailer_templates_confirmation_content: "<h2>halka'"'"'ya hoş geldin</h2><p>Hesabını doğrulamak ve uygulamaya dönmek için:</p><p><a href=\"{{ .ConfirmationURL }}\">E-postamı doğrula</a></p><p>Bu kaydı sen yapmadıysan bu e-postayı yok sayabilirsin.</p>"}')"
-          apply "Sıfırlama e-postası içeriği" "$(jq -n '{mailer_templates_recovery_content: "<h2>Şifreni sıfırla</h2><p>halka hesabın için yeni şifre belirlemek üzere:</p><p><a href=\"{{ .ConfirmationURL }}\">Şifremi sıfırla</a></p><p>Bu isteği sen yapmadıysan bu e-postayı yok sayabilirsin.</p>"}')"
 
           echo "" >> report.md
           echo "**Doğrulama:**" >> report.md
           curl -s -H "Authorization: Bearer $TOKEN" "$URL" -o /tmp/cfg.json
-          for K in mailer_autoconfirm site_url uri_allow_list external_google_enabled external_apple_enabled; do
-            V=$(jq -r --arg k "$K" '.[$k] // "yok"' /tmp/cfg.json)
-            echo "- \`$K\` = \`$V\`" >> report.md
-          done
+          jq -r 'to_entries[] | select(.key | test("autoconfirm|site_url|uri_allow|external_(google|apple)_enabled")) | "- `\(.key)` = `\(.value)`"' /tmp/cfg.json >> report.md
           echo "" >> report.md
           echo "_${OK}/$((OK+FAIL)) ayar uygulandı._" >> report.md
 
