@@ -1,0 +1,77 @@
+# E-posta teşhisi: Resend anahtarı çalışıyor mu, Supabase SMTP'ye bağlı mı,
+# hangi limitler geçerli? Sonuç issue #30'a yorum olarak yazılır.
+name: E-posta Teşhis
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_to:
+        description: "Test e-postasının gideceği adres"
+        required: true
+        default: "simgehelvaci@gmail.com"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Teşhis
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          RESEND: ${{ secrets.RESEND_API_KEY }}
+          TO: ${{ inputs.test_to }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          echo "## E-posta teşhis raporu" > r.md
+          echo "" >> r.md
+
+          # 1) Supabase SMTP ayarları + limitler
+          echo "### Supabase Auth ayarları" >> r.md
+          curl -s -H "Authorization: Bearer $TOKEN" \
+            "https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph/config/auth" -o cfg.json
+          jq -r 'to_entries[] | select(.key | test("smtp_(host|port|user|admin_email|sender_name|max_frequency)$|rate_limit_email|mailer_autoconfirm|external_(apple|google)_client_id")) | "- `\(.key)` = `\(.value)`"' cfg.json >> r.md
+          if jq -e '.smtp_host != null' cfg.json > /dev/null; then
+            echo "- ✅ Custom SMTP tanımlı" >> r.md
+          else
+            echo "- ❌ Custom SMTP tanımlı DEĞİL (varsayılan sağlayıcı, saatlik limit çok düşük)" >> r.md
+          fi
+
+          # 2) Resend anahtarı geçerli mi + alan adı durumu
+          echo "" >> r.md
+          echo "### Resend hesabı" >> r.md
+          CODE=$(curl -s -o dom.json -w "%{http_code}" -H "Authorization: Bearer $RESEND" https://api.resend.com/domains)
+          echo "- API anahtarı: HTTP \`$CODE\`" >> r.md
+          if [ "$CODE" = "200" ]; then
+            COUNT=$(jq '(.data // []) | length' dom.json)
+            echo "- Doğrulanmış alan adı sayısı: \`$COUNT\`" >> r.md
+            jq -r '(.data // [])[] | "  - `\(.name)` → \(.status)"' dom.json >> r.md
+            [ "$COUNT" = "0" ] && echo "  - ⚠️ Alan adı yok → yalnızca **Resend hesabının kendi adresine** gönderim yapılabilir" >> r.md
+          else
+            echo "- ❌ Anahtar geçersiz veya yetkisiz: \`$(head -c 200 dom.json)\`" >> r.md
+          fi
+
+          # 3) Doğrudan Resend üzerinden test e-postası
+          echo "" >> r.md
+          echo "### Doğrudan gönderim testi (Resend API)" >> r.md
+          BODY=$(jq -n --arg to "$TO" '{
+            from: "halka <onboarding@resend.dev>",
+            to: [$to],
+            subject: "halka — e-posta altyapısı testi",
+            html: "<p>Bu e-posta Resend üzerinden doğrudan gönderildi. Bunu aldıysan anahtar ve teslimat çalışıyor demektir.</p>"
+          }')
+          CODE=$(curl -s -o send.json -w "%{http_code}" -X POST https://api.resend.com/emails \
+            -H "Authorization: Bearer $RESEND" -H "Content-Type: application/json" -d "$BODY")
+          echo "- Gönderim: HTTP \`$CODE\` → \`$(head -c 250 send.json | tr -d '\n')\`" >> r.md
+          if [ "$CODE" = "200" ]; then
+            echo "- ✅ Resend kabul etti — gelen kutusunu kontrol et" >> r.md
+          else
+            echo "- ❌ Resend reddetti (üstteki mesaj sebebi açıklar)" >> r.md
+          fi
+
+          cat r.md
+          gh issue comment 30 --repo "$REPO" --body-file r.md
