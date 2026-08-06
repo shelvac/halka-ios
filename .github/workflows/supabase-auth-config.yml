@@ -46,11 +46,14 @@ jobs:
           apply "E-posta doğrulaması açık" '{"mailer_autoconfirm": false}'
           apply "Site URL (halka://)" '{"site_url": "halka://login-callback"}'
           apply "Redirect allow list" '{"uri_allow_list": "halka://login-callback,halka://reset-password,halka://*"}'
+          # Custom SMTP varken saatlik e-posta limiti varsayılanda (2) kalıyor —
+          # doğrulama/sıfırlama maillerinin gelmemesinin sebebi buydu.
+          apply "E-posta saatlik limiti (100)" '{"rate_limit_email_sent": 100}'
 
           echo "" >> report.md
           echo "**Doğrulama:**" >> report.md
           curl -s -H "Authorization: Bearer $TOKEN" "$URL" -o /tmp/cfg.json
-          jq -r 'to_entries[] | select(.key | test("autoconfirm|site_url|uri_allow|external_(google|apple)_enabled")) | "- `\(.key)` = `\(.value)`"' /tmp/cfg.json >> report.md
+          jq -r 'to_entries[] | select(.key | test("autoconfirm|site_url|uri_allow|rate_limit_email|external_(google|apple)_enabled")) | "- `\(.key)` = `\(.value)`"' /tmp/cfg.json >> report.md
           echo "" >> report.md
           echo "_${OK}/$((OK+FAIL)) ayar uygulandı._" >> report.md
 
