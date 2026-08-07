@@ -149,6 +149,29 @@ final class SupabaseService {
         try await client.auth.update(user: UserAttributes(password: newPassword))
     }
 
+    /// Girilen şifre kullanıcının MEVCUT şifresiyle aynı mı?
+    ///
+    /// Sıfırlama akışında kullanıcı eski şifresini yazmaz, Supabase'de de
+    /// "aynı şifreyi reddet" diye bir ayar yok. Bu yüzden kontrolü kendimiz
+    /// yapıyoruz: yeni şifreyle giriş denenir — başarılı olursa şifre eskisiyle
+    /// aynıdır. Deneme AYRI bir istemciyle yapılır ki sıfırlama oturumu
+    /// bozulmasın; sonuç ne olursa olsun o istemcinin oturumu kapatılır.
+    ///
+    /// Ağ hatası gibi belirsiz durumlarda `false` döner — kontrol kullanıcıyı
+    /// bloke etmemeli, sadece uyarı amaçlıdır.
+    func isSameAsCurrentPassword(_ password: String) async -> Bool {
+        guard let email = await currentEmail(),
+              let url = URL(string: SupabaseConfig.url) else { return false }
+        let probe = SupabaseClient(supabaseURL: url, supabaseKey: SupabaseConfig.anonKey)
+        defer { Task { try? await probe.auth.signOut() } }
+        do {
+            try await probe.auth.signIn(email: email, password: password)
+            return true          // giriş yapabildi → şifre aynı
+        } catch {
+            return false         // giriş yapamadı → şifre farklı (ya da ağ hatası)
+        }
+    }
+
     func signOut() async {
         try? await client?.auth.signOut()
     }

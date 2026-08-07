@@ -168,6 +168,11 @@ extension AppModel {
         }
         authBusy = true
         defer { authBusy = false }
+        // Supabase aynı şifreyi sessizce kabul ediyor; kontrolü biz yapıyoruz.
+        if await SupabaseService.shared.isSameAsCurrentPassword(password) {
+            authError = "Yeni şifre eskisinden farklı olmalı — başka bir şifre seç."
+            return
+        }
         do {
             try await SupabaseService.shared.updatePassword(password)
             authInfo = "Şifren güncellendi."

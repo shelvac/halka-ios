@@ -1,0 +1,64 @@
+# Şifre politikası + güvenlik bildirimleri (US-013 devamı).
+#
+# Supabase'de "aynı şifreyi reddet" diye bir ayar YOK — o kontrol uygulama
+# tarafında yapılıyor (SupabaseService.isSameAsCurrentPassword). Burada
+# sunucuda ayarlanabilen kısımları sıkılaştırıyoruz:
+#   - Asgari şifre uzunluğu 6 → 8 (uygulamadaki kuralla aynı olsun)
+#   - Şifre değişikliği bildirimi AÇIK + markalı Türkçe şablon
+name: Auth Sıkılaştırma
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      URL: https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph/config/auth
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ayarları uygula
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          echo "## Auth sıkılaştırma" > r.md
+          echo "" >> r.md
+          OK=0; FAIL=0
+
+          apply() {
+            CODE=$(curl -s --max-time 45 -o /tmp/resp.json -w "%{http_code}" -X PATCH \
+              -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+              "$URL" -d "$2")
+            if [ "$CODE" = "200" ]; then
+              echo "- ✅ $1" >> r.md; OK=$((OK+1))
+            else
+              echo "- ❌ $1 — \`$CODE: $(head -c 220 /tmp/resp.json | tr -d '\n')\`" >> r.md
+              FAIL=$((FAIL+1))
+            fi
+          }
+
+          apply "Asgari şifre uzunluğu 8" '{"password_min_length": 8}'
+          apply "Şifre değişikliği bildirimi açık" '{"mailer_notifications_password_changed_enabled": true}'
+          apply "Bildirim şablonu (TR)" "$(jq -n --rawfile c supabase/emails/password_changed.html \
+            '{mailer_subjects_password_changed_notification: "halka — şifren değiştirildi",
+              mailer_templates_password_changed_notification_content: $c}')"
+
+          echo "" >> r.md
+          echo "**Doğrulama:**" >> r.md
+          curl -s --max-time 45 -H "Authorization: Bearer $TOKEN" "$URL" -o cfg.json
+          jq -r 'to_entries[] | select(.key | test("password_min_length|mailer_notifications_password_changed_enabled|mailer_subjects_password_changed_notification")) | "- `\(.key)` = `\(.value)`"' cfg.json >> r.md
+          echo "" >> r.md
+          echo "_${OK}/$((OK+FAIL)) ayar uygulandı._" >> r.md
+
+          cat r.md
+          gh issue comment 30 --repo "$REPO" --body-file r.md
+          [ "$FAIL" = "0" ]
