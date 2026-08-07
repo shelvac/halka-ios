@@ -112,6 +112,17 @@ final class SupabaseService {
             .execute()
     }
 
+    /// Sağlık verisi açık rızasını geri çeker (KVKK m.6 — rıza her an geri
+    /// alınabilir olmalı). Aydınlatma onayı korunur; geri çekilen yalnızca
+    /// sağlık verisi işleme rızasıdır.
+    func withdrawHealthConsent() async throws {
+        guard let client, let user = await currentUser() else { return }
+        try await client.from("users")
+            .update(["health_consent_at": AnyJSON.null])
+            .eq("id", value: user.id.uuidString)
+            .execute()
+    }
+
     // MARK: Profil (US-016)
 
     /// `users` satırının okunan hâli. Sunucu tarihleri `yyyy-MM-dd` (date) ve
@@ -126,6 +137,8 @@ final class SupabaseService {
         let target_weight_kg: Double?
         let activity_level: String?
         let profile_completed_at: String?
+        let kvkk_accepted_at: String?
+        let health_consent_at: String?
     }
 
     private static let dayFormatter: DateFormatter = {
@@ -141,7 +154,7 @@ final class SupabaseService {
     func fetchProfile() async -> Profile? {
         guard let client, let user = await currentUser() else { return nil }
         guard let rows: [ProfileRow] = try? await client.from("users")
-            .select("full_name,avatar_path,birth_date,sex,height_cm,weight_kg,target_weight_kg,activity_level,profile_completed_at")
+            .select("full_name,avatar_path,birth_date,sex,height_cm,weight_kg,target_weight_kg,activity_level,profile_completed_at,kvkk_accepted_at,health_consent_at")
             .eq("id", value: user.id.uuidString)
             .limit(1)
             .execute()
@@ -157,9 +170,18 @@ final class SupabaseService {
         profile.weightKg = row.weight_kg
         profile.targetWeightKg = row.target_weight_kg
         profile.activityLevel = row.activity_level.flatMap(Profile.ActivityLevel.init(rawValue:))
-        profile.completedAt = row.profile_completed_at
-            .flatMap { ISO8601DateFormatter().date(from: $0) }
+        profile.completedAt = row.profile_completed_at.flatMap(Self.timestamp)
+        profile.kvkkAcceptedAt = row.kvkk_accepted_at.flatMap(Self.timestamp)
+        profile.healthConsentAt = row.health_consent_at.flatMap(Self.timestamp)
         return profile
+    }
+
+    /// Postgres timestamptz'i ayrıştırır. Sunucu kesirli saniyeyi bazen
+    /// döndürüp bazen döndürmediği için iki biçim de denenir.
+    private static func timestamp(_ text: String) -> Date? {
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return withFraction.date(from: text) ?? ISO8601DateFormatter().date(from: text)
     }
 
     /// Profili kaydeder. Zorunlu alanlar tamamsa `profile_completed_at` damgalanır

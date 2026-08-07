@@ -7,14 +7,37 @@ struct ProfileView: View {
     @State private var shotItem: PhotosPickerItem? = nil
     @State private var confirmDelete = false
     @State private var editingProfile = false
+    @State private var showPrivacy = false
 
-    private let settingsRows: [(String, String)] = [
-        ("Bildirimler", "Açık"),
-        ("Birimler", "Metrik (kg · ml)"),
-        ("Hedeflerim", "Kilo: 65 kg"),
-        ("Belgelerim", "Tartı + tahlil PDF"),
-        ("KVKK & Gizlilik", "")
-    ]
+    /// Ayar satırları. "Birimler" kaldırıldı: metrik/imperial desteği her
+    /// kg/cm/ml/kcal gösterimini dolaşan yatay bir iş ve Türkiye'deki kullanıcı
+    /// için karşılığı yok — ölü satır olarak durmasındansa hiç olmasın.
+    /// Bildirimler ve Hedeflerim henüz ekransız; sahte durum ("Açık",
+    /// "Kilo: 65 kg") göstermek yerine "Yakında" deyip pasif bırakıldılar.
+    private enum SettingRow: String, CaseIterable, Identifiable {
+        case notifications, goals, documents, privacy
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .notifications: return "Bildirimler"
+            case .goals: return "Hedeflerim"
+            case .documents: return "Belgelerim"
+            case .privacy: return "KVKK & Gizlilik"
+            }
+        }
+
+        var detail: String {
+            switch self {
+            case .notifications: return "Yakında"
+            case .goals: return "Yakında"
+            case .documents: return "Yakında"
+            case .privacy: return ""
+            }
+        }
+
+        var isEnabled: Bool { self == .privacy }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -67,25 +90,31 @@ struct ProfileView: View {
 
             // Settings
             VStack(spacing: 0) {
-                ForEach(Array(settingsRows.enumerated()), id: \.offset) { i, row in
-                    HStack(spacing: 10) {
-                        Text(row.0)
-                            .font(.h(13, .bold))
-                            .foregroundStyle(Color.inkBody)
-                        Spacer()
-                        if !row.1.isEmpty {
-                            Text(row.1)
-                                .font(.h(11.5, .bold))
-                                .foregroundStyle(Color.sub)
+                ForEach(Array(SettingRow.allCases.enumerated()), id: \.element.id) { i, row in
+                    Button {
+                        if row == .privacy { showPrivacy = true }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Text(row.title)
+                                .font(.h(13, .bold))
+                                .foregroundStyle(row.isEnabled ? Color.inkBody : Color.disabledText)
+                            Spacer()
+                            if !row.detail.isEmpty {
+                                Text(row.detail)
+                                    .font(.h(11.5, .bold))
+                                    .foregroundStyle(Color.faint)
+                            }
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .heavy))
+                                .foregroundStyle(Color.chevron)
                         }
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 11, weight: .heavy))
-                            .foregroundStyle(Color.chevron)
+                        .padding(.vertical, 14)
+                        .overlay(alignment: .top) {
+                            if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
+                        }
                     }
-                    .padding(.vertical, 14)
-                    .overlay(alignment: .top) {
-                        if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
-                    }
+                    .buttonStyle(.plain)
+                    .disabled(!row.isEnabled)
                 }
             }
             .padding(.horizontal, 18)
@@ -110,6 +139,10 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $editingProfile) {
             ProfileEditView()
+                .environment(model)
+        }
+        .sheet(isPresented: $showPrivacy) {
+            PrivacyView()
                 .environment(model)
         }
         // Geri alınamaz bir işlem — onay penceresi zorunlu (US-021).

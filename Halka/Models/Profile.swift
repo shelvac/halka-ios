@@ -17,6 +17,13 @@ struct Profile: Codable, Equatable {
     var targetWeightKg: Double?
     var activityLevel: ActivityLevel?
     var completedAt: Date?
+    /// KVKK aydınlatma onayı ve sağlık verisi AÇIK RIZA zaman damgaları.
+    /// Rıza geri çekilince `healthConsentAt` boşalır (KVKK m.6).
+    var kvkkAcceptedAt: Date?
+    var healthConsentAt: Date?
+
+    /// Sağlık verisi işlemeye rıza var mı?
+    var hasHealthConsent: Bool { healthConsentAt != nil }
 
     enum Sex: String, Codable, CaseIterable, Identifiable {
         case female, male, other

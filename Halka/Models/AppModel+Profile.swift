@@ -99,6 +99,30 @@ extension AppModel {
         }
     }
 
+    /// Sağlık verisi açık rızasını geri çeker (KVKK m.6).
+    ///
+    /// Rıza olmadan sağlık takibi hukuki dayanağını kaybeder; bu yüzden geri
+    /// çekme sonrası oturum kapatılır. Kullanıcı tekrar girip rıza verirse
+    /// devam edebilir, vermezse hesabını silebilir.
+    @discardableResult
+    func withdrawHealthConsent() async -> Bool {
+        profileError = nil
+        guard supabaseReady else { return true }
+        profileBusy = true
+        defer { profileBusy = false }
+        do {
+            try await SupabaseService.shared.withdrawHealthConsent()
+            profile.healthConsentAt = nil
+            logout()
+            authInfo = "Açık rızan geri çekildi. Sağlık takibi için tekrar rıza vermen gerekiyor."
+            return true
+        } catch {
+            profileError = "Rıza geri çekilemedi — bağlantını kontrol edip tekrar dene."
+            AuthLog.warn("withdrawConsent", error)
+            return false
+        }
+    }
+
     /// Profil kartında gösterilecek özet: "31 yaş · Kadın · 04.02.1995".
     /// Eksik alanlar atlanır; hiçbiri yoksa kullanıcıyı doldurmaya çağırır.
     var profileSummary: String {
