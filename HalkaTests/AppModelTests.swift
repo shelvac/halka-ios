@@ -75,18 +75,29 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.menu(forDay: model.mealDay)[0], "Yulaf pancake")
     }
 
-    // MARK: Su + geri alma
+    // MARK: Su sayacı
 
     @MainActor
-    func testWaterAddAndUndoRespectBounds() {
+    func testWaterAddAndRemoveRespectBounds() {
         let model = AppModel()
-        let start = model.water
+        XCTAssertEqual(model.water, 0)
+
         model.addWater()
-        XCTAssertEqual(model.water, start + 250)
-        XCTAssertTrue(model.waterUndoVisible)
-        model.undoWater()
-        XCTAssertEqual(model.water, start)
-        XCTAssertFalse(model.waterUndoVisible)
+        model.addWater()
+        XCTAssertEqual(model.water, 500)
+
+        // Azaltma her an yapılabilir, tek seferle sınırlı değil.
+        model.removeWater()
+        model.removeWater()
+        XCTAssertEqual(model.water, 0)
+
+        // Sıfırın altına inmez.
+        model.removeWater()
+        XCTAssertEqual(model.water, 0)
+
+        // Üst sınır 4 L.
+        for _ in 0..<40 { model.addWater() }
+        XCTAssertEqual(model.water, 4000)
     }
 
     // MARK: Tarifler

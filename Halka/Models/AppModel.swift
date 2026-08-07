@@ -48,8 +48,6 @@ final class AppModel {
     var exerciseBase = 0              // Health'ten okunan egzersiz dakikası
     var extraExerciseMin = 0          // uygulama içi antrenmanlardan eklenen
     var sleepHours = 0.0              // Health'ten okunan uyku
-    var waterUndoVisible = false
-    private var waterUndoToken = 0
 
     /// Takvim: gerçek tarihe bağlı (eskiden Ağustos 2026'ya sabitti).
     var visibleMonth: Date = AppModel.appCalendar.date(
@@ -78,24 +76,19 @@ final class AppModel {
         }
     }
 
+    /// Su sayacı — 250 ml adımlarla. Üst sınır 4 L: günlük su hedefinin
+    /// tavanıyla aynı, üstü tıbbi değerlendirme ister.
     func addWater() {
         water = min(water + 250, 4000)
         scheduleRingSave()
-        waterUndoVisible = true
-        waterUndoToken += 1
-        let token = waterUndoToken
-        Task { [weak self] in
-            try? await Task.sleep(for: .seconds(6))
-            guard let self, self.waterUndoToken == token else { return }
-            self.waterUndoVisible = false
-        }
     }
 
-    func undoWater() {
+    /// Yanlış eklemeyi düzeltmek için. Eskiden yalnızca eklemenin ardından
+    /// 6 saniye görünen tek seferlik bir "geri al" vardı; sonradan düzeltme
+    /// mümkün değildi.
+    func removeWater() {
         water = max(water - 250, 0)
         scheduleRingSave()
-        waterUndoVisible = false
-        waterUndoToken += 1
     }
 
     // MARK: Meals

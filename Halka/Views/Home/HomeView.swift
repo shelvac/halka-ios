@@ -246,31 +246,33 @@ struct TodayView: View {
 
     private var quickActions: some View {
         HStack(spacing: 8) {
-            Button { model.addWater() } label: {
-                Text("+ 250 ml su")
-                    .font(.h(12))
-                    .foregroundStyle(Color.blueDark)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Capsule().fill(Color.blueBg))
-            }
-            .buttonStyle(.plain)
-
-            if model.waterUndoVisible {
-                Button { model.undoWater() } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "arrow.uturn.backward")
-                            .font(.system(size: 10, weight: .heavy))
-                        Text("Geri al").font(.h(12))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(Capsule().fill(Color.ink))
+            // Su sayacı: eksi/artı birlikte. Eskiden yalnızca eklemenin
+            // ardından 6 saniye görünen tek seferlik "Geri al" vardı; sonradan
+            // düzeltmenin yolu yoktu.
+            HStack(spacing: 0) {
+                Button { model.removeWater() } label: {
+                    Image(systemName: "minus")
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundStyle(model.water > 0 ? Color.blueDark : Color.chevron)
+                        .frame(width: 34, height: 34)
                 }
                 .buttonStyle(.plain)
-                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                .disabled(model.water == 0)
+
+                Text("\(model.water) ml")
+                    .font(.h(12))
+                    .foregroundStyle(Color.blueDark)
+                    .frame(minWidth: 56)
+
+                Button { model.addWater() } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundStyle(Color.blueDark)
+                        .frame(width: 34, height: 34)
+                }
+                .buttonStyle(.plain)
             }
+            .background(Capsule().fill(Color.blueBg))
 
             Button {
                 model.tab = .meal
@@ -290,7 +292,7 @@ struct TodayView: View {
 
             Spacer(minLength: 0)
         }
-        .animation(.easeInOut(duration: 0.2), value: model.waterUndoVisible)
+        .animation(.easeInOut(duration: 0.2), value: model.water)
     }
 
     private func pillLabel(_ text: String) -> some View {
