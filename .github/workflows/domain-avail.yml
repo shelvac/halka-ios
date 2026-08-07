@@ -1,0 +1,48 @@
+# Aday domainlerin boş olup olmadığını RDAP üzerinden kontrol eder.
+# RDAP 404 = kayıtsız (büyük ihtimalle satın alınabilir). Sonuç issue #30'a yazılır.
+name: Domain Müsaitlik
+
+on:
+  workflow_dispatch:
+    inputs:
+      domains:
+        description: "Virgülle ayrılmış domain listesi"
+        required: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Müsaitlik kontrolü
+        env:
+          DOMAINS: ${{ inputs.domains }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set +e
+          echo "## Domain müsaitlik kontrolü" > r.md
+          echo "" >> r.md
+          echo "| Domain | Durum |" >> r.md
+          echo "|---|---|" >> r.md
+          IFS=',' read -ra DS <<< "$DOMAINS"
+          for d in "${DS[@]}"; do
+            d=$(echo "$d" | tr -d ' ')
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 25 -L "https://rdap.org/domain/$d")
+            if [ "$CODE" = "404" ]; then
+              echo "| \`$d\` | 🟢 boş görünüyor (satın alınabilir) |" >> r.md
+            elif [ "$CODE" = "200" ]; then
+              echo "| \`$d\` | 🔴 kayıtlı (başkasına ait) |" >> r.md
+            else
+              echo "| \`$d\` | ⚪ belirsiz (HTTP $CODE) |" >> r.md
+            fi
+            sleep 2
+          done
+          echo "" >> r.md
+          echo "_Not: RDAP anlık kayıt durumudur; kesin fiyat/müsaitlik registrar aramasında görünür._" >> r.md
+          cat r.md
+          gh issue comment 30 --repo "$REPO" --body-file r.md
