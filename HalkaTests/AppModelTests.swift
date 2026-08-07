@@ -252,6 +252,25 @@ final class AppModelTests: XCTestCase {
         XCTAssertGreaterThan(Double(goal), tdee)
     }
 
+    func testStepsGoalFollowsActivityLevel() {
+        var p = sampleProfile()
+        XCTAssertEqual(p.stepsGoal, 8000)          // az hareketli
+        p.activityLevel = .sedentary
+        XCTAssertEqual(p.stepsGoal, 6000)
+        p.activityLevel = .veryActive
+        XCTAssertEqual(p.stepsGoal, 14000)
+    }
+
+    @MainActor
+    func testStepsDriveTheThirdRing() {
+        let model = AppModel()
+        model.profile = sampleProfile()            // hedef 8000
+        XCTAssertEqual(model.todayFractions[2], 0)
+        model.hkSteps = 4000
+        XCTAssertEqual(model.todayFractions[2], 0.5, accuracy: 0.001)
+        XCTAssertEqual(model.currentValue(.steps), 4000)
+    }
+
     func testWaterGoalScalesWithWeightAndIsClamped() {
         var p = sampleProfile()
         XCTAssertEqual(p.waterGoalML ?? 0, 2400, accuracy: 50)
@@ -271,6 +290,7 @@ final class AppModelTests: XCTestCase {
         model.profile = sampleProfile()
         XCTAssertNotEqual(model.goal(for: .water), RingKind.water.goal)
         XCTAssertEqual(model.goal(for: .exercise), 30)   // az hareketli
+        XCTAssertEqual(model.goal(for: .steps), 8000)    // az hareketli
     }
 
     // MARK: Auth hata mesajları

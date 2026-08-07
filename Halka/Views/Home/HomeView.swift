@@ -115,10 +115,13 @@ struct TodayView: View {
     private var activityStats: some View {
         if model.hkConnected {
             HStack(spacing: 0) {
-                statCell(icon: "figure.walk",
-                         value: Self.grouped(model.hkSteps),
-                         label: "adım",
-                         color: .coral)
+                // Uyku artık halka değil: hedefe koşulacak bir şey değil,
+                // olan bir şey. Ölçülüyor ama baskı yapmadan gösteriliyor.
+                statCell(icon: "moon.zzz.fill",
+                         value: model.sleepHours > 0
+                             ? String(format: "%.1f", model.sleepHours) : "—",
+                         label: "saat uyku",
+                         color: .sleepPurple)
                 Rectangle().fill(Color.hairline).frame(width: 1, height: 34)
                 statCell(icon: "flame.fill",
                          value: Self.grouped(model.hkActiveEnergy),
@@ -173,7 +176,7 @@ struct TodayView: View {
                     Image(systemName: "heart.text.square")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(Color.coral)
-                    Text("Adım ve aktif enerji için Apple Health'i bağla")
+                    Text("Adım, uyku ve enerji için Apple Health'i bağla")
                         .font(.h(12, .bold))
                         .foregroundStyle(Color.inkBody)
                     Spacer()
@@ -220,13 +223,13 @@ struct TodayView: View {
         let color: Color = switch kind {
         case .exercise: .coral
         case .water: .waterBlue
-        case .sleep: .sleepPurple
+        case .steps: .stepPurple
         case .nutrition: .green
         }
         let cur = model.currentValue(kind)
-        let curText = kind == .sleep ? String(format: "%.1f", cur) : "\(Int(cur))"
         let goalValue = model.goal(for: kind)
-        let goalText = kind == .sleep ? String(format: "%.0f", goalValue) : "\(Int(goalValue))"
+        let curText = Self.grouped(Int(cur))
+        let goalText = Self.grouped(Int(goalValue))
         return VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 6) {
                 Circle().fill(color).frame(width: 8, height: 8)
@@ -317,17 +320,17 @@ struct TodayView: View {
         let color: Color = switch kind {
         case .exercise: .coral
         case .water: .waterBlue
-        case .sleep: .sleepPurple
+        case .steps: .stepPurple
         case .nutrition: .green
         }
         let cur = model.currentValue(kind)
         let goalValue = model.goal(for: kind)
         let pct = min(cur / goalValue, 1)
-        let big = kind == .sleep ? String(format: "%.1f", cur) : "\(Int(cur))"
-        let remaining = goalValue - cur
+        let big = Self.grouped(Int(cur))
+        let remaining = max(goalValue - cur, 0)
         let leftText = pct >= 1
             ? "Hedef tamamlandı"
-            : "Kalan: \(kind == .sleep ? String(format: "%.1f", remaining) : "\(Int(remaining))") \(kind.unit)"
+            : "Kalan: \(Self.grouped(Int(remaining))) \(kind.unit)"
 
         return VStack(alignment: .leading, spacing: 0) {
             Text(kind.name)

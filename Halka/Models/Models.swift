@@ -18,13 +18,17 @@ enum HomeSegment: CaseIterable { case today, calendar, social, dietitian
 
 // MARK: - Rings
 
+/// Dört halka. Uyku yerine ADIM: uyku hedefe koşulacak bir şey değil (kimse
+/// "bugün 8 saat uyumaya çalışayım" diye halka doldurmuyor, uyku olan bir şey),
+/// adım ise gün içinde etkilenebilir. Uyku ölçülmeye devam ediyor ama
+/// istatistik olarak gösteriliyor.
 enum RingKind: CaseIterable {
-    case exercise, water, sleep, nutrition
+    case exercise, water, steps, nutrition
     var name: String {
         switch self {
         case .exercise: return "Egzersiz"
         case .water: return "Su"
-        case .sleep: return "Uyku"
+        case .steps: return "Adım"
         case .nutrition: return "Beslenme"
         }
     }
@@ -32,15 +36,16 @@ enum RingKind: CaseIterable {
         switch self {
         case .exercise: return "dk"
         case .water: return "ml"
-        case .sleep: return "sa"
+        case .steps: return "adım"
         case .nutrition: return "kcal"
         }
     }
+    /// Profil eksikken kullanılan varsayılan hedefler.
     var goal: Double {
         switch self {
         case .exercise: return 60
         case .water: return 2000
-        case .sleep: return 8
+        case .steps: return 10000
         case .nutrition: return 1420
         }
     }

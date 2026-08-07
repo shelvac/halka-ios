@@ -77,7 +77,7 @@ extension AppModel {
         }
         return [Double(row.exercise_min) / goal(for: .exercise),
                 Double(row.water_ml) / goal(for: .water),
-                row.sleep_hours / goal(for: .sleep),
+                Double(row.steps) / goal(for: .steps),
                 Double(row.nutrition_kcal) / goal(for: .nutrition)]
     }
 
@@ -89,7 +89,7 @@ extension AppModel {
         }
         return [Double(row.exercise_min) / goal(for: .exercise),
                 Double(row.water_ml) / goal(for: .water),
-                row.sleep_hours / goal(for: .sleep),
+                Double(row.steps) / goal(for: .steps),
                 Double(row.nutrition_kcal) / goal(for: .nutrition)]
     }
 
@@ -128,6 +128,17 @@ extension AppModel {
         return f.string(from: today).capitalized(with: Locale(identifier: "tr_TR"))
     }
 
+    /// Bir günün uyku ve aktif enerjisi — halka değil, istatistik.
+    /// Bugün için canlı değerler, geçmiş için kayıt kullanılır.
+    func stats(forDay day: Int) -> (sleep: Double, energy: Int) {
+        if isToday(day: day) { return (sleepHours, hkActiveEnergy) }
+        guard let date = date(forDay: day),
+              let row = ringHistory[Self.dayKeyFormatter.string(from: date)] else {
+            return (0, 0)
+        }
+        return (row.sleep_hours, row.active_energy_kcal)
+    }
+
     /// Seçili günde hiç kayıt var mı? (boş durum metni için)
     func hasData(forDay day: Int) -> Bool {
         fractions(forDay: day).contains { $0 > 0 }
@@ -151,6 +162,9 @@ extension AppModel {
             water = row.water_ml
             exerciseBase = row.exercise_min
             sleepHours = row.sleep_hours
+            // Health bağlı değilse kayıtlı değerler gösterilsin (sıfır sanılmasın).
+            if hkSteps == 0 { hkSteps = row.steps }
+            if hkActiveEnergy == 0 { hkActiveEnergy = row.active_energy_kcal }
         }
     }
 
@@ -177,7 +191,9 @@ extension AppModel {
                 exercise_min: snapshot.exerciseMinutes,
                 water_ml: snapshot.waterML,
                 sleep_hours: snapshot.sleepHours,
-                nutrition_kcal: existingKcal)
+                nutrition_kcal: existingKcal,
+                steps: snapshot.steps,
+                active_energy_kcal: snapshot.activeEnergy)
         }
 
         do {
@@ -223,14 +239,18 @@ extension AppModel {
                 exerciseMin: exerciseMinutes,
                 waterML: water,
                 sleepHours: sleepHours,
-                nutritionKcal: nutritionToday)
+                nutritionKcal: nutritionToday,
+                steps: hkSteps,
+                activeEnergy: hkActiveEnergy)
             // Yerel geçmişi de tazele ki takvim anında doğru göstersin.
             ringHistory[todayKey] = SupabaseService.RingsRow(
                 day: todayKey,
                 exercise_min: exerciseMinutes,
                 water_ml: water,
                 sleep_hours: sleepHours,
-                nutrition_kcal: nutritionToday)
+                nutrition_kcal: nutritionToday,
+                steps: hkSteps,
+                active_energy_kcal: hkActiveEnergy)
         } catch {
             AuthLog.warn("saveRings", error)
         }

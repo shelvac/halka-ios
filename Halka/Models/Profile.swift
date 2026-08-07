@@ -163,7 +163,21 @@ struct Profile: Codable, Equatable {
         }
     }
 
+    /// Günlük adım hedefi — hareket düzeyine göre.
+    /// 10.000 yaygın bir varsayılan ama herkese uygun değil; hareketsiz biri
+    /// için ulaşılamaz hedef motive etmez, çok hareketli biri için fazla kolay.
+    var stepsGoal: Int {
+        switch activityLevel ?? .light {
+        case .sedentary: return 6000
+        case .light: return 8000
+        case .moderate: return 10000
+        case .active: return 12000
+        case .veryActive: return 14000
+        }
+    }
+
     /// Uyku hedefi — yetişkinlerde 7-9 saat; 65 yaş üstünde 7-8.
+    /// Halka değil, istatistik olarak gösterilir.
     var sleepGoalHours: Double {
         guard let age else { return 8 }
         return age >= 65 ? 7.5 : 8

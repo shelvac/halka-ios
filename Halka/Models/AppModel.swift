@@ -35,7 +35,7 @@ final class AppModel {
         switch kind {
         case .exercise: return Double(profile.exerciseGoalMin)
         case .water: return Double(profile.waterGoalML ?? Int(kind.goal))
-        case .sleep: return profile.sleepGoalHours
+        case .steps: return Double(profile.stepsGoal)
         case .nutrition: return Double(profile.calorieGoal ?? Int(kind.goal))
         }
     }
@@ -63,7 +63,7 @@ final class AppModel {
     var todayFractions: [Double] {
         [Double(exerciseMinutes) / goal(for: .exercise),
          Double(water) / goal(for: .water),
-         sleepHours / goal(for: .sleep),
+         Double(hkSteps) / goal(for: .steps),
          Double(nutritionToday) / goal(for: .nutrition)]
     }
 
@@ -71,7 +71,7 @@ final class AppModel {
         switch kind {
         case .exercise: return Double(exerciseMinutes)
         case .water: return Double(water)
-        case .sleep: return sleepHours
+        case .steps: return Double(hkSteps)
         case .nutrition: return Double(nutritionToday)
         }
     }

@@ -42,7 +42,9 @@ extension Color {
     static let waterBlue = Color(hex: 0x3E9BD6)    // water
     static let blueDark = Color(hex: 0x2E7DB2)
     static let blueBg = Color(hex: 0xE7F1F9)
-    static let sleepPurple = Color(hex: 0x7A6FE3)  // sleep
+    static let sleepPurple = Color(hex: 0x7A6FE3)  // adım halkası (eskiden uyku)
+    /// Anlamı değişti: bu mor artık adım halkasının rengi.
+    static var stepPurple: Color { sleepPurple }
     static let purpleBg = Color(hex: 0xF3EDFB)
     static let green = Color(hex: 0x45A46F)        // nutrition / success
     static let greenDark = Color(hex: 0x2E7D53)

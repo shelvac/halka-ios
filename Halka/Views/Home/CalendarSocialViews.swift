@@ -94,19 +94,25 @@ struct CalendarPane: View {
         .disabled(future)
     }
 
+    /// 8432 → "8.432"
+    private static func grouped(_ value: Int) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.locale = Locale(identifier: "tr_TR")
+        return f.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+
     private var detailCard: some View {
         let day = model.selectedCalendarDay
         let fractions = model.fractions(forDay: day)
-        let colors: [Color] = [.coral, .waterBlue, .sleepPurple, .green]
+        let colors: [Color] = [.coral, .waterBlue, .stepPurple, .green]
         // Hedefler profile göre değiştiği için metinler de oradan üretilir.
         let goals = RingKind.allCases.map { model.goal(for: $0) }
-        let values: [String] = [
-            "\(Int((fractions[0] * goals[0]).rounded())) / \(Int(goals[0])) dk",
-            "\(Int((fractions[1] * goals[1]).rounded())) / \(Int(goals[1])) ml",
-            String(format: "%.1f", fractions[2] * goals[2])
-                + String(format: " / %.0f sa", goals[2]),
-            "\(Int((fractions[3] * goals[3]).rounded())) / \(Int(goals[3])) kcal"
-        ]
+        let values: [String] = zip(RingKind.allCases.indices, RingKind.allCases).map { i, kind in
+            let current = Int((fractions[i] * goals[i]).rounded())
+            return "\(Self.grouped(current)) / \(Self.grouped(Int(goals[i]))) \(kind.unit)"
+        }
+        let dayStats = model.stats(forDay: day)
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Text(model.dayTitle(forDay: day))
@@ -118,6 +124,25 @@ struct CalendarPane: View {
                     Text("Kayıt yok")
                         .font(.h(10.5))
                         .foregroundStyle(Color.faint)
+                }
+            }
+
+            // Halka olmayan ölçüler: uyku ve aktif enerji.
+            if dayStats.sleep > 0 || dayStats.energy > 0 {
+                HStack(spacing: 14) {
+                    if dayStats.sleep > 0 {
+                        Label(String(format: "%.1f sa uyku", dayStats.sleep),
+                              systemImage: "moon.zzz.fill")
+                            .font(.h(11, .bold))
+                            .foregroundStyle(Color.sleepPurple)
+                    }
+                    if dayStats.energy > 0 {
+                        Label("\(Self.grouped(dayStats.energy)) kcal aktif",
+                              systemImage: "flame.fill")
+                            .font(.h(11, .bold))
+                            .foregroundStyle(Color.warnOrange)
+                    }
+                    Spacer(minLength: 0)
                 }
             }
             VStack(spacing: 10) {

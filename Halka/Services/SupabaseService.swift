@@ -219,13 +219,15 @@ final class SupabaseService {
         let water_ml: Int
         let sleep_hours: Double
         let nutrition_kcal: Int
+        var steps: Int = 0
+        var active_energy_kcal: Int = 0
     }
 
     /// Bir tarih aralığındaki günlük kayıtlar (takvim geçmişi için).
     func fetchRings(from start: Date, to end: Date) async -> [String: RingsRow] {
         guard let client, let user = await currentUser() else { return [:] }
         guard let rows: [RingsRow] = try? await client.from("rings_daily")
-            .select("day,exercise_min,water_ml,sleep_hours,nutrition_kcal")
+            .select("day,exercise_min,water_ml,sleep_hours,nutrition_kcal,steps,active_energy_kcal")
             .eq("user_id", value: user.id.uuidString)
             .gte("day", value: Self.dayFormatter.string(from: start))
             .lte("day", value: Self.dayFormatter.string(from: end))
@@ -237,7 +239,8 @@ final class SupabaseService {
     /// Bugünün değerlerini yazar. `(user_id, day)` benzersiz olduğu için
     /// upsert kullanılıyor — aynı gün defalarca güncellenebilir.
     func saveRings(day: Date, exerciseMin: Int, waterML: Int,
-                   sleepHours: Double, nutritionKcal: Int) async throws {
+                   sleepHours: Double, nutritionKcal: Int,
+                   steps: Int = 0, activeEnergy: Int = 0) async throws {
         guard let client, let user = await currentUser() else { return }
         let payload: [String: AnyJSON] = [
             "user_id": .string(user.id.uuidString.lowercased()),
@@ -245,7 +248,9 @@ final class SupabaseService {
             "exercise_min": .integer(exerciseMin),
             "water_ml": .integer(waterML),
             "sleep_hours": .double(sleepHours),
-            "nutrition_kcal": .integer(nutritionKcal)
+            "nutrition_kcal": .integer(nutritionKcal),
+            "steps": .integer(steps),
+            "active_energy_kcal": .integer(activeEnergy)
         ]
         try await client.from("rings_daily")
             .upsert(payload, onConflict: "user_id,day")
@@ -261,7 +266,9 @@ final class SupabaseService {
              "exercise_min": .integer(row.exercise_min),
              "water_ml": .integer(row.water_ml),
              "sleep_hours": .double(row.sleep_hours),
-             "nutrition_kcal": .integer(row.nutrition_kcal)]
+             "nutrition_kcal": .integer(row.nutrition_kcal),
+             "steps": .integer(row.steps),
+             "active_energy_kcal": .integer(row.active_energy_kcal)]
         }
         try await client.from("rings_daily")
             .upsert(payload, onConflict: "user_id,day")
