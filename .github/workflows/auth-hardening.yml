@@ -47,15 +47,34 @@ jobs:
           }
 
           apply "Asgari şifre uzunluğu 8" '{"password_min_length": 8}'
-          apply "Şifre değişikliği bildirimi açık" '{"mailer_notifications_password_changed_enabled": true}'
-          apply "Bildirim şablonu (TR)" "$(jq -n --rawfile c supabase/emails/password_changed.html \
-            '{mailer_subjects_password_changed_notification: "halka — şifren değiştirildi",
+
+          # Güvenlik bildirimleri — hepsi varsayılanda kapalı ve İngilizce geliyor.
+          # Kullanılmayanlar (telefon, MFA, davet, yeniden kimlik doğrulama) bilinçli
+          # olarak kapalı bırakıldı; uygulamada o akışlar yok.
+          apply "Şifre değişikliği bildirimi" "$(jq -n --rawfile c supabase/emails/password_changed.html \
+            '{mailer_notifications_password_changed_enabled: true,
+              mailer_subjects_password_changed_notification: "halka — şifren değiştirildi",
               mailer_templates_password_changed_notification_content: $c}')"
+
+          apply "E-posta değişikliği bildirimi" "$(jq -n --rawfile c supabase/emails/email_changed_notification.html \
+            '{mailer_notifications_email_changed_enabled: true,
+              mailer_subjects_email_changed_notification: "halka — e-posta adresin değişti",
+              mailer_templates_email_changed_notification_content: $c}')"
+
+          apply "Giriş yöntemi eklendi bildirimi" "$(jq -n --rawfile c supabase/emails/identity_linked.html \
+            '{mailer_notifications_identity_linked_enabled: true,
+              mailer_subjects_identity_linked_notification: "halka — hesabına yeni giriş yöntemi eklendi",
+              mailer_templates_identity_linked_notification_content: $c}')"
+
+          apply "Giriş yöntemi kaldırıldı bildirimi" "$(jq -n --rawfile c supabase/emails/identity_unlinked.html \
+            '{mailer_notifications_identity_unlinked_enabled: true,
+              mailer_subjects_identity_unlinked_notification: "halka — bir giriş yöntemi kaldırıldı",
+              mailer_templates_identity_unlinked_notification_content: $c}')"
 
           echo "" >> r.md
           echo "**Doğrulama:**" >> r.md
           curl -s --max-time 45 -H "Authorization: Bearer $TOKEN" "$URL" -o cfg.json
-          jq -r 'to_entries[] | select(.key | test("password_min_length|mailer_notifications_password_changed_enabled|mailer_subjects_password_changed_notification")) | "- `\(.key)` = `\(.value)`"' cfg.json >> r.md
+          jq -r 'to_entries[] | select(.key | test("password_min_length|^mailer_notifications_|^mailer_subjects_(password_changed|email_changed|identity_linked|identity_unlinked)")) | "- `\(.key)` = `\(.value)`"' cfg.json >> r.md
           echo "" >> r.md
           echo "_${OK}/$((OK+FAIL)) ayar uygulandı._" >> r.md
 
