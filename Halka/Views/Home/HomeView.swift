@@ -26,7 +26,7 @@ struct HomeView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 0) {
-                Text("5 Ağustos, Çarşamba")
+                Text(model.todayHeaderTitle)
                     .font(.h(13, .bold))
                     .foregroundStyle(Color.sub)
                 Text("Merhaba, \(model.userName)")
@@ -39,7 +39,8 @@ struct HomeView: View {
                 model.tab = .health
                 model.healthPane = .profile
             } label: {
-                MeAvatar(size: 44)
+                ProfileAvatar(image: model.avatarImage,
+                              fullName: model.userFullName, size: 44)
             }
             .buttonStyle(.plain)
         }
@@ -78,6 +79,8 @@ struct TodayView: View {
     var body: some View {
         VStack(spacing: 0) {
             ringsCard
+            activityStats
+                .padding(.top, 12)
             quickActions
                 .padding(.top, 12)
             goalGrid
@@ -101,6 +104,81 @@ struct TodayView: View {
         }
         .padding(18)
         .card(22)
+    }
+
+    /// Adım ve aktif enerji — halka DEĞİL, istatistik.
+    ///
+    /// Adımı egzersiz halkasına katmıyoruz: Apple tempolu yürüyüşü zaten
+    /// egzersiz dakikası olarak sayıyor, ikisini toplamak aynı hareketi iki kez
+    /// saymak olurdu. Burada hedefsiz, dürüst bir gösterim var.
+    @ViewBuilder
+    private var activityStats: some View {
+        if model.hkConnected {
+            HStack(spacing: 0) {
+                statCell(icon: "figure.walk",
+                         value: Self.grouped(model.hkSteps),
+                         label: "adım",
+                         color: .coral)
+                Rectangle().fill(Color.hairline).frame(width: 1, height: 34)
+                statCell(icon: "flame.fill",
+                         value: Self.grouped(model.hkActiveEnergy),
+                         label: "kcal aktif",
+                         color: .warnOrange)
+            }
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .card(18)
+        } else {
+            // Bağlı değilken sahte sayı göstermek yerine bağlanmaya çağır.
+            Button {
+                model.tab = .health
+                model.healthPane = .profile
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "heart.text.square")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color.coral)
+                    Text("Adım ve aktif enerji için Apple Health'i bağla")
+                        .font(.h(12, .bold))
+                        .foregroundStyle(Color.inkBody)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .heavy))
+                        .foregroundStyle(Color.chevron)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity)
+                .card(18)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func statCell(icon: String, value: String, label: String,
+                          color: Color) -> some View {
+        VStack(spacing: 3) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(color)
+                Text(value)
+                    .font(.h(18))
+                    .foregroundStyle(Color.ink)
+            }
+            Text(label)
+                .font(.h(10.5, .bold))
+                .foregroundStyle(Color.sub)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// 8432 → "8.432" (Türkçe binlik ayırıcı).
+    private static func grouped(_ value: Int) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.locale = Locale(identifier: "tr_TR")
+        return f.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 
     private func legendRow(_ kind: RingKind) -> some View {

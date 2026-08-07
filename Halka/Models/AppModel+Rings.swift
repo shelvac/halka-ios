@@ -112,6 +112,14 @@ extension AppModel {
         return isToday(day: day) ? text + " · Bugün" : text
     }
 
+    /// Ana ekran başlığı: "7 Ağustos, Cuma" (eskiden sabitti).
+    var todayHeaderTitle: String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "tr_TR")
+        f.dateFormat = "d MMMM, EEEE"
+        return f.string(from: today)
+    }
+
     /// Sosyal ekranındaki "Ağustos · halka puanı" başlığı için.
     var currentMonthName: String {
         let f = DateFormatter()
