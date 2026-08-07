@@ -41,7 +41,8 @@ jobs:
           echo "" >> r.md
 
           if [ "$MODE" = "builtin" ]; then
-            BODY='{"smtp_host":"","smtp_port":"","smtp_user":"","smtp_pass":"","smtp_admin_email":"","smtp_sender_name":""}'
+            # Boş string reddediliyor ("Invalid email address"); null ile temizlenir.
+            BODY='{"smtp_host":null,"smtp_port":null,"smtp_user":null,"smtp_pass":null,"smtp_admin_email":null,"smtp_sender_name":null}'
           else
             BODY=$(jq -n --arg pass "$RESEND" '{
               smtp_admin_email: "onboarding@resend.dev",
