@@ -176,6 +176,25 @@ final class SupabaseService {
         try? await client?.auth.signOut()
     }
 
+    /// US-021 — Hesabı ve tüm verisini siler (KVKK md. 7).
+    ///
+    /// Önce `delete-account` Edge Function'ı denenir: veda e-postasını gönderip
+    /// hesabı service_role ile siler. Fonksiyon dağıtılmamışsa ya da hata
+    /// verirse SQL yedeğine (`delete_account()`) düşülür — kullanıcının silme
+    /// hakkı e-posta altyapısına bağlı olmamalı. İki yolda da cascade zinciri
+    /// veriyi temizler (0003_delete_account.sql).
+    /// Silme sonrası oturum kapatılır — token geçersiz olsa da yerel iz kalmasın.
+    func deleteAccount() async throws {
+        guard let client else { return }
+        do {
+            _ = try await client.functions.invoke("delete-account")
+        } catch {
+            AuthLog.warn("deleteAccount/edge", error)
+            try await client.rpc("delete_account").execute()
+        }
+        await signOut()
+    }
+
     // MARK: SSO (US-018 · Google · Apple)
 
     /// Sağlayıcıyla giriş — ASWebAuthenticationSession üzerinden, dönüşte

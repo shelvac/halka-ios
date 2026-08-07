@@ -5,6 +5,7 @@ import PhotosUI
 struct ProfileView: View {
     @Environment(AppModel.self) private var model
     @State private var shotItem: PhotosPickerItem? = nil
+    @State private var confirmDelete = false
 
     private let settingsRows: [(String, String)] = [
         ("Bildirimler", "Açık"),
@@ -89,7 +90,39 @@ struct ProfileView: View {
             }
             .buttonStyle(.plain)
             .padding(.top, 14)
+
+            deleteAccountButton
+                .padding(.top, 8)
         }
+        // Geri alınamaz bir işlem — onay penceresi zorunlu (US-021).
+        .alert("Hesabını silmek istediğine emin misin?", isPresented: $confirmDelete) {
+            Button("Vazgeç", role: .cancel) {}
+            Button("Hesabımı sil", role: .destructive) {
+                Task { await model.deleteAccount() }
+            }
+        } message: {
+            Text("Ölçümlerin, öğünlerin, antrenmanların, tahlillerin ve mesajların "
+                 + "kalıcı olarak silinir. Bu işlem geri alınamaz.")
+        }
+    }
+
+    /// US-021 — Hesabı sil. Yıkıcı bir işlem olduğu için çıkıştan görsel olarak
+    /// ayrıştırılmış: dolgusuz, yalnızca yazı.
+    private var deleteAccountButton: some View {
+        Button { confirmDelete = true } label: {
+            HStack(spacing: 6) {
+                if model.authBusy {
+                    ProgressView().scaleEffect(0.7)
+                }
+                Text(model.authBusy ? "Siliniyor…" : "Hesabımı Sil")
+                    .font(.h(12.5))
+                    .foregroundStyle(Color.sub)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+        }
+        .buttonStyle(.plain)
+        .disabled(model.authBusy)
     }
 
     private func statColumn(_ title: String, _ value: String, _ color: Color) -> some View {

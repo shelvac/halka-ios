@@ -188,6 +188,21 @@ final class AppModel {
         screen = .app
     }
 
+    /// US-021 — Hesabı sil. Sunucudaki veri cascade ile temizlenir; sonrasında
+    /// oturum kapanır ve giriş ekranına dönülür (çıkışla aynı yerel sıfırlama).
+    func deleteAccount() async {
+        authError = nil
+        authBusy = true
+        defer { authBusy = false }
+        do {
+            try await SupabaseService.shared.deleteAccount()
+            logout()
+            authInfo = "Hesabın ve tüm verilerin silindi."
+        } catch {
+            authError = "Hesap silinemedi: \(error.localizedDescription)"
+        }
+    }
+
     func logout() {
         Task { await SupabaseService.shared.signOut() }
         screen = .login
