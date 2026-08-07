@@ -1,0 +1,87 @@
+# Supabase e-posta göndericisini değiştirir:
+#   mode=builtin → özel SMTP'yi kapatır, Supabase'in yerleşik göndericisine döner
+#   mode=resend  → Resend SMTP'yi (mevcut secrets ile) yeniden açar
+# Sonuç issue #30'a yorum olarak yazılır.
+name: SMTP Aç/Kapat
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "builtin | resend"
+        required: true
+        default: "builtin"
+      test_to:
+        description: "Test sıfırlama maili gönderilecek adres (boş = test yok)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  toggle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      API: https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph
+    steps:
+      - name: Göndericiyi değiştir
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          RESEND: ${{ secrets.RESEND_API_KEY }}
+          MODE: ${{ inputs.mode }}
+          TEST_TO: ${{ inputs.test_to }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set +e
+          echo "## SMTP modu: \`$MODE\`" > r.md
+          echo "" >> r.md
+
+          if [ "$MODE" = "builtin" ]; then
+            BODY='{"smtp_host":"","smtp_port":"","smtp_user":"","smtp_pass":"","smtp_admin_email":"","smtp_sender_name":""}'
+          else
+            BODY=$(jq -n --arg pass "$RESEND" '{
+              smtp_admin_email: "onboarding@resend.dev",
+              smtp_host: "smtp.resend.com",
+              smtp_port: "587",
+              smtp_user: "resend",
+              smtp_pass: $pass,
+              smtp_sender_name: "halka",
+              smtp_max_frequency: 1
+            }')
+          fi
+
+          CODE=$(curl -s --max-time 45 -o cfg.json -w "%{http_code}" -X PATCH \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            "$API/config/auth" -d "$BODY")
+          echo "- PATCH HTTP \`$CODE\`" >> r.md
+          if [ "$CODE" != "200" ]; then
+            echo '```json' >> r.md
+            head -c 800 cfg.json >> r.md
+            echo "" >> r.md
+            echo '```' >> r.md
+          fi
+
+          echo "" >> r.md
+          echo "### Güncel SMTP ayarları" >> r.md
+          curl -s --max-time 45 -H "Authorization: Bearer $TOKEN" "$API/config/auth" -o now.json
+          jq -r 'to_entries[] | select(.key | test("^smtp_")) | "- `\(.key)` = `\(.value)`"' now.json >> r.md
+
+          if [ -n "$TEST_TO" ]; then
+            echo "" >> r.md
+            echo "### Test: şifre sıfırlama isteği → \`$TEST_TO\`" >> r.md
+            sleep 20
+            curl -s --max-time 45 -H "Authorization: Bearer $TOKEN" "$API/api-keys?reveal=true" -o keys.json
+            ANON=$(jq -r '[.[] | select(.name == "anon")][0].api_key' keys.json)
+            CODE=$(curl -s --max-time 45 -o rec.json -w "%{http_code}" -X POST \
+              "https://urrjkubdngoszkttpeph.supabase.co/auth/v1/recover?redirect_to=halka://reset-password" \
+              -H "apikey: $ANON" -H "Content-Type: application/json" \
+              -d "{\"email\":\"$TEST_TO\"}")
+            echo "- HTTP \`$CODE\` → \`$(head -c 200 rec.json | tr -d '\n')\`" >> r.md
+          fi
+
+          cat r.md
+          gh issue comment 30 --repo "$REPO" --body-file r.md
