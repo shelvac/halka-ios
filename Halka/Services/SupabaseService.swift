@@ -223,6 +223,18 @@ final class SupabaseService {
             credentials: OpenIDConnectCredentials(provider: .apple, idToken: idToken, nonce: nonce))
     }
 
+    /// US-019 — Native Google girişi: `GoogleOAuth`'un ürettiği id_token'ı
+    /// Supabase oturumuna çevirir. iOS istemci ID'si Supabase'de
+    /// `external_google_client_id` listesinde kayıtlı olmalıdır.
+    func signInWithGoogle(_ tokens: GoogleOAuth.Tokens) async throws {
+        guard let client else { return }
+        try await client.auth.signInWithIdToken(
+            credentials: OpenIDConnectCredentials(provider: .google,
+                                                  idToken: tokens.idToken,
+                                                  accessToken: tokens.accessToken,
+                                                  nonce: tokens.nonce))
+    }
+
     /// E-posta bağlantısı / OAuth dönüşündeki kodu oturuma çevirir.
     @discardableResult
     func session(from url: URL) async throws -> Bool {

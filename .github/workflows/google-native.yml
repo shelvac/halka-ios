@@ -1,0 +1,46 @@
+# US-019 — Native Google girişi için Supabase yapılandırması.
+# iOS OAuth istemcisinin ürettiği id_token'ların "audience" kontrolünden
+# geçebilmesi için istemci ID'si external_google_client_id listesine eklenir
+# (web istemcisi ilk sırada kalır — web tabanlı yedek akış onu kullanıyor).
+name: Google Native Ayarı
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      URL: https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph/config/auth
+      WEB_ID: 79557204804-bgfcv0kkdqeba7tgk2t9us8vk0tgh48h.apps.googleusercontent.com
+      IOS_ID: 79557204804-r4ttpt0n056k5leklb3fpi4v26rpgecm.apps.googleusercontent.com
+    steps:
+      - name: İstemci listesini güncelle
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set +e
+          echo "## Google native ayarı" > r.md
+          echo "" >> r.md
+          CODE=$(curl -s --max-time 45 -o resp.json -w "%{http_code}" -X PATCH \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            "$URL" -d "{\"external_google_client_id\":\"$WEB_ID,$IOS_ID\"}")
+          if [ "$CODE" = "200" ]; then
+            echo "- ✅ iOS istemcisi eklendi (HTTP \`$CODE\`)" >> r.md
+          else
+            echo "- ❌ HTTP \`$CODE\`: \`$(head -c 250 resp.json | tr -d '\n')\`" >> r.md
+          fi
+          echo "" >> r.md
+          echo "**Doğrulama:**" >> r.md
+          curl -s --max-time 45 -H "Authorization: Bearer $TOKEN" "$URL" -o cfg.json
+          jq -r 'to_entries[] | select(.key | test("external_google_(client_id|enabled)")) | "- `\(.key)` = `\(.value)`"' cfg.json >> r.md
+          cat r.md
+          gh issue comment 29 --repo "$REPO" --body-file r.md
+          [ "$CODE" = "200" ]

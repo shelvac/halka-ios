@@ -197,14 +197,45 @@ extension AppModel {
             return
         }
         do {
-            try await SupabaseService.shared.signInWithProvider(provider)
+            if provider == .google {
+                // US-019 — native akış: Google izin ekranında Supabase alan adı
+                // değil uygulamanın kendi kimliği görünür.
+                let tokens = try await GoogleOAuth.shared.signIn()
+                try await SupabaseService.shared.signInWithGoogle(tokens)
+            } else {
+                try await SupabaseService.shared.signInWithProvider(provider)
+            }
             // Sağlayıcı e-postaları doğrulanmış sayılır.
             if let name = await SupabaseService.shared.syncProviderProfile() {
                 applyFullName(name)
             }
             await enterApp()
+        } catch let failure as GoogleOAuth.Failure {
+            switch failure {
+            case .cancelled:
+                return   // kullanıcı vazgeçti → sessiz
+            case .exchange:
+                // Native akış düşerse eski web akışına geri düşülür — kullanıcı
+                // yine giriş yapabilsin; hata yalnızca log'a gider.
+                AuthLog.warn("googleNative", failure)
+                await fallbackWebGoogle()
+            }
         } catch {
             let message = Self.providerMessage(error, provider: provider)
+            authError = message.isEmpty ? nil : message
+        }
+    }
+
+    /// Native Google akışı düşerse Supabase'in web tabanlı OAuth'una dönüş.
+    private func fallbackWebGoogle() async {
+        do {
+            try await SupabaseService.shared.signInWithProvider(.google)
+            if let name = await SupabaseService.shared.syncProviderProfile() {
+                applyFullName(name)
+            }
+            await enterApp()
+        } catch {
+            let message = Self.providerMessage(error, provider: .google)
             authError = message.isEmpty ? nil : message
         }
     }
