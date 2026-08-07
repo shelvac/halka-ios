@@ -196,7 +196,9 @@ final class SupabaseService {
     @discardableResult
     func uploadAvatar(_ data: Data) async throws -> String {
         guard let client, let user = await currentUser() else { return "" }
-        let path = "\(user.id.uuidString)/avatar.jpg"
+        // Yol küçük harfli: storage RLS politikaları düz metin karşılaştırması
+        // yapıyor, Swift'in ürettiği BÜYÜK harfli UUID ile eşleşmiyordu.
+        let path = "\(user.id.uuidString.lowercased())/avatar.jpg"
 
         try await client.storage.from("avatars").upload(
             path, data: data,
@@ -220,7 +222,9 @@ final class SupabaseService {
     /// Fotoğrafı siler ve profildeki yolu boşaltır.
     func removeAvatar() async throws {
         guard let client, let user = await currentUser() else { return }
-        let path = "\(user.id.uuidString)/avatar.jpg"
+        // Yol küçük harfli: storage RLS politikaları düz metin karşılaştırması
+        // yapıyor, Swift'in ürettiği BÜYÜK harfli UUID ile eşleşmiyordu.
+        let path = "\(user.id.uuidString.lowercased())/avatar.jpg"
         _ = try? await client.storage.from("avatars").remove(paths: [path])
         try await client.from("users")
             .update(["avatar_path": AnyJSON.null])

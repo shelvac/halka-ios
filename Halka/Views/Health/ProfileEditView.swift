@@ -18,14 +18,29 @@ struct ProfileEditView: View {
     @State private var hasBirthDate = false
     @State private var birthDate = Calendar.current.date(
         byAdding: .year, value: -30, to: Date()) ?? Date()
-    @State private var heightText = ""
-    @State private var weightText = ""
-    @State private var targetText = ""
     @State private var saving = false
+    @State private var editingMeasure: Measure? = nil
     @State private var photoItem: PhotosPickerItem? = nil
     @FocusState private var focused: Field?
 
-    private enum Field { case name, height, weight, target }
+    private enum Field { case name }
+
+    /// Tekerlek seçiciyle girilen ölçüler.
+    private enum Measure: String, Identifiable {
+        case height, weight, target
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .height: return "Boy"
+            case .weight: return "Güncel kilo"
+            case .target: return "Hedef kilo"
+            }
+        }
+        var unit: String { self == .height ? "cm" : "kg" }
+        var range: ClosedRange<Int> { self == .height ? 100...230 : 30...250 }
+        var allowsDecimal: Bool { self != .height }
+    }
 
     var body: some View {
         ZStack {
@@ -51,6 +66,26 @@ struct ProfileEditView: View {
             }
         }
         .onAppear(perform: load)
+        .sheet(item: $editingMeasure) { measure in
+            MeasurePickerSheet(
+                title: measure.title,
+                unit: measure.unit,
+                range: measure.range,
+                allowsDecimal: measure.allowsDecimal,
+                value: binding(for: measure))
+        }
+    }
+
+    /// Seçicinin doğrudan taslağa yazması için alan bağlantısı.
+    private func binding(for measure: Measure) -> Binding<Double?> {
+        switch measure {
+        case .height: return Binding(get: { draft.heightCm },
+                                     set: { draft.heightCm = $0 })
+        case .weight: return Binding(get: { draft.weightKg },
+                                     set: { draft.weightKg = $0 })
+        case .target: return Binding(get: { draft.targetWeightKg },
+                                     set: { draft.targetWeightKg = $0 })
+        }
     }
 
     // MARK: Başlık
@@ -177,11 +212,11 @@ struct ProfileEditView: View {
 
     private var measuresCard: some View {
         card("Ölçüler") {
-            measureRow("Boy", text: $heightText, unit: "cm", field: .height)
+            measureRow(.height, value: draft.heightCm)
             divider
-            measureRow("Güncel kilo", text: $weightText, unit: "kg", field: .weight)
+            measureRow(.weight, value: draft.weightKg)
             divider
-            measureRow("Hedef kilo", text: $targetText, unit: "kg", field: .target)
+            measureRow(.target, value: draft.targetWeightKg)
         }
     }
 
@@ -326,23 +361,27 @@ struct ProfileEditView: View {
         .padding(.vertical, 13)
     }
 
-    private func measureRow(_ title: String, text: Binding<String>,
-                            unit: String, field: Field) -> some View {
-        fieldRow(title) {
-            HStack(spacing: 5) {
-                TextField("—", text: text)
-                    .font(.h(13, .bold))
-                    .foregroundStyle(Color.ink)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-                    .frame(maxWidth: 70)
-                    .focused($focused, equals: field)
-                Text(unit)
-                    .font(.h(12, .bold))
-                    .foregroundStyle(Color.sub)
-                    .frame(width: 24, alignment: .leading)
+    private func measureRow(_ measure: Measure, value: Double?) -> some View {
+        Button {
+            focused = nil
+            editingMeasure = measure
+        } label: {
+            fieldRow(measure.title) {
+                HStack(spacing: 5) {
+                    Text(Self.display(value, decimal: measure.allowsDecimal))
+                        .font(.h(13, .bold))
+                        .foregroundStyle(value == nil ? Color.faint : Color.ink)
+                    Text(measure.unit)
+                        .font(.h(12, .bold))
+                        .foregroundStyle(Color.sub)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .heavy))
+                        .foregroundStyle(Color.chevron)
+                        .padding(.leading, 2)
+                }
             }
         }
+        .buttonStyle(.plain)
     }
 
     private func goalRow(_ title: String, _ value: String?, _ color: Color) -> some View {
@@ -386,13 +425,10 @@ struct ProfileEditView: View {
 
     // MARK: Durum
 
-    /// Metin alanları henüz `draft`e işlenmediği için önizleme ayrı üretilir.
+    /// Doğum tarihi ayrı tutulduğu (aç/kapa) için önizleme birleştirilerek üretilir.
     private var previewProfile: Profile {
         var p = draft
         p.birthDate = hasBirthDate ? birthDate : nil
-        p.heightCm = Self.number(heightText)
-        p.weightKg = Self.number(weightText)
-        p.targetWeightKg = Self.number(targetText)
         return p
     }
 
@@ -403,9 +439,6 @@ struct ProfileEditView: View {
             birthDate = date
             hasBirthDate = true
         }
-        heightText = Self.text(model.profile.heightCm)
-        weightText = Self.text(model.profile.weightKg)
-        targetText = Self.text(model.profile.targetWeightKg)
     }
 
     private func save() {
@@ -419,22 +452,13 @@ struct ProfileEditView: View {
         }
     }
 
-    // MARK: Sayı biçimlendirme
+    // MARK: Gösterim
     //
-    // Türkçe klavyede ondalık ayırıcı virgül; iki biçimi de kabul ediyoruz.
+    // Türkçe'de ondalık ayırıcı virgül: "72,5 kg".
 
-    private static func number(_ text: String) -> Double? {
-        let normalized = text
-            .replacingOccurrences(of: ",", with: ".")
-            .trimmingCharacters(in: .whitespaces)
-        guard !normalized.isEmpty, let value = Double(normalized), value > 0 else { return nil }
-        return value
-    }
-
-    private static func text(_ value: Double?) -> String {
-        guard let value else { return "" }
-        return value == value.rounded()
-            ? String(Int(value))
-            : String(format: "%.1f", value)
+    private static func display(_ value: Double?, decimal: Bool) -> String {
+        guard let value else { return "—" }
+        guard decimal else { return String(Int(value.rounded())) }
+        return String(format: "%.1f", value).replacingOccurrences(of: ".", with: ",")
     }
 }
