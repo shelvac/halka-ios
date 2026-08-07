@@ -1,0 +1,138 @@
+# Gmail SMTP'yi custom SMTP olarak bağlar + markalı Türkçe şablonları geri yükler.
+#
+# Neden Gmail:
+#   Resend gibi servisler doğrulanmış alan adı olmadan yalnızca hesap sahibine
+#   gönderim yapıyor. Gmail SMTP alan adı istemez, günde ~500 mail gönderir ve
+#   Gmail alıcılarında teslimatı çok iyidir. Geçici çözüm — kendi alan adımız
+#   olunca Resend'e döneceğiz (smtp-toggle.yml mode=resend).
+#
+# Gerekli secret: GMAIL_APP_PASSWORD (Google Hesabı → Uygulama Şifreleri, 16 hane)
+name: Gmail SMTP
+
+on:
+  workflow_dispatch:
+    inputs:
+      gmail_address:
+        description: "Gönderen Gmail adresi"
+        required: true
+        default: "simgehelvaci@gmail.com"
+      test_to:
+        description: "Test sıfırlama maili gönderilecek adres (boş = test yok)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      URL: https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph/config/auth
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Gmail SMTP + şablonlar
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          APP_PASS: ${{ secrets.GMAIL_APP_PASSWORD }}
+          GMAIL: ${{ inputs.gmail_address }}
+          TEST_TO: ${{ inputs.test_to }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          echo "## Gmail SMTP kurulumu" > report.md
+          echo "" >> report.md
+          OK=0; FAIL=0
+
+          if [ -z "${APP_PASS:-}" ]; then
+            echo "- ❌ \`GMAIL_APP_PASSWORD\` secret'ı tanımlı değil" >> report.md
+            gh issue comment 30 --repo "$REPO" --body-file report.md
+            exit 1
+          fi
+
+          apply() {   # $1 = etiket, $2 = json gövde
+            CODE=$(curl -s --max-time 45 -o /tmp/resp.json -w "%{http_code}" -X PATCH \
+              -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+              "$URL" -d "$2")
+            if [ "$CODE" = "200" ]; then
+              echo "- ✅ $1" >> report.md; OK=$((OK+1))
+            else
+              echo "- ❌ $1 — \`$CODE: $(head -c 220 /tmp/resp.json | tr -d '\n')\`" >> report.md
+              FAIL=$((FAIL+1))
+            fi
+          }
+
+          # 1) Gmail SMTP bağlantısı — boşluklar temizlenir (Google 4'lü gruplar hâlinde gösteriyor)
+          CLEAN_PASS=$(printf '%s' "$APP_PASS" | tr -d ' ')
+          apply "Gmail SMTP bağlantısı" "$(jq -n --arg pass "$CLEAN_PASS" --arg user "$GMAIL" '{
+            smtp_admin_email: $user,
+            smtp_host: "smtp.gmail.com",
+            smtp_port: "587",
+            smtp_user: $user,
+            smtp_pass: $pass,
+            smtp_sender_name: "halka",
+            smtp_max_frequency: 1
+          }')"
+
+          # 2) Saatlik limit — custom SMTP ile artık geçerli
+          apply "E-posta saatlik limiti (100)" '{"rate_limit_email_sent": 100}'
+
+          # 3) Markalı Türkçe şablonlar geri
+          apply "Doğrulama e-postası" "$(jq -n --rawfile c supabase/emails/confirmation.html \
+            '{mailer_subjects_confirmation: "halka — e-posta adresini doğrula",
+              mailer_templates_confirmation_content: $c}')"
+
+          apply "Şifre sıfırlama e-postası" "$(jq -n --rawfile c supabase/emails/recovery.html \
+            '{mailer_subjects_recovery: "halka — şifreni sıfırla",
+              mailer_templates_recovery_content: $c}')"
+
+          apply "Giriş bağlantısı e-postası" "$(jq -n --rawfile c supabase/emails/magic_link.html \
+            '{mailer_subjects_magic_link: "halka — giriş bağlantın",
+              mailer_templates_magic_link_content: $c}')"
+
+          apply "E-posta değişikliği" "$(jq -n --rawfile c supabase/emails/email_change.html \
+            '{mailer_subjects_email_change: "halka — yeni e-posta adresini onayla",
+              mailer_templates_email_change_content: $c}')"
+
+          echo "" >> report.md
+          echo "**Doğrulama:**" >> report.md
+          curl -s --max-time 45 -H "Authorization: Bearer $TOKEN" "$URL" -o /tmp/cfg.json
+          jq -r 'to_entries[] | select(.key | test("^smtp_(host|port|user|admin_email|sender_name)$|rate_limit_email_sent")) | "- `\(.key)` = `\(.value)`"' /tmp/cfg.json >> report.md
+
+          # 4) Uçtan uca test
+          if [ -n "$TEST_TO" ]; then
+            echo "" >> report.md
+            echo "### Test: şifre sıfırlama → \`$TEST_TO\`" >> report.md
+            sleep 20
+            curl -s --max-time 45 -H "Authorization: Bearer $TOKEN" \
+              "https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph/api-keys?reveal=true" -o keys.json
+            ANON=$(jq -r '[.[] | select(.name == "anon")][0].api_key' keys.json)
+            CODE=$(curl -s --max-time 45 -o rec.json -w "%{http_code}" -X POST \
+              "https://urrjkubdngoszkttpeph.supabase.co/auth/v1/recover?redirect_to=halka://reset-password" \
+              -H "apikey: $ANON" -H "Content-Type: application/json" \
+              -d "{\"email\":\"$TEST_TO\"}")
+            echo "- HTTP \`$CODE\` → \`$(head -c 200 rec.json | tr -d '\n')\`" >> report.md
+
+            echo "" >> report.md
+            echo "### Auth logları (SMTP hatası var mı?)" >> report.md
+            sleep 25
+            SQL='select cast(timestamp as string) as ts, event_message from auth_logs order by timestamp desc limit 10'
+            curl -s --max-time 45 -G -H "Authorization: Bearer $TOKEN" \
+              --data-urlencode "sql=$SQL" \
+              "https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph/analytics/endpoints/logs.all" -o logs.json
+            echo '```json' >> report.md
+            head -c 2000 logs.json >> report.md
+            echo "" >> report.md
+            echo '```' >> report.md
+          fi
+
+          echo "" >> report.md
+          echo "_${OK}/$((OK+FAIL)) adım uygulandı._" >> report.md
+
+          cat report.md
+          gh issue comment 30 --repo "$REPO" --body-file report.md
+          [ "$FAIL" = "0" ]
