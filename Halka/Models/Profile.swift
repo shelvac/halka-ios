@@ -8,6 +8,8 @@ import Foundation
 /// ondan hesaplar.
 struct Profile: Codable, Equatable {
     var fullName: String = ""
+    /// `avatars` bucket'ındaki dosya yolu; boşsa baş harf avatarı gösterilir.
+    var avatarPath: String?
     var birthDate: Date?
     var sex: Sex?
     var heightCm: Double?
@@ -132,11 +134,15 @@ struct Profile: Codable, Equatable {
         return Int((raw / 10).rounded() * 10)     // 10'a yuvarla
     }
 
-    /// Günlük su hedefi (ml) — kilo başına ~33 ml, 1500-4000 ml arasına sıkıştırılır.
+    /// Günlük su hedefi (ml) — kilo başına ~33 ml.
+    ///
+    /// Taban 2000 ml: hesap daha azını önerse bile (düşük kilo) günlük 2 litre
+    /// yaygın kabul gören asgari öneri, altını hedef olarak göstermiyoruz.
+    /// Tavan 4000 ml — üstü kişiye özel tıbbi değerlendirme ister.
     var waterGoalML: Int? {
         guard let weightKg else { return nil }
         let raw = weightKg * 33
-        return Int((min(max(raw, 1500), 4000) / 50).rounded() * 50)
+        return Int((min(max(raw, 2000), 4000) / 50).rounded() * 50)
     }
 
     /// Haftalık 150 dk orta şiddet önerisinin günlük karşılığı (DSÖ);

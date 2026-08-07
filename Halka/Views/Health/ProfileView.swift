@@ -23,7 +23,8 @@ struct ProfileView: View {
 
             // Identity card — US-016: değerler profilden gelir, sabit değil.
             VStack(spacing: 0) {
-                MeAvatar(size: 76)
+                ProfileAvatar(image: model.avatarImage,
+                              fullName: model.userFullName, size: 76)
                 Text(model.userFullName)
                     .font(.h(20))
                     .foregroundStyle(Color.ink)

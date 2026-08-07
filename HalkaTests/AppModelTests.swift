@@ -213,8 +213,8 @@ final class AppModelTests: XCTestCase {
     func testWaterGoalScalesWithWeightAndIsClamped() {
         var p = sampleProfile()
         XCTAssertEqual(p.waterGoalML ?? 0, 2400, accuracy: 50)
-        p.weightKg = 30                                  // aşırı düşük → alt sınır
-        XCTAssertEqual(p.waterGoalML, 1500)
+        p.weightKg = 30                                  // aşırı düşük → 2 L tabanı
+        XCTAssertEqual(p.waterGoalML, 2000)
         p.weightKg = 200                                 // aşırı yüksek → üst sınır
         XCTAssertEqual(p.waterGoalML, 4000)
     }

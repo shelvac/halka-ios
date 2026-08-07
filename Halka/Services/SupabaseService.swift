@@ -118,6 +118,7 @@ final class SupabaseService {
     /// ISO-8601 (timestamptz) olarak döndürdüğü için ayrıştırma burada yapılır.
     private struct ProfileRow: Decodable {
         let full_name: String?
+        let avatar_path: String?
         let birth_date: String?
         let sex: String?
         let height_cm: Double?
@@ -140,7 +141,7 @@ final class SupabaseService {
     func fetchProfile() async -> Profile? {
         guard let client, let user = await currentUser() else { return nil }
         guard let rows: [ProfileRow] = try? await client.from("users")
-            .select("full_name,birth_date,sex,height_cm,weight_kg,target_weight_kg,activity_level,profile_completed_at")
+            .select("full_name,avatar_path,birth_date,sex,height_cm,weight_kg,target_weight_kg,activity_level,profile_completed_at")
             .eq("id", value: user.id.uuidString)
             .limit(1)
             .execute()
@@ -149,6 +150,7 @@ final class SupabaseService {
 
         var profile = Profile()
         profile.fullName = row.full_name ?? ""
+        profile.avatarPath = row.avatar_path
         profile.birthDate = row.birth_date.flatMap { Self.dayFormatter.date(from: $0) }
         profile.sex = row.sex.flatMap(Profile.Sex.init(rawValue:))
         profile.heightCm = row.height_cm
@@ -182,6 +184,46 @@ final class SupabaseService {
 
         try await client.from("users")
             .update(payload)
+            .eq("id", value: user.id.uuidString)
+            .execute()
+    }
+
+    // MARK: Profil fotoğrafı (US-016)
+
+    /// Fotoğrafı `avatars` bucket'ına yükler ve yolunu profile yazar.
+    /// Yol kullanıcının kendi id'siyle başlar; RLS politikaları başkasının
+    /// klasörüne yazmayı engelliyor (0005_avatars.sql).
+    @discardableResult
+    func uploadAvatar(_ data: Data) async throws -> String {
+        guard let client, let user = await currentUser() else { return "" }
+        let path = "\(user.id.uuidString)/avatar.jpg"
+
+        try await client.storage.from("avatars").upload(
+            path, data: data,
+            options: FileOptions(cacheControl: "3600",
+                                 contentType: "image/jpeg",
+                                 upsert: true))
+
+        try await client.from("users")
+            .update(["avatar_path": path])
+            .eq("id", value: user.id.uuidString)
+            .execute()
+        return path
+    }
+
+    /// Profil fotoğrafını indirir. Dosya yoksa veya erişilemezse `nil`.
+    func downloadAvatar(path: String) async -> Data? {
+        guard let client else { return nil }
+        return try? await client.storage.from("avatars").download(path: path)
+    }
+
+    /// Fotoğrafı siler ve profildeki yolu boşaltır.
+    func removeAvatar() async throws {
+        guard let client, let user = await currentUser() else { return }
+        let path = "\(user.id.uuidString)/avatar.jpg"
+        _ = try? await client.storage.from("avatars").remove(paths: [path])
+        try await client.from("users")
+            .update(["avatar_path": AnyJSON.null])
             .eq("id", value: user.id.uuidString)
             .execute()
     }

@@ -27,6 +27,8 @@ final class AppModel {
     var profile = Profile()
     var profileBusy = false
     var profileError: String? = nil
+    /// Profil fotoğrafı — buluttan indirilip bellekte tutulur (US-016).
+    var avatarImage: UIImage? = nil
 
     /// Kişiye özel halka hedefi; profil eksikse `RingKind`'ın varsayılanı.
     func goal(for kind: RingKind) -> Double {

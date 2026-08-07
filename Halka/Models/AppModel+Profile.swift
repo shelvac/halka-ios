@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 // MARK: - Profil yükleme / kaydetme (US-016)
 
@@ -14,6 +15,61 @@ extension AppModel {
         if !loaded.fullName.isEmpty {
             applyFullName(loaded.fullName)
         }
+        if let path = loaded.avatarPath,
+           let data = await SupabaseService.shared.downloadAvatar(path: path) {
+            avatarImage = UIImage(data: data)
+        }
+    }
+
+    /// Galeriden seçilen fotoğrafı küçültüp yükler.
+    ///
+    /// Önce yerelde gösterilir (kullanıcı beklemesin), sonra yüklenir; yükleme
+    /// düşerse eski fotoğrafa dönülür — ekranda değişmiş görünüp sunucuda
+    /// olmaması yanıltıcı olurdu.
+    func updateAvatar(_ image: UIImage) async {
+        profileError = nil
+        let previous = avatarImage
+        avatarImage = image
+
+        guard supabaseReady, let data = Self.avatarJPEG(image) else { return }
+
+        profileBusy = true
+        defer { profileBusy = false }
+        do {
+            let path = try await SupabaseService.shared.uploadAvatar(data)
+            profile.avatarPath = path
+        } catch {
+            avatarImage = previous
+            profileError = "Fotoğraf yüklenemedi — bağlantını kontrol edip tekrar dene."
+            AuthLog.warn("uploadAvatar", error)
+        }
+    }
+
+    func removeAvatar() async {
+        let previous = avatarImage
+        avatarImage = nil
+        guard supabaseReady else { return }
+        do {
+            try await SupabaseService.shared.removeAvatar()
+            profile.avatarPath = nil
+        } catch {
+            avatarImage = previous
+            profileError = "Fotoğraf kaldırılamadı — tekrar dene."
+            AuthLog.warn("removeAvatar", error)
+        }
+    }
+
+    /// Avatarı 512 pikselde JPEG'e çevirir — telefondan gelen 4-5 MB'lık kareyi
+    /// olduğu gibi yüklemek hem yavaş hem gereksiz.
+    private static func avatarJPEG(_ image: UIImage, maxSide: CGFloat = 512) -> Data? {
+        let side = max(image.size.width, image.size.height)
+        let scale = side > maxSide ? maxSide / side : 1
+        let target = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: target)
+        let resized = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+        return resized.jpegData(compressionQuality: 0.8)
     }
 
     /// Profil düzenleme ekranından kaydeder.

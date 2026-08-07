@@ -172,6 +172,39 @@ struct MeAvatar: View {
     }
 }
 
+/// US-016 — Kullanıcının profil fotoğrafı; yoksa adının baş harfi.
+/// Fotoğraf kırpılmadan kareye oturtulur (`.fill` + kırpma), böylece dikey
+/// çekilmiş kareler yamulmaz.
+struct ProfileAvatar: View {
+    var image: UIImage?
+    var fullName: String
+    var size: CGFloat = 44
+
+    private var initial: String {
+        let trimmed = fullName.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? "?" : String(trimmed.prefix(1)).uppercased()
+    }
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Color.avatarPeach
+                    .overlay(
+                        Text(initial)
+                            .font(.h(size * 0.37))
+                            .foregroundStyle(Color.brown)
+                    )
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+}
+
 /// Prototype-style status chip ("Normal", "Yüksek"…).
 struct StatusChip: View {
     var text: String
