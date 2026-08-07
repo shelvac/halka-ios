@@ -164,6 +164,46 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.workoutLog[0].meta.contains("2/5"))
     }
 
+    // MARK: Auth hata mesajları
+    //
+    // Sunucudan gelen İngilizce hatalar kullanıcıya Türkçe ve eyleme dönük
+    // gösterilmeli. Gerçek ağ çağrısı yapmadan yalnızca eşlemeyi doğrular.
+
+    private func serverError(_ message: String) -> NSError {
+        NSError(domain: "AuthTest", code: 400,
+                userInfo: [NSLocalizedDescriptionKey: message])
+    }
+
+    @MainActor
+    func testSamePasswordErrorIsTranslated() {
+        // Supabase bunu hem düz metin hem `same_password` koduyla döndürebiliyor.
+        for raw in ["New password should be different from the old password.",
+                    "same_password"] {
+            let message = AppModel.authMessage(serverError(raw))
+            XCTAssertTrue(message.contains("eskisinden farklı"),
+                          "beklenmeyen çeviri: \(message)")
+        }
+    }
+
+    @MainActor
+    func testRateLimitErrorIsTranslated() {
+        let message = AppModel.authMessage(serverError("email rate limit exceeded"))
+        XCTAssertTrue(message.contains("Çok fazla deneme"))
+    }
+
+    @MainActor
+    func testExpiredLinkErrorIsTranslated() {
+        let message = AppModel.authMessage(serverError("Email link is invalid or has expired"))
+        XCTAssertTrue(message.contains("süresi dolmuş"))
+    }
+
+    @MainActor
+    func testUnknownErrorFallsBackWithDetail() {
+        // Bilinmeyen hata yutulmamalı: teşhis için özgün metin korunur.
+        let message = AppModel.authMessage(serverError("teapot is on fire"))
+        XCTAssertTrue(message.contains("teapot is on fire"))
+    }
+
     // MARK: Kan tahlili durumları
 
     func testBloodTestStatusThresholds() {

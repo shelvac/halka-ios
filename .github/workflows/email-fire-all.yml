@@ -1,0 +1,88 @@
+# Her e-posta türünü sırayla tetikler ve Supabase auth loglarında SMTP hatası
+# olup olmadığına bakar. "Mail çıktı mı?" sorusunu otomatik cevaplar;
+# "gelen kutusuna düştü mü?" sorusu manuel testte (docs/QA-Email-Test-Plan.md).
+name: E-posta Tetikleme Testi
+
+on:
+  workflow_dispatch:
+    inputs:
+      to:
+        description: "Test adresi (kayıtlı bir hesap olmalı)"
+        required: true
+        default: "simgehelvaci@gmail.com"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PROJ: https://urrjkubdngoszkttpeph.supabase.co
+      API: https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Şablon doğrulaması
+        run: python3 scripts/check_email_templates.py
+
+      - name: Mailleri tetikle
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          TO: ${{ inputs.to }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set +e
+          echo "## E-posta tetikleme testi · \`$TO\`" > r.md
+          echo "" >> r.md
+
+          curl -s --max-time 45 -H "Authorization: Bearer $TOKEN" "$API/api-keys?reveal=true" -o keys.json
+          ANON=$(jq -r '[.[] | select(.name == "anon")][0].api_key' keys.json)
+
+          fire() {   # $1 = etiket, $2 = yol, $3 = gövde
+            CODE=$(curl -s --max-time 45 -o out.json -w "%{http_code}" -X POST \
+              "$PROJ/auth/v1/$2" -H "apikey: $ANON" -H "Content-Type: application/json" -d "$3")
+            BODY=$(head -c 160 out.json | tr -d '\n')
+            if [ "$CODE" = "200" ] || [ "$CODE" = "201" ]; then
+              echo "- ✅ $1 — HTTP \`$CODE\`" >> r.md
+            else
+              echo "- ❌ $1 — HTTP \`$CODE\` \`$BODY\`" >> r.md
+            fi
+            sleep 6
+          }
+
+          fire "Şifre sıfırlama" "recover?redirect_to=halka://reset-password" "{\"email\":\"$TO\"}"
+          fire "Giriş bağlantısı (magic link)" "magiclink?redirect_to=halka://login-callback" "{\"email\":\"$TO\"}"
+          fire "Doğrulama maili (resend)" "resend?redirect_to=halka://login-callback" "{\"email\":\"$TO\",\"type\":\"signup\"}"
+
+          echo "" >> r.md
+          echo "### Auth logları — SMTP hatası taraması" >> r.md
+          sleep 30
+          SQL='select cast(timestamp as string) as ts, event_message from auth_logs order by timestamp desc limit 25'
+          curl -s --max-time 45 -G -H "Authorization: Bearer $TOKEN" \
+            --data-urlencode "sql=$SQL" "$API/analytics/endpoints/logs.all" -o logs.json
+
+          HITS=$(grep -o -i 'smtp[^"]*error\|failed to send\|dial tcp\|authentication failed\|550 \|535 ' logs.json | head -10)
+          if [ -n "$HITS" ]; then
+            echo "- ❌ SMTP hatası bulundu:" >> r.md
+            echo '```' >> r.md
+            echo "$HITS" >> r.md
+            echo '```' >> r.md
+          else
+            echo "- ✅ Loglarda SMTP hatası yok — mailler Gmail'e teslim edildi" >> r.md
+          fi
+
+          echo "" >> r.md
+          echo "<details><summary>Ham loglar</summary>" >> r.md
+          echo "" >> r.md
+          echo '```json' >> r.md
+          head -c 2500 logs.json >> r.md
+          echo "" >> r.md
+          echo '```' >> r.md
+          echo "</details>" >> r.md
+
+          cat r.md
+          gh issue comment 30 --repo "$REPO" --body-file r.md

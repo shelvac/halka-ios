@@ -1,0 +1,22 @@
+# Şablon dosyaları her değiştiğinde statik doğrulama.
+# Ücretsiz ve hızlı (ubuntu runner) — macOS CI'ya dokunmaz.
+name: E-posta Şablon Kontrolü
+
+on:
+  push:
+    paths:
+      - "supabase/emails/**"
+      - "scripts/check_email_templates.py"
+  pull_request:
+    paths:
+      - "supabase/emails/**"
+      - "scripts/check_email_templates.py"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/check_email_templates.py
