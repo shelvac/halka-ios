@@ -153,23 +153,32 @@ final class SupabaseService {
     ///
     /// Sıfırlama akışında kullanıcı eski şifresini yazmaz, Supabase'de de
     /// "aynı şifreyi reddet" diye bir ayar yok. Bu yüzden kontrolü kendimiz
-    /// yapıyoruz: yeni şifreyle giriş denenir — başarılı olursa şifre eskisiyle
-    /// aynıdır. Deneme AYRI bir istemciyle yapılır ki sıfırlama oturumu
-    /// bozulmasın; sonuç ne olursa olsun o istemcinin oturumu kapatılır.
+    /// yapıyoruz: yeni şifreyle giriş denenir — sunucu 200 dönerse şifre
+    /// eskisiyle aynıdır.
+    ///
+    /// Doğrudan HTTP ile sorulur, SDK istemcisiyle DEĞİL: ikinci bir
+    /// `SupabaseClient` aynı yerel oturum deposunu paylaşıyor, dolayısıyla
+    /// giriş/çıkış yapması sıfırlama oturumunu siliyor ve şifre güncellemesi
+    /// "Auth session missing" ile düşüyordu. Buradaki istek hiçbir yere
+    /// oturum yazmaz; dönen token'lar kullanılmadan atılır.
     ///
     /// Ağ hatası gibi belirsiz durumlarda `false` döner — kontrol kullanıcıyı
     /// bloke etmemeli, sadece uyarı amaçlıdır.
     func isSameAsCurrentPassword(_ password: String) async -> Bool {
         guard let email = await currentEmail(),
-              let url = URL(string: SupabaseConfig.url) else { return false }
-        let probe = SupabaseClient(supabaseURL: url, supabaseKey: SupabaseConfig.anonKey)
-        defer { Task { try? await probe.auth.signOut() } }
-        do {
-            try await probe.auth.signIn(email: email, password: password)
-            return true          // giriş yapabildi → şifre aynı
-        } catch {
-            return false         // giriş yapamadı → şifre farklı (ya da ağ hatası)
-        }
+              let url = URL(string: SupabaseConfig.url + "/auth/v1/token?grant_type=password")
+        else { return false }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(SupabaseConfig.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(
+            withJSONObject: ["email": email, "password": password])
+
+        guard let (_, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse else { return false }
+        return http.statusCode == 200
     }
 
     func signOut() async {

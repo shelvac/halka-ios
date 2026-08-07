@@ -315,6 +315,11 @@ extension AppModel {
         if text.contains("password") && (text.contains("least") || text.contains("short")) {
             return "Şifre çok kısa — en az 8 karakter kullan."
         }
+        // Sıfırlama oturumu düşmüşse kullanıcıya ne yapacağını söyle.
+        if text.contains("session missing") || text.contains("session_not_found")
+            || text.contains("auth session") {
+            return "Oturumun sona ermiş — e-postadaki sıfırlama bağlantısını tekrar aç."
+        }
         if text.contains("expired") || text.contains("invalid token")
             || text.contains("token has expired") || text.contains("otp_expired") {
             return "Bağlantının süresi dolmuş — yeni bir bağlantı iste."

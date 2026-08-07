@@ -198,6 +198,12 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
+    func testMissingSessionErrorIsTranslated() {
+        let message = AppModel.authMessage(serverError("Auth session missing!"))
+        XCTAssertTrue(message.contains("sıfırlama bağlantısını tekrar aç"))
+    }
+
+    @MainActor
     func testUnknownErrorFallsBackWithDetail() {
         // Bilinmeyen hata yutulmamalı: teşhis için özgün metin korunur.
         let message = AppModel.authMessage(serverError("teapot is on fire"))
