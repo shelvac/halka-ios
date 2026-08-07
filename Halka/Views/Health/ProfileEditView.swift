@@ -359,8 +359,12 @@ struct ProfileEditView: View {
     }
 
     /// Tek seçimli yatay çip satırı.
+    /// Her iki kapanış da `@escaping`: `ForEach` gövdesi görünüm ağacında
+    /// saklandığı için çağrı bittikten sonra da kullanılıyor.
     private func chipRow<T: Identifiable & Equatable>(
-        _ items: [T], selected: T?, label: (T) -> String, tap: @escaping (T) -> Void
+        _ items: [T], selected: T?,
+        label: @escaping (T) -> String,
+        tap: @escaping (T) -> Void
     ) -> some View {
         HStack(spacing: 8) {
             ForEach(items) { item in
