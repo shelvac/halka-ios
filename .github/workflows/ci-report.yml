@@ -1,0 +1,66 @@
+# Derleme/test hatalarını issue yorumu olarak raporlar.
+#
+# Neden: Actions log dosyalarına (blob depolama) geliştirme ortamından
+# erişilemiyor; hatayı görebilmek için çıktıyı repoya geri yazıyoruz.
+name: CI Rapor
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Raporun yazılacağı issue numarası"
+        required: true
+        default: "34"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derle ve test et
+        id: build
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Halka.xcodeproj \
+            -scheme Halka \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            CODE_SIGNING_ALLOWED=NO > build.log 2>&1
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Raporla
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ inputs.issue }}
+        run: |
+          set +e
+          echo "## CI raporu · \`$(git rev-parse --short HEAD)\`" > r.md
+          echo "" >> r.md
+
+          # Derleyici hataları ve test başarısızlıkları
+          ERRORS=$(grep -E "error:|XCTAssert.*failed|failed -" build.log | head -40)
+          if [ -n "$ERRORS" ]; then
+            echo "### Hatalar" >> r.md
+            echo '```' >> r.md
+            echo "$ERRORS" >> r.md
+            echo '```' >> r.md
+          else
+            echo "- Derleyici hatası bulunamadı; kuyruk aşağıda." >> r.md
+          fi
+
+          echo "" >> r.md
+          echo "### Log kuyruğu" >> r.md
+          echo '```' >> r.md
+          tail -c 3000 build.log >> r.md
+          echo "" >> r.md
+          echo '```' >> r.md
+
+          gh issue comment "$ISSUE" --repo "$REPO" --body-file r.md
