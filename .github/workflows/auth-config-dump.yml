@@ -1,0 +1,38 @@
+# Supabase auth yapılandırmasının şifre/güvenlik ile ilgili tüm alanlarını döker.
+# Hangi ayarların mevcut olduğunu görmek için teşhis amaçlıdır.
+name: Auth Config Dump
+
+on:
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: "Anahtar filtresi (regex)"
+        required: false
+        default: "password|security|refresh|session|mfa"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Yapılandırmayı dök
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          FILTER: ${{ inputs.filter }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set +e
+          echo "## Auth config · filtre \`$FILTER\`" > r.md
+          echo "" >> r.md
+          curl -s --max-time 45 -H "Authorization: Bearer $TOKEN" \
+            "https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph/config/auth" -o cfg.json
+          echo '```' >> r.md
+          jq -r --arg f "$FILTER" 'to_entries[] | select(.key | test($f)) | "\(.key) = \(.value)"' cfg.json >> r.md
+          echo '```' >> r.md
+          cat r.md
+          gh issue comment 30 --repo "$REPO" --body-file r.md
