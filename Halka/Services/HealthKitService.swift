@@ -87,6 +87,70 @@ final class HealthKitService {
         return snapshot
     }
 
+    /// Geçmiş günlerin günlük toplamları — takvimi Apple Health geçmişinden
+    /// doldurmak için (US-023).
+    ///
+    /// Uygulama yeni kurulduğunda kullanıcının aylardır biriken Watch verisi
+    /// duruyor; takvimi boş göstermek yerine buradan aktarıyoruz.
+    func fetchDailyTotals(days: Int) async -> [Date: TodaySnapshot] {
+        guard isAvailable, days > 0 else { return [:] }
+        let calendar = Calendar.current
+        let end = Date()
+        guard let start = calendar.date(byAdding: .day, value: -(days - 1),
+                                        to: calendar.startOfDay(for: end)) else { return [:] }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+
+        var result: [Date: TodaySnapshot] = [:]
+
+        func collect(_ identifier: HKQuantityTypeIdentifier, unit: HKUnit,
+                     assign: (inout TodaySnapshot, Int) -> Void) async {
+            let descriptor = HKStatisticsCollectionQueryDescriptor(
+                predicate: .quantitySample(type: HKQuantityType(identifier),
+                                           predicate: predicate),
+                options: .cumulativeSum,
+                anchorDate: calendar.startOfDay(for: start),
+                intervalComponents: DateComponents(day: 1))
+            guard let collection = try? await descriptor.result(for: store) else { return }
+            for statistics in collection.statistics() {
+                guard let quantity = statistics.sumQuantity() else { continue }
+                let day = calendar.startOfDay(for: statistics.startDate)
+                var snapshot = result[day] ?? TodaySnapshot()
+                assign(&snapshot, Int(quantity.doubleValue(for: unit).rounded()))
+                result[day] = snapshot
+            }
+        }
+
+        await collect(.stepCount, unit: .count()) { $0.steps = $1 }
+        await collect(.appleExerciseTime, unit: .minute()) { $0.exerciseMinutes = $1 }
+        await collect(.activeEnergyBurned, unit: .kilocalorie()) { $0.activeEnergy = $1 }
+        await collect(.dietaryWater, unit: .literUnit(with: .milli)) { $0.waterML = $1 }
+
+        // Uyku: uyanılan güne yazılır (gece yarısını aşan uyku bir sonraki güne ait).
+        let sleepDescriptor = HKSampleQueryDescriptor(
+            predicates: [.categorySample(type: HKCategoryType(.sleepAnalysis),
+                                         predicate: predicate)],
+            sortDescriptors: [])
+        if let samples = try? await sleepDescriptor.result(for: store) {
+            let asleep: Set<Int> = [
+                HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
+                HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+                HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
+                HKCategoryValueSleepAnalysis.asleepREM.rawValue
+            ]
+            for sample in samples where asleep.contains(sample.value) {
+                let day = calendar.startOfDay(for: sample.endDate)
+                var snapshot = result[day] ?? TodaySnapshot()
+                snapshot.sleepHours += sample.endDate.timeIntervalSince(sample.startDate) / 3600
+                result[day] = snapshot
+            }
+            for (day, var snapshot) in result {
+                snapshot.sleepHours = (snapshot.sleepHours * 10).rounded() / 10
+                result[day] = snapshot
+            }
+        }
+        return result
+    }
+
     /// Bugün kaydedilen antrenmanlar (Apple Watch dahil).
     ///
     /// Egzersiz halkası `appleExerciseTime`den doluyor; bu liste ise "hangi

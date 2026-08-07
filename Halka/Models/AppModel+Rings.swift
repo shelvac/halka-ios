@@ -154,6 +154,41 @@ extension AppModel {
         }
     }
 
+    /// Apple Health geçmişini `rings_daily`ye aktarır.
+    ///
+    /// Uygulama yeni kurulduğunda kullanıcının aylardır biriken Watch verisi
+    /// duruyor; takvimi boş göstermek yerine son 90 günü bir kez aktarıyoruz.
+    /// Beslenme aktarılmıyor — o veri Health'te değil, uygulamada tutuluyor;
+    /// mevcut kayıt varsa korunur.
+    func backfillFromHealthKit(days: Int = 90) async {
+        guard supabaseReady, HealthKitService.shared.isAvailable else { return }
+        guard let userID = await SupabaseService.shared.currentUserID() else { return }
+
+        let totals = await HealthKitService.shared.fetchDailyTotals(days: days)
+        guard !totals.isEmpty else { return }
+
+        let rows: [SupabaseService.RingsRow] = totals.compactMap { day, snapshot in
+            guard snapshot.hasAnyData else { return nil }
+            let key = Self.dayKeyFormatter.string(from: day)
+            // Uygulamada zaten kayıt varsa beslenmeyi ondan koru.
+            let existingKcal = ringHistory[key]?.nutrition_kcal ?? 0
+            return SupabaseService.RingsRow(
+                day: key,
+                exercise_min: snapshot.exerciseMinutes,
+                water_ml: snapshot.waterML,
+                sleep_hours: snapshot.sleepHours,
+                nutrition_kcal: existingKcal)
+        }
+
+        do {
+            try await SupabaseService.shared.saveRingsBatch(rows, userID: userID)
+            healthBackfillDone = true
+            await loadRingHistory()
+        } catch {
+            AuthLog.warn("backfillHealth", error)
+        }
+    }
+
     func showMonth(offset: Int) {
         guard let moved = Self.appCalendar.date(byAdding: .month, value: offset,
                                                 to: visibleMonth) else { return }

@@ -252,6 +252,27 @@ final class SupabaseService {
             .execute()
     }
 
+    /// Birden çok günü tek istekte yazar (Apple Health geçmişi aktarımı).
+    func saveRingsBatch(_ rows: [RingsRow], userID: String) async throws {
+        guard let client, !rows.isEmpty else { return }
+        let payload: [[String: AnyJSON]] = rows.map { row in
+            ["user_id": .string(userID.lowercased()),
+             "day": .string(row.day),
+             "exercise_min": .integer(row.exercise_min),
+             "water_ml": .integer(row.water_ml),
+             "sleep_hours": .double(row.sleep_hours),
+             "nutrition_kcal": .integer(row.nutrition_kcal)]
+        }
+        try await client.from("rings_daily")
+            .upsert(payload, onConflict: "user_id,day")
+            .execute()
+    }
+
+    /// Oturumdaki kullanıcının kimliği (toplu yazımda gerekiyor).
+    func currentUserID() async -> String? {
+        await currentUser()?.id.uuidString
+    }
+
     // MARK: Profil fotoğrafı (US-016)
 
     /// Fotoğrafı `avatars` bucket'ına yükler ve yolunu profile yazar.

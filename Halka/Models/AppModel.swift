@@ -140,6 +140,8 @@ final class AppModel {
     var hkActiveEnergy = 0
     /// Bugün Apple Watch/iPhone'da kaydedilen antrenmanlar (US-023).
     var hkWorkouts: [HealthKitService.WorkoutSummary] = []
+    /// Geçmiş aktarımı bu oturumda yapıldı mı? (her tazelemede tekrarlanmasın)
+    var healthBackfillDone = false
 
     /// İzin diyaloğunu tetikler (Profil'deki "Bağlan" düğmesi).
     func connectHealthKit() {
@@ -168,6 +170,8 @@ final class AppModel {
         if snapshot.waterML > 0 { water = max(water, snapshot.waterML) }
         hkWorkouts = await HealthKitService.shared.fetchTodayWorkouts()
         await persistRings()
+        // Geçmişi bir kez aktar: takvim ilk açılışta dolu gelsin.
+        if !healthBackfillDone { await backfillFromHealthKit() }
     }
 
     // MARK: Health
