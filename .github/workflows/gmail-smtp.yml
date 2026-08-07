@@ -15,7 +15,7 @@ on:
       gmail_address:
         description: "Gönderen Gmail adresi"
         required: true
-        default: "simgehelvaci@gmail.com"
+        default: "halkahealthapp@gmail.com"
       test_to:
         description: "Test sıfırlama maili gönderilecek adres (boş = test yok)"
         required: false
