@@ -271,6 +271,17 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.currentValue(.steps), 4000)
     }
 
+    @MainActor
+    func testManualSleepEntryIsClamped() {
+        let model = AppModel()
+        model.setSleepHours(7.5)
+        XCTAssertEqual(model.sleepHours, 7.5)
+        model.setSleepHours(-2)          // negatif olamaz
+        XCTAssertEqual(model.sleepHours, 0)
+        model.setSleepHours(30)          // gerçekçi üst sınır
+        XCTAssertEqual(model.sleepHours, 14)
+    }
+
     func testWaterGoalScalesWithWeightAndIsClamped() {
         var p = sampleProfile()
         XCTAssertEqual(p.waterGoalML ?? 0, 2400, accuracy: 50)

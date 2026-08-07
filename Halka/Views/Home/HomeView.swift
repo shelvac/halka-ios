@@ -75,6 +75,7 @@ struct HomeView: View {
 
 struct TodayView: View {
     @Environment(AppModel.self) private var model
+    @State private var editingSleep = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -89,6 +90,16 @@ struct TodayView: View {
                 .padding(.top, 14)
             streakCard
                 .padding(.top, 14)
+        }
+        .sheet(isPresented: $editingSleep) {
+            MeasurePickerSheet(
+                title: "Uyku",
+                unit: "sa",
+                range: 0...14,
+                allowsDecimal: true,
+                value: Binding(
+                    get: { model.sleepHours > 0 ? model.sleepHours : nil },
+                    set: { model.setSleepHours($0 ?? 0) }))
         }
     }
 
@@ -117,11 +128,16 @@ struct TodayView: View {
             HStack(spacing: 0) {
                 // Uyku artık halka değil: hedefe koşulacak bir şey değil,
                 // olan bir şey. Ölçülüyor ama baskı yapmadan gösteriliyor.
-                statCell(icon: "moon.zzz.fill",
-                         value: model.sleepHours > 0
-                             ? String(format: "%.1f", model.sleepHours) : "—",
-                         label: "saat uyku",
-                         color: .sleepPurple)
+                // Saati geceleri takmayan kullanıcı uykusunu elle girebilsin;
+                // Health'ten veri geldiğinde o öncelikli olur.
+                Button { editingSleep = true } label: {
+                    statCell(icon: "moon.zzz.fill",
+                             value: model.sleepHours > 0
+                                 ? String(format: "%.1f", model.sleepHours) : "—",
+                             label: model.sleepHours > 0 ? "saat uyku" : "uyku ekle",
+                             color: .sleepPurple)
+                }
+                .buttonStyle(.plain)
                 Rectangle().fill(Color.hairline).frame(width: 1, height: 34)
                 statCell(icon: "flame.fill",
                          value: Self.grouped(model.hkActiveEnergy),

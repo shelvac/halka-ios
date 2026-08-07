@@ -91,6 +91,14 @@ final class AppModel {
         scheduleRingSave()
     }
 
+    /// Uykuyu elle ayarlar (US-025 — Health'te uyku kaydı olmayan kullanıcılar).
+    /// Health'ten veri geldiğinde `refreshFromHealthKit` bunun üzerine yazar:
+    /// ölçülen veri, tahmin edilenden önce gelir.
+    func setSleepHours(_ hours: Double) {
+        sleepHours = min(max(hours, 0), 14)
+        scheduleRingSave()
+    }
+
     // MARK: Meals
     var mealDay: Int = (AppModel.appCalendar.component(.weekday, from: Date()) + 5) % 7
     var mealView: MealView = .menu
