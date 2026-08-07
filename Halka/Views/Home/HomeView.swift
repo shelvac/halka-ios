@@ -251,13 +251,14 @@ struct TodayView: View {
                 .foregroundStyle(Color.ink)
                 .padding(.horizontal, 4)
             HStack {
-                ForEach(0..<7, id: \.self) { i in
-                    let dayNumber = 3 + i    // week runs Aug 3 (Mon) – Aug 9
+                // US-024: hafta gerçek takvimden — eskiden 3-9 Ağustos'a sabitti.
+                ForEach(Array(model.currentWeek.enumerated()), id: \.offset) { i, date in
+                    let isToday = AppModel.appCalendar.isDate(date, inSameDayAs: model.today)
                     VStack(spacing: 5) {
-                        MiniRings(fractions: dayNumber <= 5 ? model.fractions(forDay: dayNumber) : [0, 0, 0, 0])
+                        MiniRings(fractions: model.fractions(for: date))
                         Text(Demo.dayNamesShort[i])
                             .font(.h(10))
-                            .foregroundStyle(dayNumber == 5 ? Color.ink : Color.faint)
+                            .foregroundStyle(isToday ? Color.ink : Color.faint)
                     }
                     if i < 6 { Spacer() }
                 }

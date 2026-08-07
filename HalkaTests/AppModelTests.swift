@@ -57,11 +57,12 @@ final class AppModelTests: XCTestCase {
     func testPhotoExtraCountsTowardsConsumedAndCanBeDeleted() {
         let model = AppModel()
         let estimate = model.currentPhotoEstimate
+        let day = model.mealDay          // fotoğraftan öğün bugüne eklenir
         model.savePhotoMeal()
-        XCTAssertEqual(model.consumed(forDay: 2), estimate.total)
-        XCTAssertEqual(model.extras(forDay: 2).count, 1)
-        model.deleteExtra(model.extras(forDay: 2)[0].id)
-        XCTAssertEqual(model.consumed(forDay: 2), 0)
+        XCTAssertEqual(model.consumed(forDay: day), estimate.total)
+        XCTAssertEqual(model.extras(forDay: day).count, 1)
+        model.deleteExtra(model.extras(forDay: day)[0].id)
+        XCTAssertEqual(model.consumed(forDay: day), 0)
     }
 
     @MainActor
@@ -70,7 +71,8 @@ final class AppModelTests: XCTestCase {
         model.mealSelection = MealSelection(food: "Yulaf pancake", mealIndex: 0,
                                             fromCatalog: true, catalogName: "Kahvaltı")
         model.adoptCatalogMeal()
-        XCTAssertEqual(model.menu(forDay: 2)[0], "Yulaf pancake")
+        // Öğün düzenlemeleri BUGÜNÜN gününe yazılır (mealDay), sabit güne değil.
+        XCTAssertEqual(model.menu(forDay: model.mealDay)[0], "Yulaf pancake")
     }
 
     // MARK: Su + geri alma

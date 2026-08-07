@@ -81,6 +81,27 @@ extension AppModel {
                 Double(row.nutrition_kcal) / goal(for: .nutrition)]
     }
 
+    /// Herhangi bir tarihin halka oranları (hafta şeridi bunu kullanır).
+    func fractions(for date: Date) -> [Double] {
+        if Self.appCalendar.isDate(date, inSameDayAs: today) { return todayFractions }
+        guard let row = ringHistory[Self.dayKeyFormatter.string(from: date)] else {
+            return [0, 0, 0, 0]
+        }
+        return [Double(row.exercise_min) / goal(for: .exercise),
+                Double(row.water_ml) / goal(for: .water),
+                row.sleep_hours / goal(for: .sleep),
+                Double(row.nutrition_kcal) / goal(for: .nutrition)]
+    }
+
+    /// İçinde bulunulan haftanın günleri (pazartesiden pazara).
+    /// Eskiden ana ekranda "3-9 Ağustos" diye sabitti.
+    var currentWeek: [Date] {
+        let calendar = Self.appCalendar
+        guard let monday = calendar.date(from: calendar.dateComponents(
+            [.yearForWeekOfYear, .weekOfYear], from: today)) else { return [] }
+        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: monday) }
+    }
+
     /// "7 Ağustos · Bugün" — detay kartının başlığı.
     func dayTitle(forDay day: Int) -> String {
         guard let date = date(forDay: day) else { return "\(day)" }
