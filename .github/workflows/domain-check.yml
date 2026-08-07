@@ -1,0 +1,64 @@
+# halka.app domaininin kime kayıtlı olduğunu ve nereye yönlendiğini kontrol eder.
+# Sonuç issue #30'a yorum olarak yazılır.
+name: Domain Kontrol
+
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: "Kontrol edilecek domain"
+        required: true
+        default: "halka.app"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Domain teşhisi
+        env:
+          D: ${{ inputs.domain }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set +e
+          echo "## Domain kontrol · \`$D\`" > r.md
+          echo "" >> r.md
+
+          echo "### RDAP (kayıt bilgisi)" >> r.md
+          curl -s --max-time 30 -L "https://rdap.org/domain/$D" -o rdap.json
+          echo '```' >> r.md
+          jq -r '"durum: \(.status // [] | join(", "))",
+                 "kayıt tarihi: \([.events[]? | select(.eventAction=="registration") | .eventDate][0] // "?")",
+                 "son kullanma: \([.events[]? | select(.eventAction=="expiration") | .eventDate][0] // "?")",
+                 "registrar: \([.entities[]? | select(.roles[]? == "registrar") | .vcardArray[1][]? | select(.[0]=="fn") | .[3]][0] // "?")"' rdap.json >> r.md 2>&1
+          if [ ! -s rdap.json ]; then echo "RDAP yanıtı yok" >> r.md; fi
+          echo '```' >> r.md
+
+          echo "" >> r.md
+          echo "### DNS" >> r.md
+          echo '```' >> r.md
+          for t in NS A MX TXT; do
+            echo "-- $t --"
+            dig +short "$t" "$D"
+          done
+          echo "-- TXT resend._domainkey.$D --"
+          dig +short TXT "resend._domainkey.$D"
+          echo "-- MX send.$D --"
+          dig +short MX "send.$D"
+          echo '```' >> r.md
+
+          echo "" >> r.md
+          echo "### Web sitesi (https://$D)" >> r.md
+          echo '```' >> r.md
+          curl -s --max-time 20 -L "https://$D" -o page.html -w "HTTP %{http_code}, son URL: %{url_effective}\n" >> r.md
+          echo "-- başlık --" >> r.md
+          grep -o -i '<title>[^<]*</title>' page.html | head -1 >> r.md
+          echo '```' >> r.md
+
+          cat r.md
+          gh issue comment 30 --repo "$REPO" --body-file r.md
