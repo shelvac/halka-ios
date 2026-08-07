@@ -18,6 +18,8 @@ extension AppModel {
     func toggleEaten(day: Int, slot: Int) {
         let key = "\(day)-\(slot)"
         if eaten.contains(key) { eaten.remove(key) } else { eaten.insert(key) }
+        // Beslenme halkasını etkiliyorsa günlük kayda yaz (US-024).
+        if day == todayWeekdayIndex { scheduleRingSave() }
     }
 
     func extras(forDay day: Int) -> [ExtraMeal] {
@@ -32,8 +34,9 @@ extension AppModel {
         return plan + extras(forDay: day).reduce(0) { $0 + $1.kcal }
     }
 
-    /// Nutrition ring source — always today's (Wednesday) log.
-    var nutritionToday: Int { consumed(forDay: 2) }
+    /// Beslenme halkasının kaynağı: BUGÜNÜN kaydı.
+    /// Eskiden Çarşamba'ya (demo günü) sabitti.
+    var nutritionToday: Int { consumed(forDay: todayWeekdayIndex) }
 
     /// Sum of the full planned menu for a day (regardless of eaten state).
     func planTotal(forDay day: Int) -> Int {
@@ -44,7 +47,7 @@ extension AppModel {
     }
 
     var mealDayTitle: String {
-        Demo.dayNamesFull[mealDay] + (mealDay == 2 ? " · Bugün" : "")
+        Demo.dayNamesFull[mealDay] + (mealDay == todayWeekdayIndex ? " · Bugün" : "")
     }
 
     var currentPhotoEstimate: PhotoEstimate {

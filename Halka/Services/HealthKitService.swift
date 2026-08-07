@@ -19,9 +19,11 @@ final class HealthKitService {
         var exerciseMinutes = 0
         var activeEnergy = 0
         var sleepHours = 0.0
+        var waterML = 0
 
         var hasAnyData: Bool {
-            steps > 0 || exerciseMinutes > 0 || activeEnergy > 0 || sleepHours > 0
+            steps > 0 || exerciseMinutes > 0 || activeEnergy > 0
+                || sleepHours > 0 || waterML > 0
         }
     }
 
@@ -29,6 +31,7 @@ final class HealthKitService {
         [HKQuantityType(.stepCount),
          HKQuantityType(.appleExerciseTime),
          HKQuantityType(.activeEnergyBurned),
+         HKQuantityType(.dietaryWater),
          HKCategoryType(.sleepAnalysis)]
     }
 
@@ -48,6 +51,9 @@ final class HealthKitService {
         snapshot.steps = await sum(.stepCount, unit: .count(), predicate: todayPredicate)
         snapshot.exerciseMinutes = await sum(.appleExerciseTime, unit: .minute(), predicate: todayPredicate)
         snapshot.activeEnergy = await sum(.activeEnergyBurned, unit: .kilocalorie(), predicate: todayPredicate)
+        // Su: Health'te litre olarak tutulur, uygulamada ml.
+        snapshot.waterML = await sum(.dietaryWater, unit: .literUnit(with: .milli),
+                                     predicate: todayPredicate)
 
         // Uyku: önceki akşam 18:00'den şimdiye kadarki "asleep" evreleri.
         if let sleepStart = calendar.date(byAdding: .hour, value: -6, to: startOfDay) {

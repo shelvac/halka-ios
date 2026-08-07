@@ -8,20 +8,49 @@ final class AppModelTests: XCTestCase {
     // MARK: Kalori günlüğü / Beslenme halkası
 
     @MainActor
-    func testConsumedMatchesInitiallyEatenMeals() {
+    func testNewUserStartsWithEmptyLog() {
         let model = AppModel()
-        // Demo state: Çarşamba (day 2) sabah (310) + öğle (400) yenmiş.
-        XCTAssertEqual(model.consumed(forDay: 2), 710)
-        XCTAssertEqual(model.nutritionToday, 710)
+        // US-024: yeni kullanıcıda yenmiş öğün yok — beslenme halkası sıfırdan.
+        XCTAssertEqual(model.consumed(forDay: 2), 0)
+        XCTAssertEqual(model.nutritionToday, 0)
+    }
+
+    @MainActor
+    func testRingsStartEmptyForNewUser() {
+        let model = AppModel()
+        XCTAssertEqual(model.water, 0)
+        XCTAssertEqual(model.exerciseMinutes, 0)
+        XCTAssertEqual(model.sleepHours, 0)
+        XCTAssertTrue(model.todayFractions.allSatisfy { $0 == 0 })
+    }
+
+    @MainActor
+    func testPastDaysWithoutRecordsShowZero() {
+        let model = AppModel()
+        // Demo geçmişi kaldırıldı: kaydı olmayan gün sıfır gösterir, uydurulmaz.
+        let past = max(model.selectedCalendarDay - 1, 1)
+        if !model.isToday(day: past) {
+            XCTAssertEqual(model.fractions(forDay: past), [0, 0, 0, 0])
+            XCTAssertFalse(model.hasData(forDay: past))
+        }
+    }
+
+    @MainActor
+    func testTodayWeekdayIndexIsMondayBased() {
+        let model = AppModel()
+        XCTAssertTrue((0...6).contains(model.todayWeekdayIndex))
+        XCTAssertEqual(model.mealDay, model.todayWeekdayIndex)
     }
 
     @MainActor
     func testTogglingMealUpdatesConsumed() {
         let model = AppModel()
+        model.toggleEaten(day: 2, slot: 0) // Çarşamba sabah, 310 kcal
+        XCTAssertEqual(model.consumed(forDay: 2), 310)
         model.toggleEaten(day: 2, slot: 2) // Meyve + fındık, 150 kcal
-        XCTAssertEqual(model.consumed(forDay: 2), 860)
+        XCTAssertEqual(model.consumed(forDay: 2), 460)
         model.toggleEaten(day: 2, slot: 2)
-        XCTAssertEqual(model.consumed(forDay: 2), 710)
+        XCTAssertEqual(model.consumed(forDay: 2), 310)
     }
 
     @MainActor
@@ -29,10 +58,10 @@ final class AppModelTests: XCTestCase {
         let model = AppModel()
         let estimate = model.currentPhotoEstimate
         model.savePhotoMeal()
-        XCTAssertEqual(model.consumed(forDay: 2), 710 + estimate.total)
+        XCTAssertEqual(model.consumed(forDay: 2), estimate.total)
         XCTAssertEqual(model.extras(forDay: 2).count, 1)
         model.deleteExtra(model.extras(forDay: 2)[0].id)
-        XCTAssertEqual(model.consumed(forDay: 2), 710)
+        XCTAssertEqual(model.consumed(forDay: 2), 0)
     }
 
     @MainActor

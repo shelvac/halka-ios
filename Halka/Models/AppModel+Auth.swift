@@ -31,6 +31,11 @@ extension AppModel {
         await loadProfile()
         role = .user
         screen = .app
+        // Halka verisi ve Apple Health'i arka planda tazele — giriş beklemesin.
+        Task { [weak self] in
+            await self?.loadRingHistory()
+            await self?.refreshFromHealthKit()
+        }
     }
 
     /// US-012 — E-posta ile giriş (doğrulama kontrollü).

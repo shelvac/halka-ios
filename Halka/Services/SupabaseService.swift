@@ -210,6 +210,48 @@ final class SupabaseService {
             .execute()
     }
 
+    // MARK: Günlük halka verisi (US-024)
+
+    /// `rings_daily` satırı. Gün "yyyy-MM-dd" olarak tutulur.
+    struct RingsRow: Codable {
+        let day: String
+        let exercise_min: Int
+        let water_ml: Int
+        let sleep_hours: Double
+        let nutrition_kcal: Int
+    }
+
+    /// Bir tarih aralığındaki günlük kayıtlar (takvim geçmişi için).
+    func fetchRings(from start: Date, to end: Date) async -> [String: RingsRow] {
+        guard let client, let user = await currentUser() else { return [:] }
+        guard let rows: [RingsRow] = try? await client.from("rings_daily")
+            .select("day,exercise_min,water_ml,sleep_hours,nutrition_kcal")
+            .eq("user_id", value: user.id.uuidString)
+            .gte("day", value: Self.dayFormatter.string(from: start))
+            .lte("day", value: Self.dayFormatter.string(from: end))
+            .execute()
+            .value else { return [:] }
+        return Dictionary(rows.map { ($0.day, $0) }, uniquingKeysWith: { _, last in last })
+    }
+
+    /// Bugünün değerlerini yazar. `(user_id, day)` benzersiz olduğu için
+    /// upsert kullanılıyor — aynı gün defalarca güncellenebilir.
+    func saveRings(day: Date, exerciseMin: Int, waterML: Int,
+                   sleepHours: Double, nutritionKcal: Int) async throws {
+        guard let client, let user = await currentUser() else { return }
+        let payload: [String: AnyJSON] = [
+            "user_id": .string(user.id.uuidString.lowercased()),
+            "day": .string(Self.dayFormatter.string(from: day)),
+            "exercise_min": .integer(exerciseMin),
+            "water_ml": .integer(waterML),
+            "sleep_hours": .double(sleepHours),
+            "nutrition_kcal": .integer(nutritionKcal)
+        ]
+        try await client.from("rings_daily")
+            .upsert(payload, onConflict: "user_id,day")
+            .execute()
+    }
+
     // MARK: Profil fotoğrafı (US-016)
 
     /// Fotoğrafı `avatars` bucket'ına yükler ve yolunu profile yazar.

@@ -14,14 +14,27 @@ struct CalendarPane: View {
 
     private var calendarCard: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Ağustos 2026")
+            HStack(alignment: .center) {
+                Button { model.showMonth(offset: -1) } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 13, weight: .heavy))
+                        .foregroundStyle(Color.coral)
+                }
+                .buttonStyle(.plain)
+
+                Text(model.visibleMonthTitle)
                     .font(.h(17))
                     .foregroundStyle(Color.ink)
-                Spacer()
-                Text("Halka geçmişi")
-                    .font(.h(11, .bold))
-                    .foregroundStyle(Color.faint)
+                    .frame(maxWidth: .infinity)
+
+                // İleri düğmesi yalnızca geçmiş bir aydayken anlamlı.
+                Button { model.showMonth(offset: 1) } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .heavy))
+                        .foregroundStyle(model.visibleMonthIsCurrent ? Color.chevron : Color.coral)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.visibleMonthIsCurrent)
             }
             .padding(.horizontal, 6)
             .padding(.bottom, 12)
@@ -32,11 +45,11 @@ struct CalendarPane: View {
                         .font(.h(10))
                         .foregroundStyle(Color.faint)
                 }
-                // Aug 1, 2026 falls on Saturday → 5 leading blanks in a Monday-first grid.
-                ForEach(0..<5, id: \.self) { i in
+                // Ayın 1'i hangi güne denk geliyorsa o kadar boşluk (pazartesi başlangıçlı).
+                ForEach(0..<model.leadingBlanks, id: \.self) { i in
                     Color.clear.frame(minHeight: 52).id("blank-\(i)")
                 }
-                ForEach(1...31, id: \.self) { day in
+                ForEach(1...model.daysInVisibleMonth, id: \.self) { day in
                     dayCell(day)
                 }
             }
@@ -47,14 +60,15 @@ struct CalendarPane: View {
     }
 
     private func dayCell(_ day: Int) -> some View {
-        let future = day > 5
+        let future = model.isFuture(day: day)
+        let isToday = model.isToday(day: day)
         let selected = model.selectedCalendarDay == day
         return Button {
             guard !future else { return }
             model.selectedCalendarDay = day
         } label: {
             VStack(spacing: 3) {
-                if day == 5 {
+                if isToday {
                     Text("\(day)")
                         .font(.h(10.5))
                         .foregroundStyle(.white)
@@ -94,9 +108,18 @@ struct CalendarPane: View {
             "\(Int((fractions[3] * goals[3]).rounded())) / \(Int(goals[3])) kcal"
         ]
         return VStack(alignment: .leading, spacing: 12) {
-            Text("\(day) Ağustos \(day == 5 ? "· Bugün" : "")")
-                .font(.h(14))
-                .foregroundStyle(Color.ink)
+            HStack(spacing: 8) {
+                Text(model.dayTitle(forDay: day))
+                    .font(.h(14))
+                    .foregroundStyle(Color.ink)
+                Spacer()
+                // US-024: kayıt yoksa bunu açıkça söyle, sıfırları veri gibi gösterme.
+                if !model.hasData(forDay: day) {
+                    Text("Kayıt yok")
+                        .font(.h(10.5))
+                        .foregroundStyle(Color.faint)
+                }
+            }
             VStack(spacing: 10) {
                 ForEach(Array(RingKind.allCases.enumerated()), id: \.offset) { i, kind in
                     let done = fractions[i] >= 1
@@ -228,7 +251,7 @@ struct SocialPane: View {
                     .font(.h(15))
                     .foregroundStyle(Color.ink)
                 Spacer()
-                Text("Ağustos · halka puanı")
+                Text("\(model.currentMonthName) · halka puanı")
                     .font(.h(10))
                     .foregroundStyle(Color.sub)
             }

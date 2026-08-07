@@ -40,14 +40,24 @@ final class AppModel {
         }
     }
 
-    // MARK: Rings (demo day: 5 Ağustos 2026, Çarşamba)
-    var water = 1250                  // ml
-    var exerciseBase = 24             // minutes logged before app interactions
-    var extraExerciseMin = 0          // added by workouts + Health imports
-    var sleepHours = 6.5              // overwritten by HealthKit when data exists
+    // MARK: Rings (US-024 — gerçek veri; demo değerleri kaldırıldı)
+    //
+    // Yeni kullanıcı halkaları SIFIRDAN görür. Değerler Apple Health'ten ya da
+    // kullanıcının kendi girdisinden gelir, `rings_daily` tablosunda saklanır.
+    var water = 0                     // ml
+    var exerciseBase = 0              // Health'ten okunan egzersiz dakikası
+    var extraExerciseMin = 0          // uygulama içi antrenmanlardan eklenen
+    var sleepHours = 0.0              // Health'ten okunan uyku
     var waterUndoVisible = false
     private var waterUndoToken = 0
-    var selectedCalendarDay = 5
+
+    /// Takvim: gerçek tarihe bağlı (eskiden Ağustos 2026'ya sabitti).
+    var visibleMonth: Date = AppModel.appCalendar.date(
+        from: AppModel.appCalendar.dateComponents([.year, .month], from: Date())) ?? Date()
+    var selectedCalendarDay: Int = AppModel.appCalendar.component(.day, from: Date())
+    /// Görüntülenen ayın kayıtları ("yyyy-MM-dd" → satır).
+    var ringHistory: [String: SupabaseService.RingsRow] = [:]
+    var ringSaveToken = 0
 
     var exerciseMinutes: Int { exerciseBase + extraExerciseMin }
 
@@ -57,10 +67,6 @@ final class AppModel {
          Double(water) / goal(for: .water),
          sleepHours / goal(for: .sleep),
          Double(nutritionToday) / goal(for: .nutrition)]
-    }
-
-    func fractions(forDay day: Int) -> [Double] {
-        day == 5 ? todayFractions : (Demo.history[day] ?? [0, 0, 0, 0])
     }
 
     func currentValue(_ kind: RingKind) -> Double {
@@ -73,7 +79,8 @@ final class AppModel {
     }
 
     func addWater() {
-        water = min(water + 250, 3000)
+        water = min(water + 250, 4000)
+        scheduleRingSave()
         waterUndoVisible = true
         waterUndoToken += 1
         let token = waterUndoToken
@@ -86,17 +93,18 @@ final class AppModel {
 
     func undoWater() {
         water = max(water - 250, 0)
+        scheduleRingSave()
         waterUndoVisible = false
         waterUndoToken += 1
     }
 
     // MARK: Meals
-    var mealDay = 2                   // Wednesday
+    var mealDay: Int = (AppModel.appCalendar.component(.weekday, from: Date()) + 5) % 7
     var mealView: MealView = .menu
     var mealBack: MealView = .menu
     var mealSelection: MealSelection? = nil
     var mealTimes = ["09:00", "13:30", "16:30", "19:30"]
-    var eaten: Set<String> = ["2-0", "2-1"]
+    var eaten: Set<String> = []       // US-024: yenmiş öğünler kullanıcı verisi
     var overrides: [String: String] = [:]
     var marketChecked: Set<String> = []
     var extras: [ExtraMeal] = []
@@ -140,8 +148,12 @@ final class AppModel {
         }
     }
 
-    /// Sessiz senkronizasyon: izin zaten verilmişse veriyi halkalara işler,
-    /// verilmemişse hiçbir diyalog göstermeden demo değerlerde kalır.
+    /// Sessiz senkronizasyon: izin verilmişse Health verisi halkalara işlenir.
+    ///
+    /// Health bu ölçüler için tek doğru kaynak sayılır — kullanıcı Health'te
+    /// düzeltme yaptıysa uygulama onu ezmemeli. Su ise iki yerden gelebildiği
+    /// için (uygulama içi "+250 ml" ya da Health) büyük olan alınır: Health'e
+    /// yazmadığımız sürece uygulamadaki eklemeler orada görünmüyor.
     func refreshFromHealthKit() async {
         guard HealthKitService.shared.isAvailable else { return }
         let snapshot = await HealthKitService.shared.fetchToday()
@@ -151,6 +163,8 @@ final class AppModel {
         hkActiveEnergy = snapshot.activeEnergy
         if snapshot.exerciseMinutes > 0 { exerciseBase = snapshot.exerciseMinutes }
         if snapshot.sleepHours > 0 { sleepHours = snapshot.sleepHours }
+        if snapshot.waterML > 0 { water = max(water, snapshot.waterML) }
+        await persistRings()
     }
 
     // MARK: Health
