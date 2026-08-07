@@ -22,6 +22,22 @@ final class AppModel {
     var userName = "Simge"            // selamlamada görünen ad (buluttan güncellenir)
     var userFullName = "Simge Helvacı"
 
+    // MARK: Profil (US-016)
+    /// Buluttan yüklenen profil. Boşken hedefler varsayılan değerlere düşer.
+    var profile = Profile()
+    var profileBusy = false
+    var profileError: String? = nil
+
+    /// Kişiye özel halka hedefi; profil eksikse `RingKind`'ın varsayılanı.
+    func goal(for kind: RingKind) -> Double {
+        switch kind {
+        case .exercise: return Double(profile.exerciseGoalMin)
+        case .water: return Double(profile.waterGoalML ?? Int(kind.goal))
+        case .sleep: return profile.sleepGoalHours
+        case .nutrition: return Double(profile.calorieGoal ?? Int(kind.goal))
+        }
+    }
+
     // MARK: Rings (demo day: 5 Ağustos 2026, Çarşamba)
     var water = 1250                  // ml
     var exerciseBase = 24             // minutes logged before app interactions
@@ -35,10 +51,10 @@ final class AppModel {
 
     /// Ring fractions [exercise, water, sleep, nutrition] for today.
     var todayFractions: [Double] {
-        [Double(exerciseMinutes) / RingKind.exercise.goal,
-         Double(water) / RingKind.water.goal,
-         sleepHours / RingKind.sleep.goal,
-         Double(nutritionToday) / RingKind.nutrition.goal]
+        [Double(exerciseMinutes) / goal(for: .exercise),
+         Double(water) / goal(for: .water),
+         sleepHours / goal(for: .sleep),
+         Double(nutritionToday) / goal(for: .nutrition)]
     }
 
     func fractions(forDay day: Int) -> [Double] {

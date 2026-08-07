@@ -84,11 +84,14 @@ struct CalendarPane: View {
         let day = model.selectedCalendarDay
         let fractions = model.fractions(forDay: day)
         let colors: [Color] = [.coral, .waterBlue, .sleepPurple, .green]
+        // Hedefler profile göre değiştiği için metinler de oradan üretilir.
+        let goals = RingKind.allCases.map { model.goal(for: $0) }
         let values: [String] = [
-            "\(Int((fractions[0] * RingKind.exercise.goal).rounded())) / 60 dk",
-            "\(Int((fractions[1] * RingKind.water.goal).rounded())) / 2000 ml",
-            String(format: "%.1f", fractions[2] * RingKind.sleep.goal) + " / 8 sa",
-            "\(Int((fractions[3] * RingKind.nutrition.goal).rounded())) / 1420 kcal"
+            "\(Int((fractions[0] * goals[0]).rounded())) / \(Int(goals[0])) dk",
+            "\(Int((fractions[1] * goals[1]).rounded())) / \(Int(goals[1])) ml",
+            String(format: "%.1f", fractions[2] * goals[2])
+                + String(format: " / %.0f sa", goals[2]),
+            "\(Int((fractions[3] * goals[3]).rounded())) / \(Int(goals[3])) kcal"
         ]
         return VStack(alignment: .leading, spacing: 12) {
             Text("\(day) Ağustos \(day == 5 ? "· Bugün" : "")")

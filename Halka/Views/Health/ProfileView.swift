@@ -6,6 +6,7 @@ struct ProfileView: View {
     @Environment(AppModel.self) private var model
     @State private var shotItem: PhotosPickerItem? = nil
     @State private var confirmDelete = false
+    @State private var editingProfile = false
 
     private let settingsRows: [(String, String)] = [
         ("Bildirimler", "Açık"),
@@ -20,7 +21,7 @@ struct ProfileView: View {
             BackRow(label: "Geri") { model.healthPane = .body }
                 .padding(.top, 4)
 
-            // Identity card
+            // Identity card — US-016: değerler profilden gelir, sabit değil.
             VStack(spacing: 0) {
                 MeAvatar(size: 76)
                 Text(model.userFullName)
@@ -28,20 +29,32 @@ struct ProfileView: View {
                     .foregroundStyle(Color.ink)
                     .kerning(-0.4)
                     .padding(.top, 12)
-                Text("31 yaş · Kadın · 04.02.1995")
+                Text(model.profileSummary)
                     .font(.h(12, .bold))
                     .foregroundStyle(Color.sub)
                     .padding(.top, 3)
                 HStack(spacing: 20) {
-                    statColumn("Kilo", "72.15 kg", .ink)
-                    statColumn("Hedef", "65.0 kg", .greenDark)
-                    statColumn("BMI", "26.2", .ink)
-                    statColumn("Seri", "12 gün", .coral)
+                    statColumn("Kilo", Self.weightText(model.profile.weightKg), .ink)
+                    statColumn("Hedef", Self.weightText(model.profile.targetWeightKg), .greenDark)
+                    statColumn("BMI", Self.bmiText(model.profile.bmi), .ink)
+                    statColumn("Kalori", Self.kcalText(model.profile.calorieGoal), .coral)
                 }
                 .padding(.top, 14)
                 .overlay(alignment: .top) {
                     Rectangle().fill(Color.hairline).frame(height: 1)
                 }
+                .padding(.top, 16)
+
+                Button { editingProfile = true } label: {
+                    Text(model.profile.isComplete ? "Profili düzenle" : "Profilini tamamla")
+                        .font(.h(12.5))
+                        .foregroundStyle(Color.coralDark)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(Color.coralBg)
+                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                }
+                .buttonStyle(.plain)
                 .padding(.top, 16)
             }
             .frame(maxWidth: .infinity)
@@ -94,6 +107,10 @@ struct ProfileView: View {
             deleteAccountButton
                 .padding(.top, 8)
         }
+        .sheet(isPresented: $editingProfile) {
+            ProfileEditView()
+                .environment(model)
+        }
         // Geri alınamaz bir işlem — onay penceresi zorunlu (US-021).
         .alert("Hesabını silmek istediğine emin misin?", isPresented: $confirmDelete) {
             Button("Vazgeç", role: .cancel) {}
@@ -123,6 +140,22 @@ struct ProfileView: View {
         }
         .buttonStyle(.plain)
         .disabled(model.authBusy)
+    }
+
+    /// Profil eksikken sayı uydurmuyoruz — tire gösterip düzenlemeye yönlendiriyoruz.
+    private static func weightText(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        return String(format: "%.1f kg", value)
+    }
+
+    private static func bmiText(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        return String(format: "%.1f", value)
+    }
+
+    private static func kcalText(_ value: Int?) -> String {
+        guard let value else { return "—" }
+        return "\(value)"
     }
 
     private func statColumn(_ title: String, _ value: String, _ color: Color) -> some View {

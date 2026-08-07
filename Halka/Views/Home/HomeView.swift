@@ -112,7 +112,8 @@ struct TodayView: View {
         }
         let cur = model.currentValue(kind)
         let curText = kind == .sleep ? String(format: "%.1f", cur) : "\(Int(cur))"
-        let goalText = kind == .sleep ? "8" : "\(Int(kind.goal))"
+        let goalValue = model.goal(for: kind)
+        let goalText = kind == .sleep ? String(format: "%.0f", goalValue) : "\(Int(goalValue))"
         return VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 6) {
                 Circle().fill(color).frame(width: 8, height: 8)
@@ -205,9 +206,10 @@ struct TodayView: View {
         case .nutrition: .green
         }
         let cur = model.currentValue(kind)
-        let pct = min(cur / kind.goal, 1)
+        let goalValue = model.goal(for: kind)
+        let pct = min(cur / goalValue, 1)
         let big = kind == .sleep ? String(format: "%.1f", cur) : "\(Int(cur))"
-        let remaining = kind.goal - cur
+        let remaining = goalValue - cur
         let leftText = pct >= 1
             ? "Hedef tamamlandı"
             : "Kalan: \(kind == .sleep ? String(format: "%.1f", remaining) : "\(Int(remaining))") \(kind.unit)"

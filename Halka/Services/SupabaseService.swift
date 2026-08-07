@@ -112,6 +112,80 @@ final class SupabaseService {
             .execute()
     }
 
+    // MARK: Profil (US-016)
+
+    /// `users` satırının okunan hâli. Sunucu tarihleri `yyyy-MM-dd` (date) ve
+    /// ISO-8601 (timestamptz) olarak döndürdüğü için ayrıştırma burada yapılır.
+    private struct ProfileRow: Decodable {
+        let full_name: String?
+        let birth_date: String?
+        let sex: String?
+        let height_cm: Double?
+        let weight_kg: Double?
+        let target_weight_kg: Double?
+        let activity_level: String?
+        let profile_completed_at: String?
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    /// Oturumdaki kullanıcının profili. Satır yoksa veya ağ hatasında `nil`.
+    func fetchProfile() async -> Profile? {
+        guard let client, let user = await currentUser() else { return nil }
+        guard let rows: [ProfileRow] = try? await client.from("users")
+            .select("full_name,birth_date,sex,height_cm,weight_kg,target_weight_kg,activity_level,profile_completed_at")
+            .eq("id", value: user.id.uuidString)
+            .limit(1)
+            .execute()
+            .value,
+            let row = rows.first else { return nil }
+
+        var profile = Profile()
+        profile.fullName = row.full_name ?? ""
+        profile.birthDate = row.birth_date.flatMap { Self.dayFormatter.date(from: $0) }
+        profile.sex = row.sex.flatMap(Profile.Sex.init(rawValue:))
+        profile.heightCm = row.height_cm
+        profile.weightKg = row.weight_kg
+        profile.targetWeightKg = row.target_weight_kg
+        profile.activityLevel = row.activity_level.flatMap(Profile.ActivityLevel.init(rawValue:))
+        profile.completedAt = row.profile_completed_at
+            .flatMap { ISO8601DateFormatter().date(from: $0) }
+        return profile
+    }
+
+    /// Profili kaydeder. Zorunlu alanlar tamamsa `profile_completed_at` damgalanır
+    /// (US-026 onboarding akışı bu damgaya bakacak).
+    func saveProfile(_ profile: Profile) async throws {
+        guard let client, let user = await currentUser() else { return }
+
+        // PostgREST'e karışık tipli sözlük gönderilemiyor; JSON'a çevirip yolluyoruz.
+        var payload: [String: AnyJSON] = [:]
+        payload["full_name"] = .string(profile.fullName)
+        payload["birth_date"] = profile.birthDate
+            .map { .string(Self.dayFormatter.string(from: $0)) } ?? .null
+        payload["sex"] = profile.sex.map { .string($0.rawValue) } ?? .null
+        payload["height_cm"] = profile.heightCm.map { .double($0) } ?? .null
+        payload["weight_kg"] = profile.weightKg.map { .double($0) } ?? .null
+        payload["target_weight_kg"] = profile.targetWeightKg.map { .double($0) } ?? .null
+        payload["activity_level"] = profile.activityLevel.map { .string($0.rawValue) } ?? .null
+        if profile.isComplete {
+            payload["profile_completed_at"] =
+                .string(ISO8601DateFormatter().string(from: profile.completedAt ?? Date()))
+        }
+
+        try await client.from("users")
+            .update(payload)
+            .eq("id", value: user.id.uuidString)
+            .execute()
+    }
+
     /// Bir e-postanın kayıtlı olup olmadığı ve hangi yöntemle açıldığı (US-013).
     struct AccountStatus: Decodable {
         let exists: Bool
@@ -245,13 +319,13 @@ final class SupabaseService {
 
     // MARK: Profil (US-016)
 
-    private struct ProfileRow: Decodable {
+    private struct NameRow: Decodable {
         let full_name: String?
     }
 
     func fetchFullName() async -> String? {
         guard let client, let user = await currentUser() else { return nil }
-        let row: ProfileRow? = try? await client.from("users")
+        let row: NameRow? = try? await client.from("users")
             .select("full_name")
             .eq("id", value: user.id.uuidString)
             .single()

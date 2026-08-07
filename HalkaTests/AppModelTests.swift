@@ -164,6 +164,73 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.workoutLog[0].meta.contains("2/5"))
     }
 
+    // MARK: Profil ve hesaplanan hedefler (US-016)
+
+    private func sampleProfile() -> Profile {
+        var p = Profile()
+        p.birthDate = Calendar.current.date(byAdding: .year, value: -31, to: Date())
+        p.sex = .female
+        p.heightCm = 166
+        p.weightKg = 72
+        p.targetWeightKg = 65
+        p.activityLevel = .light
+        return p
+    }
+
+    func testProfileIsIncompleteWithoutCoreFields() {
+        var p = Profile()
+        XCTAssertFalse(p.isComplete)
+        XCTAssertNil(p.calorieGoal)      // eksik profilde hedef uydurulmaz
+        p = sampleProfile()
+        XCTAssertTrue(p.isComplete)
+        XCTAssertNotNil(p.calorieGoal)
+    }
+
+    func testBMIAndLabel() {
+        let p = sampleProfile()
+        XCTAssertEqual(p.bmi ?? 0, 26.1, accuracy: 0.15)
+        XCTAssertEqual(p.bmiLabel, "Fazla kilolu")
+    }
+
+    func testCalorieGoalCreatesDeficitButNeverBelowBMR() {
+        let p = sampleProfile()
+        guard let goal = p.calorieGoal, let tdee = p.tdee, let bmr = p.bmr else {
+            return XCTFail("hedef hesaplanamadı")
+        }
+        XCTAssertLessThan(Double(goal), tdee)            // kilo verme → açık
+        XCTAssertGreaterThanOrEqual(Double(goal), bmr - 10)  // ama BMR altına inmez
+    }
+
+    func testCalorieGoalRisesWhenGainingWeight() {
+        var p = sampleProfile()
+        p.targetWeightKg = 78                            // kilo alma hedefi
+        guard let goal = p.calorieGoal, let tdee = p.tdee else {
+            return XCTFail("hedef hesaplanamadı")
+        }
+        XCTAssertGreaterThan(Double(goal), tdee)
+    }
+
+    func testWaterGoalScalesWithWeightAndIsClamped() {
+        var p = sampleProfile()
+        XCTAssertEqual(p.waterGoalML ?? 0, 2400, accuracy: 50)
+        p.weightKg = 30                                  // aşırı düşük → alt sınır
+        XCTAssertEqual(p.waterGoalML, 1500)
+        p.weightKg = 200                                 // aşırı yüksek → üst sınır
+        XCTAssertEqual(p.waterGoalML, 4000)
+    }
+
+    @MainActor
+    func testRingGoalsFallBackToDefaultsWithoutProfile() {
+        let model = AppModel()
+        // Profil boşken varsayılan hedefler korunur (uygulama kırılmaz).
+        XCTAssertEqual(model.goal(for: .water), RingKind.water.goal)
+        XCTAssertEqual(model.goal(for: .nutrition), RingKind.nutrition.goal)
+
+        model.profile = sampleProfile()
+        XCTAssertNotEqual(model.goal(for: .water), RingKind.water.goal)
+        XCTAssertEqual(model.goal(for: .exercise), 30)   // az hareketli
+    }
+
     // MARK: Auth hata mesajları
     //
     // Sunucudan gelen İngilizce hatalar kullanıcıya Türkçe ve eyleme dönük

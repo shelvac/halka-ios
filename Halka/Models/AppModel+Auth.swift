@@ -304,12 +304,9 @@ extension AppModel {
         }
     }
 
-    /// US-016 (kısmi) — Profil adını buluttan yükle; selamlama gerçek isme döner.
-    func loadProfile() async {
-        if let name = await SupabaseService.shared.fetchFullName() {
-            applyFullName(name)
-        }
-    }
+    // Not: `loadProfile()` artık AppModel+Profile.swift'te — yalnızca adı değil
+    // tüm profili (yaş, cinsiyet, boy, kilo, hedef) yükleyip halka hedeflerini
+    // kişiselleştiriyor (US-016).
 
     func applyFullName(_ name: String) {
         userFullName = name
