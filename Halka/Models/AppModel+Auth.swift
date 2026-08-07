@@ -302,8 +302,10 @@ extension AppModel {
         if text.contains("email not confirmed") {
             return "E-postan henüz doğrulanmamış — gelen kutundaki bağlantıya tıkla."
         }
-        if text.contains("same as the old") || text.contains("should be different") {
-            return "Yeni şifre eskisinden farklı olmalı."
+        // Supabase bu durumu bazen düz metin, bazen `same_password` koduyla döndürür.
+        if text.contains("same as the old") || text.contains("should be different")
+            || text.contains("same_password") {
+            return "Yeni şifre eskisinden farklı olmalı — başka bir şifre seç."
         }
         if text.contains("password") && (text.contains("least") || text.contains("short")) {
             return "Şifre çok kısa — en az 8 karakter kullan."
