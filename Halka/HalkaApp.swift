@@ -15,6 +15,7 @@ struct HalkaApp: App {
 /// Top-level router: splash → login/register → (premium) → app.
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -43,6 +44,12 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: model.screen)
         .preferredColorScheme(.light)
+        // Saatte antrenman bitirip uygulamaya dönünce veri taze olsun:
+        // Health yalnızca açılışta okunuyordu, arka planda kalınca bayatlıyordu.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, model.screen == .app else { return }
+            Task { await model.refreshFromHealthKit() }
+        }
         .onOpenURL { url in model.handleDeepLink(url) }
     }
 }

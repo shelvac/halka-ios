@@ -138,6 +138,8 @@ final class AppModel {
     var hkConnected = false
     var hkSteps = 0
     var hkActiveEnergy = 0
+    /// Bugün Apple Watch/iPhone'da kaydedilen antrenmanlar (US-023).
+    var hkWorkouts: [HealthKitService.WorkoutSummary] = []
 
     /// İzin diyaloğunu tetikler (Profil'deki "Bağlan" düğmesi).
     func connectHealthKit() {
@@ -164,6 +166,7 @@ final class AppModel {
         if snapshot.exerciseMinutes > 0 { exerciseBase = snapshot.exerciseMinutes }
         if snapshot.sleepHours > 0 { sleepHours = snapshot.sleepHours }
         if snapshot.waterML > 0 { water = max(water, snapshot.waterML) }
+        hkWorkouts = await HealthKitService.shared.fetchTodayWorkouts()
         await persistRings()
     }
 

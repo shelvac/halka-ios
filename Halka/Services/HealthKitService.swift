@@ -27,8 +27,18 @@ final class HealthKitService {
         }
     }
 
+    /// Apple Watch'ta yapılan antrenmanın uygulamada görünen hâli.
+    struct WorkoutSummary: Identifiable {
+        let id: UUID
+        let name: String
+        let minutes: Int
+        let kcal: Int
+        let start: Date
+    }
+
     private var readTypes: Set<HKObjectType> {
-        [HKQuantityType(.stepCount),
+        [HKObjectType.workoutType(),
+         HKQuantityType(.stepCount),
          HKQuantityType(.appleExerciseTime),
          HKQuantityType(.activeEnergyBurned),
          HKQuantityType(.dietaryWater),
@@ -75,6 +85,63 @@ final class HealthKitService {
             }
         }
         return snapshot
+    }
+
+    /// Bugün kaydedilen antrenmanlar (Apple Watch dahil).
+    ///
+    /// Egzersiz halkası `appleExerciseTime`den doluyor; bu liste ise "hangi
+    /// antrenman" sorusunu cevaplıyor. Saatte egzersiz başlatıp bitirince
+    /// buraya düşer.
+    func fetchTodayWorkouts() async -> [WorkoutSummary] {
+        guard isAvailable else { return [] }
+        let startOfDay = Calendar.current.startOfDay(for: Date())
+        let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: Date())
+        let descriptor = HKSampleQueryDescriptor(
+            predicates: [.workout(predicate)],
+            sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)])
+        guard let workouts = try? await descriptor.result(for: store) else { return [] }
+
+        return workouts.map { workout in
+            let kcal = workout.statistics(for: HKQuantityType(.activeEnergyBurned))?
+                .sumQuantity()?.doubleValue(for: .kilocalorie()) ?? 0
+            return WorkoutSummary(
+                id: workout.uuid,
+                name: Self.name(for: workout.workoutActivityType),
+                minutes: Int((workout.duration / 60).rounded()),
+                kcal: Int(kcal.rounded()),
+                start: workout.startDate)
+        }
+    }
+
+    /// Apple'ın antrenman türleri için Türkçe adlar. Listede olmayan türler
+    /// genel bir adla gösterilir — uydurmaktansa "Antrenman" demek yeter.
+    private static func name(for type: HKWorkoutActivityType) -> String {
+        switch type {
+        case .walking: return "Yürüyüş"
+        case .running: return "Koşu"
+        case .cycling: return "Bisiklet"
+        case .swimming: return "Yüzme"
+        case .traditionalStrengthTraining: return "Ağırlık"
+        case .functionalStrengthTraining: return "Fonksiyonel antrenman"
+        case .highIntensityIntervalTraining: return "HIIT"
+        case .yoga: return "Yoga"
+        case .pilates: return "Pilates"
+        case .cardioDance: return "Dans"
+        case .elliptical: return "Eliptik"
+        case .rowing: return "Kürek"
+        case .stairClimbing: return "Merdiven"
+        case .coreTraining: return "Karın"
+        case .flexibility: return "Esneme"
+        case .hiking: return "Doğa yürüyüşü"
+        case .mixedCardio: return "Kardiyo"
+        case .tennis: return "Tenis"
+        case .basketball: return "Basketbol"
+        case .soccer: return "Futbol"
+        case .volleyball: return "Voleybol"
+        case .boxing, .kickboxing: return "Boks"
+        case .cooldown: return "Soğuma"
+        default: return "Antrenman"
+        }
     }
 
     private func sum(_ identifier: HKQuantityTypeIdentifier, unit: HKUnit, predicate: NSPredicate) async -> Int {

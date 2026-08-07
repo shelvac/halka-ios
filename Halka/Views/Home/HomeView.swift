@@ -128,6 +128,41 @@ struct TodayView: View {
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity)
             .card(18)
+
+            // Apple Watch'ta yapılan antrenmanlar — egzersiz halkasının
+            // "neden dolu" sorusunun cevabı.
+            if !model.hkWorkouts.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(model.hkWorkouts.enumerated()), id: \.element.id) { i, workout in
+                        HStack(spacing: 10) {
+                            Image(systemName: "figure.run")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(Color.coral)
+                            Text(workout.name)
+                                .font(.h(12.5, .bold))
+                                .foregroundStyle(Color.inkBody)
+                            Spacer()
+                            Text("\(workout.minutes) dk")
+                                .font(.h(12.5))
+                                .foregroundStyle(Color.ink)
+                            if workout.kcal > 0 {
+                                Text("· \(workout.kcal) kcal")
+                                    .font(.h(11, .bold))
+                                    .foregroundStyle(Color.sub)
+                            }
+                        }
+                        .padding(.vertical, 11)
+                        .overlay(alignment: .top) {
+                            if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 3)
+                .frame(maxWidth: .infinity)
+                .card(18)
+                .padding(.top, 10)
+            }
         } else {
             // Bağlı değilken sahte sayı göstermek yerine bağlanmaya çağır.
             Button {
