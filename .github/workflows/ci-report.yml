@@ -29,17 +29,7 @@ jobs:
       - name: Simülatör seç
         id: sim
         run: |
-          UDID=$(xcrun simctl list devices available --json \
-            | python3 -c "
-import json,sys
-devices = json.load(sys.stdin)['devices']
-best = None
-for runtime, items in devices.items():
-    if 'iOS' not in runtime: continue
-    for d in items:
-        if d.get('isAvailable') and d['name'].startswith('iPhone'):
-            best = best or d['udid']
-print(best or '')")
+          UDID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.isAvailable and (.name | startswith("iPhone")))][0].udid // empty')
           if [ -z "$UDID" ]; then
             echo "Kullanılabilir iPhone simülatörü yok" >&2
             xcrun simctl list devices available >&2
