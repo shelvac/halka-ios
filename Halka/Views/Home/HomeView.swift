@@ -81,8 +81,12 @@ struct TodayView: View {
     var body: some View {
         VStack(spacing: 0) {
             ringsCard
-            // US-027 — halkanın hemen altında: beslenme ve egzersiz burada
-            // buluşuyor ve halkalarda olmayan tek bilgi bu.
+            // Hızlı işlemler halkanın hemen altında: en sık yapılan şey su
+            // eklemek, aşağıda aramaya değmez.
+            quickActions
+                .padding(.top, 12)
+            // US-027 — beslenme ve egzersizin buluştuğu yer; halkalarda
+            // olmayan tek bilgi bu.
             //
             // Buradaki "hedef kartları" ızgarası kaldırıldı: halkanın
             // yanındaki liste zaten "1.240 / 2.000 ml" diyordu, ızgara aynı
@@ -90,8 +94,6 @@ struct TodayView: View {
             EnergyBalanceCard()
                 .padding(.top, 12)
             activityStats
-                .padding(.top, 12)
-            quickActions
                 .padding(.top, 12)
             weekStrip
                 .padding(.top, 14)
