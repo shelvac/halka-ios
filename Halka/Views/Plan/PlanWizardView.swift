@@ -20,6 +20,16 @@ struct PlanWizardView: View {
     @State private var loading = true
     @State private var saving = false
     @State private var doctorConfirmed = false
+    @State private var allergyDraft = ""
+    @State private var dislikeDraft = ""
+    @State private var editingMeal: MealTimeEdit? = nil
+
+    /// Düzenlenen öğün saati (sheet için).
+    struct MealTimeEdit: Identifiable {
+        let index: Int
+        let time: String
+        var id: Int { index }
+    }
 
     var body: some View {
         ZStack {
@@ -44,6 +54,15 @@ struct PlanWizardView: View {
                     .padding(.bottom, 24)
                 }
                 footer
+            }
+        }
+        .sheet(item: $editingMeal) { edit in
+            TimePickerSheet(title: Self.mealLabel(edit.index, of: prefs.mealsPerDay),
+                            time: edit.time) { newTime in
+                guard prefs.mealTimes.indices.contains(edit.index) else { return }
+                prefs.mealTimes[edit.index] = newTime
+                // Saatler artan sırada kalsın; 20:00'den sonra 13:00 olmaz.
+                prefs.mealTimes.sort()
             }
         }
         .task {
@@ -197,13 +216,11 @@ struct PlanWizardView: View {
                 }
             }
             fieldTitle("Alerji veya intolerans")
-            chipCloud(PlanPreferences.allergyOptions, selected: prefs.allergies) {
-                toggle($0, in: &prefs.allergies)
-            }
+            editableChips(PlanPreferences.allergyOptions, selected: $prefs.allergies,
+                          draft: $allergyDraft, placeholder: "Listede yok — yazarak ekle")
             fieldTitle("Sevmediklerin")
-            chipCloud(PlanPreferences.dislikeOptions, selected: prefs.dislikes) {
-                toggle($0, in: &prefs.dislikes)
-            }
+            editableChips(PlanPreferences.dislikeOptions, selected: $prefs.dislikes,
+                          draft: $dislikeDraft, placeholder: "Sevmediğin bir şey yaz")
         }
     }
 
@@ -221,16 +238,25 @@ struct PlanWizardView: View {
             fieldTitle("Öğün saatleri")
             VStack(spacing: 0) {
                 ForEach(Array(prefs.mealTimes.enumerated()), id: \.offset) { i, time in
-                    HStack {
-                        Text(Self.mealLabel(i, of: prefs.mealsPerDay))
-                            .font(.h(12.5, .bold))
-                            .foregroundStyle(Color.inkMid)
-                        Spacer()
-                        Text(time)
-                            .font(.h(14))
-                            .foregroundStyle(Color.coral)
+                    // Saatler sabit değil: kimse 08:30'da kahvaltı etmek
+                    // zorunda değil, plan kişinin gününe uymalı.
+                    Button { editingMeal = MealTimeEdit(index: i, time: time) } label: {
+                        HStack {
+                            Text(Self.mealLabel(i, of: prefs.mealsPerDay))
+                                .font(.h(12.5, .bold))
+                                .foregroundStyle(Color.inkMid)
+                            Spacer()
+                            Text(time)
+                                .font(.h(14))
+                                .foregroundStyle(Color.coral)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10, weight: .heavy))
+                                .foregroundStyle(Color.chevron)
+                        }
+                        .padding(.vertical, 12)
+                        .contentShape(Rectangle())
                     }
-                    .padding(.vertical, 12)
+                    .buttonStyle(.plain)
                     .overlay(alignment: .top) {
                         if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
                     }
@@ -589,6 +615,77 @@ struct PlanWizardView: View {
         }
     }
 
+    /// Hazır seçenekler + serbest metin. Listeye sığmayan alerjiler ve
+    /// sevilmeyen yemekler kaçınılmaz; sabit sekiz seçenek yetmiyordu.
+    private func editableChips(_ options: [String], selected: Binding<Set<String>>,
+                               draft: Binding<String>, placeholder: String) -> some View {
+        let custom = selected.wrappedValue.subtracting(options).sorted()
+        return VStack(alignment: .leading, spacing: 10) {
+            FlowLayout(spacing: 8) {
+                ForEach(options, id: \.self) { option in
+                    chip(option, on: selected.wrappedValue.contains(option)) {
+                        if selected.wrappedValue.contains(option) {
+                            selected.wrappedValue.remove(option)
+                        } else {
+                            selected.wrappedValue.insert(option)
+                        }
+                    }
+                }
+                // Elle eklenenler silinebilir olmalı — hazır seçeneklerden
+                // farkı bu, o yüzden çarpı işareti taşıyorlar.
+                ForEach(custom, id: \.self) { item in
+                    Button { selected.wrappedValue.remove(item) } label: {
+                        HStack(spacing: 5) {
+                            Text(item)
+                                .font(.h(12, .bold))
+                            Image(systemName: "xmark")
+                                .font(.system(size: 8, weight: .heavy))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .background(Capsule().fill(Color.coral))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            HStack(spacing: 8) {
+                TextField(placeholder, text: draft)
+                    .font(.h(12.5, .semibold))
+                    .foregroundStyle(Color.ink)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .onSubmit { addCustom(draft, to: selected) }
+                    .padding(.horizontal, 14)
+                    .frame(height: 42)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .shadow(color: Color.ink.opacity(0.05), radius: 3, y: 1)
+                Button { addCustom(draft, to: selected) } label: {
+                    Text("Ekle")
+                        .font(.h(12, .bold))
+                        .foregroundStyle(draft.wrappedValue.isEmpty ? Color.chevron : .white)
+                        .padding(.horizontal, 16)
+                        .frame(height: 42)
+                        .background(draft.wrappedValue.isEmpty ? Color.bgField : Color.coral)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(draft.wrappedValue.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+    }
+
+    private func addCustom(_ draft: Binding<String>, to selected: Binding<Set<String>>) {
+        let value = draft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        // Baş harfi büyüt: "yumurta" ile "Yumurta" iki ayrı etiket olmasın.
+        let normalized = value.prefix(1).uppercased(with: Locale(identifier: "tr_TR"))
+            + value.dropFirst()
+        selected.wrappedValue.insert(normalized)
+        draft.wrappedValue = ""
+    }
+
     private func infoBox(_ text: String, tone: Color = .sub,
                          background: Color = .bgField) -> some View {
         Text(text)
@@ -687,5 +784,59 @@ struct PlanWizardView: View {
 
     private static func decimal(_ value: Double) -> String {
         String(format: "%.1f", value).replacingOccurrences(of: ".", with: ",")
+    }
+}
+
+/// Öğün saati seçici — uygulamanın kart diline uygun bir çark.
+struct TimePickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let title: String
+    let time: String
+    let onPick: (String) -> Void
+
+    @State private var date = Date()
+
+    private static let formatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    var body: some View {
+        ZStack {
+            Color.bgApp.ignoresSafeArea()
+            VStack(spacing: 0) {
+                HStack {
+                    Button("Vazgeç") { dismiss() }
+                        .font(.h(13))
+                        .foregroundStyle(Color.sub)
+                    Spacer()
+                    Text(title)
+                        .font(.h(15))
+                        .foregroundStyle(Color.ink)
+                    Spacer()
+                    Button("Tamam") {
+                        onPick(Self.formatter.string(from: date))
+                        dismiss()
+                    }
+                    .font(.h(13))
+                    .foregroundStyle(Color.coral)
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 18)
+                .padding(.bottom, 8)
+
+                DatePicker("", selection: $date, displayedComponents: .hourAndMinute)
+                    .datePickerStyle(.wheel)
+                    .labelsHidden()
+                    .padding(.horizontal, 18)
+                Spacer(minLength: 0)
+            }
+        }
+        .presentationDetents([.height(280)])
+        .onAppear {
+            date = Self.formatter.date(from: time) ?? Date()
+        }
     }
 }
