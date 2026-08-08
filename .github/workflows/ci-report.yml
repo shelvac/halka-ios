@@ -23,6 +23,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Cihaz adını sabitlemek kırılgan: runner imajı yenilenince
+      # "iPhone 16 Pro" kayboldu ve derleme değil, hedef bulunamadığı için
+      # düştü. Artık kurulu olanlardan biri seçiliyor.
+      - name: Simülatör seç
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available --json \
+            | python3 -c "
+import json,sys
+devices = json.load(sys.stdin)['devices']
+best = None
+for runtime, items in devices.items():
+    if 'iOS' not in runtime: continue
+    for d in items:
+        if d.get('isAvailable') and d['name'].startswith('iPhone'):
+            best = best or d['udid']
+print(best or '')")
+          if [ -z "$UDID" ]; then
+            echo "Kullanılabilir iPhone simülatörü yok" >&2
+            xcrun simctl list devices available >&2
+            exit 1
+          fi
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl list devices available | grep "$UDID"
+
       - name: Derle ve test et
         id: build
         continue-on-error: true
@@ -31,7 +56,7 @@ jobs:
           xcodebuild test \
             -project Halka.xcodeproj \
             -scheme Halka \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
             CODE_SIGNING_ALLOWED=NO > build.log 2>&1
           echo "code=$?" >> "$GITHUB_OUTPUT"
 
