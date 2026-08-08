@@ -55,11 +55,17 @@ final class AppModelTests: XCTestCase {
 
     @MainActor
     func testPhotoExtraCountsTowardsConsumedAndCanBeDeleted() {
+        // US-029: kalori artık demo dizisinden değil, onaylanan tahminden
+        // geliyor. Kaydedilen her yiyecek ayrı bir günlük satırı.
         let model = AppModel()
-        let estimate = model.currentPhotoEstimate
         let day = model.mealDay          // fotoğraftan öğün bugüne eklenir
+        model.mealAnalysis = MealAnalysis(
+            items: [AnalyzedFood(name: "Izgara köfte", matched: true, grams: 150,
+                                 kcal100: 215, portionG: 150,
+                                 portionName: "porsiyon", confidence: 0.9)],
+            note: nil, logID: nil, usedToday: 1, quota: 3)
         model.savePhotoMeal()
-        XCTAssertEqual(model.consumed(forDay: day), estimate.total)
+        XCTAssertEqual(model.consumed(forDay: day), 323)
         XCTAssertEqual(model.extras(forDay: day).count, 1)
         model.deleteExtra(model.extras(forDay: day)[0].id)
         XCTAssertEqual(model.consumed(forDay: day), 0)
