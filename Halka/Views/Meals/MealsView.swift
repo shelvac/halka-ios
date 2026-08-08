@@ -112,6 +112,20 @@ struct MealMenuView: View {
                         Text("\(recipe.kcal) kcal")
                             .font(.h(11))
                             .foregroundStyle(Color.sub)
+                        // Ekstra satırlarındaki silme düğmesinin aynısı.
+                        // Kaldırma yalnızca basılı tutmayla erişilebiliyordu;
+                        // görünmeyen bir hareket keşfedilmiyor.
+                        Button { model.removeMeal(day: day, slot: i) } label: {
+                            Circle()
+                                .fill(Color.bgChip)
+                                .frame(width: 24, height: 24)
+                                .overlay(
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 9, weight: .heavy))
+                                        .foregroundStyle(Color.sub)
+                                )
+                        }
+                        .buttonStyle(.plain)
                         Image(systemName: "chevron.right")
                             .font(.system(size: 11, weight: .heavy))
                             .foregroundStyle(Color.chevron)
