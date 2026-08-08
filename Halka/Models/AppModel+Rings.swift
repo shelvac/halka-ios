@@ -139,6 +139,17 @@ extension AppModel {
         return (row.sleep_hours, row.active_energy_kcal)
     }
 
+    /// Bugün yapılan antrenmanlar (ana ekran).
+    var todayWorkouts: [HealthKitService.WorkoutSummary] {
+        hkWorkouts.filter { Self.appCalendar.isDate($0.start, inSameDayAs: today) }
+    }
+
+    /// Takvimde seçili günün antrenmanları.
+    func workouts(forDay day: Int) -> [HealthKitService.WorkoutSummary] {
+        guard let date = date(forDay: day) else { return [] }
+        return hkWorkouts.filter { Self.appCalendar.isDate($0.start, inSameDayAs: date) }
+    }
+
     /// Seçili günde hiç kayıt var mı? (boş durum metni için)
     func hasData(forDay day: Int) -> Bool {
         fractions(forDay: day).contains { $0 > 0 }

@@ -152,13 +152,21 @@ final class HealthKitService {
     }
 
     /// Bugün kaydedilen antrenmanlar (Apple Watch dahil).
+    func fetchTodayWorkouts() async -> [WorkoutSummary] {
+        await fetchWorkouts(days: 1)
+    }
+
+    /// Son N günün antrenmanları.
     ///
     /// Egzersiz halkası `appleExerciseTime`den doluyor; bu liste ise "hangi
-    /// antrenman" sorusunu cevaplıyor. Saatte egzersiz başlatıp bitirince
-    /// buraya düşer.
-    func fetchTodayWorkouts() async -> [WorkoutSummary] {
-        guard isAvailable else { return [] }
-        let startOfDay = Calendar.current.startOfDay(for: Date())
+    /// antrenmanı yaptım" sorusunu cevaplıyor — halkanın neden dolu olduğunu
+    /// gösteren tek yer.
+    func fetchWorkouts(days: Int) async -> [WorkoutSummary] {
+        guard isAvailable, days > 0 else { return [] }
+        let calendar = Calendar.current
+        let startOfDay = calendar.date(byAdding: .day, value: -(days - 1),
+                                       to: calendar.startOfDay(for: Date()))
+            ?? calendar.startOfDay(for: Date())
         let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: Date())
         let descriptor = HKSampleQueryDescriptor(
             predicates: [.workout(predicate)],

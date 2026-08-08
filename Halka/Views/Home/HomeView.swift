@@ -150,9 +150,9 @@ struct TodayView: View {
 
             // Apple Watch'ta yapılan antrenmanlar — egzersiz halkasının
             // "neden dolu" sorusunun cevabı.
-            if !model.hkWorkouts.isEmpty {
+            if !model.todayWorkouts.isEmpty {
                 VStack(spacing: 0) {
-                    ForEach(Array(model.hkWorkouts.enumerated()), id: \.element.id) { i, workout in
+                    ForEach(Array(model.todayWorkouts.enumerated()), id: \.element.id) { i, workout in
                         HStack(spacing: 10) {
                             Image(systemName: "figure.run")
                                 .font(.system(size: 13, weight: .bold))

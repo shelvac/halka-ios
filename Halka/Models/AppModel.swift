@@ -139,7 +139,8 @@ final class AppModel {
     var hkConnected = false
     var hkSteps = 0
     var hkActiveEnergy = 0
-    /// Bugün Apple Watch/iPhone'da kaydedilen antrenmanlar (US-023).
+    /// Apple Watch/iPhone'da kaydedilen antrenmanlar — son 90 gün (US-023).
+    /// Bugünküler ana ekranda, geçmiş günler takvim ve Egzersiz sekmesinde.
     var hkWorkouts: [HealthKitService.WorkoutSummary] = []
     /// Geçmiş aktarımı bu oturumda yapıldı mı? (her tazelemede tekrarlanmasın)
     var healthBackfillDone = false
@@ -169,7 +170,7 @@ final class AppModel {
         if snapshot.exerciseMinutes > 0 { exerciseBase = snapshot.exerciseMinutes }
         if snapshot.sleepHours > 0 { sleepHours = snapshot.sleepHours }
         if snapshot.waterML > 0 { water = max(water, snapshot.waterML) }
-        hkWorkouts = await HealthKitService.shared.fetchTodayWorkouts()
+        hkWorkouts = await HealthKitService.shared.fetchWorkouts(days: 90)
         await persistRings()
         // Geçmişi bir kez aktar: takvim ilk açılışta dolu gelsin.
         if !healthBackfillDone { await backfillFromHealthKit() }

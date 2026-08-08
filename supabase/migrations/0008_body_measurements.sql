@@ -52,10 +52,11 @@ create policy body_measurements_own on public.body_measurements
   with check (user_id = auth.uid());
 
 -- Diyetisyen, danışanının ölçümlerini görebilir (0001'deki yardımcı fonksiyon).
+-- Fonksiyon İKİ parametre alıyor: (diyetisyen, danışan).
 drop policy if exists body_measurements_dietitian_read on public.body_measurements;
 create policy body_measurements_dietitian_read on public.body_measurements
   for select to authenticated
-  using (public.dietitian_has_client(user_id));
+  using (public.dietitian_has_client(auth.uid(), user_id));
 
 -- Tartı ekranı fotoğrafları — avatarlarla aynı düzen: ÖZEL bucket, dosya yolu
 -- kullanıcının kendi id'siyle başlamak zorunda.
