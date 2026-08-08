@@ -78,10 +78,11 @@ struct MealMenuView: View {
 
     private var menuCard: some View {
         let day = model.mealDay
-        let menu = model.menu(forDay: day)
         let extras = model.extras(forDay: day)
         return VStack(spacing: 0) {
-            ForEach(Array(menu.enumerated()), id: \.offset) { i, food in
+            ForEach(Array(model.visibleMenu(forDay: day).enumerated()), id: \.element.slot) { row, item in
+                let i = item.slot
+                let food = item.food
                 let eaten = model.isEaten(day: day, slot: i)
                 let recipe = model.recipe(for: food, slot: i)
                 Button {
@@ -118,19 +119,42 @@ struct MealMenuView: View {
                     .padding(.vertical, 13)
                 }
                 .buttonStyle(.plain)
+                // Beğenilmeyen öğünü kaldırmanın tek yolu katalogdan
+                // başkasıyla değiştirmekti; artık kaldırılabiliyor.
+                .contextMenu {
+                    Button(role: .destructive) {
+                        model.removeMeal(day: day, slot: i)
+                    } label: {
+                        Label("Menüden kaldır", systemImage: "trash")
+                    }
+                }
                 .overlay(alignment: .top) {
-                    if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
+                    if row > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
                 }
             }
 
             ForEach(extras) { extra in
+                // Plan satırıyla AYNI düzen: onay dairesi · saat + etiket ·
+                // ad · kalori. Eskiden farklı bir biçimdeydi (nokta, tek
+                // satırda "saat · ad") ve aynı listede iki dil konuşuyordu.
                 HStack(spacing: 10) {
-                    Circle().fill(Color.green).frame(width: 8, height: 8)
-                    Text("\(extra.time) · \(extra.title)")
-                        .font(.h(12.5, .bold))
+                    RoundCheck(on: true)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(extra.time)
+                            .font(.h(12))
+                            .foregroundStyle(Color.coral)
+                        Text("Ekstra")
+                            .font(.h(9.5))
+                            .foregroundStyle(Color.faint)
+                    }
+                    .frame(width: 44, alignment: .leading)
+                    Text(extra.title)
+                        .font(.h(13, .bold))
                         .foregroundStyle(Color.inkSoft)
-                    Spacer()
-                    Text("+\(extra.kcal) kcal")
+                        .lineSpacing(2)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: 4)
+                    Text("\(extra.kcal) kcal")
                         .font(.h(11))
                         .foregroundStyle(Color.sub)
                     Button { model.deleteExtra(extra.id) } label: {
@@ -153,6 +177,25 @@ struct MealMenuView: View {
                         .overlay(
                             Line().stroke(Color(hex: 0xEAE3D6), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                         )
+                }
+            }
+
+            if model.removedCount(forDay: day) > 0 {
+                HStack {
+                    Text("\(model.removedCount(forDay: day)) öğün kaldırıldı")
+                        .font(.h(11, .bold))
+                        .foregroundStyle(Color.faint)
+                    Spacer()
+                    Button { model.restoreMeals(day: day) } label: {
+                        Text("Geri al")
+                            .font(.h(11, .bold))
+                            .foregroundStyle(Color.coral)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.vertical, 11)
+                .overlay(alignment: .top) {
+                    Rectangle().fill(Color.hairline).frame(height: 1)
                 }
             }
 
@@ -301,8 +344,8 @@ struct CalorieLogView: View {
         let consumed = model.consumed(forDay: day)
         let over = consumed > 1420
         let pct = min(Double(consumed) / 1420, 1)
-        let menu = model.menu(forDay: day)
-        let planRows = menu.enumerated().filter { model.isEaten(day: day, slot: $0.offset) }
+        let planRows = model.visibleMenu(forDay: day)
+            .filter { model.isEaten(day: day, slot: $0.slot) }
         let extras = model.extras(forDay: day)
 
         return VStack(alignment: .leading, spacing: 0) {
@@ -364,12 +407,12 @@ struct CalorieLogView: View {
                         .padding(.vertical, 24)
                         .frame(maxWidth: .infinity)
                 } else {
-                    ForEach(Array(planRows.enumerated()), id: \.offset) { idx, pair in
+                    ForEach(Array(planRows.enumerated()), id: \.element.slot) { idx, pair in
                         logRow(
-                            time: model.mealTimes[pair.offset],
-                            food: pair.element,
-                            kcal: "\(model.recipe(for: pair.element, slot: pair.offset).kcal) kcal",
-                            source: "Plandan · \(Demo.mealLabels[pair.offset])",
+                            time: model.mealTimes[pair.slot],
+                            food: pair.food,
+                            kcal: "\(model.recipe(for: pair.food, slot: pair.slot).kcal) kcal",
+                            source: "Plandan · \(Demo.mealLabels[pair.slot])",
                             sourceColors: (Color.blueBg, Color.blueDark),
                             deletable: nil,
                             topBorder: idx > 0)
@@ -379,7 +422,7 @@ struct CalorieLogView: View {
                             time: extra.time,
                             food: extra.title,
                             kcal: "\(extra.kcal) kcal",
-                            source: "Fotoğraftan · Vision AI",
+                            source: "Fotoğraftan",
                             sourceColors: (Color.coralBg, Color.coralDark),
                             deletable: { model.deleteExtra(extra.id) },
                             topBorder: idx > 0 || !planRows.isEmpty)

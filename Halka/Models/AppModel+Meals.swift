@@ -15,6 +15,40 @@ extension AppModel {
         eaten.contains("\(day)-\(slot)")
     }
 
+    func isRemoved(day: Int, slot: Int) -> Bool {
+        removedMeals.contains("\(day)-\(slot)")
+    }
+
+    /// Menüde görünen öğünler — kaldırılanlar hariç.
+    ///
+    /// Dizi indeksi yerine (slot, yemek) çifti dönüyor: kaldırılanı diziden
+    /// çıkarmak sonraki öğünlerin slot numarasını kaydırır ve "işaretlendi",
+    /// "değiştirildi" gibi kayıtlar yanlış öğüne bağlanırdı.
+    func visibleMenu(forDay day: Int) -> [(slot: Int, food: String)] {
+        menu(forDay: day).enumerated()
+            .filter { !isRemoved(day: day, slot: $0.offset) }
+            .map { (slot: $0.offset, food: $0.element) }
+    }
+
+    /// Öğünü menüden kaldırır. İşaretliyse işaret de kalkar — kaldırılan bir
+    /// öğün yenmiş sayılamaz.
+    func removeMeal(day: Int, slot: Int) {
+        removedMeals.insert("\(day)-\(slot)")
+        eaten.remove("\(day)-\(slot)")
+        scheduleMealSave()
+        if day == todayWeekdayIndex { scheduleRingSave() }
+    }
+
+    func restoreMeals(day: Int) {
+        removedMeals = removedMeals.filter { !$0.hasPrefix("\(day)-") }
+        scheduleMealSave()
+        if day == todayWeekdayIndex { scheduleRingSave() }
+    }
+
+    func removedCount(forDay day: Int) -> Int {
+        removedMeals.filter { $0.hasPrefix("\(day)-") }.count
+    }
+
     func toggleEaten(day: Int, slot: Int) {
         let key = "\(day)-\(slot)"
         if eaten.contains(key) { eaten.remove(key) } else { eaten.insert(key) }
@@ -41,8 +75,9 @@ extension AppModel {
 
     /// Calories actually consumed (checked plan meals + photo extras) for a day.
     func consumed(forDay day: Int) -> Int {
-        let plan = menu(forDay: day).enumerated().reduce(0) { sum, pair in
-            sum + (isEaten(day: day, slot: pair.offset) ? recipe(for: pair.element, slot: pair.offset).kcal : 0)
+        let plan = visibleMenu(forDay: day).reduce(0) { sum, item in
+            sum + (isEaten(day: day, slot: item.slot)
+                   ? recipe(for: item.food, slot: item.slot).kcal : 0)
         }
         return plan + extras(forDay: day).reduce(0) { $0 + $1.kcal }
     }
@@ -53,8 +88,8 @@ extension AppModel {
 
     /// Sum of the full planned menu for a day (regardless of eaten state).
     func planTotal(forDay day: Int) -> Int {
-        let plan = menu(forDay: day).enumerated().reduce(0) { sum, pair in
-            sum + recipe(for: pair.element, slot: pair.offset).kcal
+        let plan = visibleMenu(forDay: day).reduce(0) { sum, item in
+            sum + recipe(for: item.food, slot: item.slot).kcal
         }
         return plan + extras(forDay: day).reduce(0) { $0 + $1.kcal }
     }
@@ -88,6 +123,20 @@ extension AppModel {
         scheduleMealSave()
         mealView = .menu
         mealSelection = nil
+    }
+
+    /// Katalogdan doğrudan günlüğe ekler — fotoğraf akışından geçmeden.
+    ///
+    /// Yemek veritabanı yalnızca fotoğraf onay ekranından erişilebiliyordu;
+    /// fotoğraf çekmeden bir şey eklemek isteyen kullanıcının yolu yoktu.
+    func logFood(_ option: FoodOption, grams: Int) {
+        let kcal = Int((Double(option.kcal100) * Double(grams) / 100).rounded())
+        extras.append(ExtraMeal(day: mealDay,
+                                title: "\(option.name) · \(grams) g",
+                                kcal: kcal,
+                                time: Self.nowHHmm()))
+        scheduleMealSave()
+        if mealDay == todayWeekdayIndex { scheduleRingSave() }
     }
 
     // MARK: Photo flow

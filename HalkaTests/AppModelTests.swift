@@ -477,6 +477,63 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(high.refPosition, 0.98, accuracy: 0.001) // clamp üst sınırı
     }
 
+    // MARK: Menüden öğün kaldırma
+
+    @MainActor
+    func testRemovedMealLeavesTheMenuAndTheTotals() {
+        let model = AppModel()
+        let day = model.mealDay
+        let before = model.planTotal(forDay: day)
+        let visibleBefore = model.visibleMenu(forDay: day).count
+        model.toggleEaten(day: day, slot: 1)
+        let eatenTotal = model.consumed(forDay: day)
+        XCTAssertGreaterThan(eatenTotal, 0)
+
+        model.removeMeal(day: day, slot: 1)
+        XCTAssertEqual(model.visibleMenu(forDay: day).count, visibleBefore - 1)
+        XCTAssertLessThan(model.planTotal(forDay: day), before)
+        // Kaldırılan öğün yenmiş sayılamaz.
+        XCTAssertFalse(model.isEaten(day: day, slot: 1))
+        XCTAssertEqual(model.consumed(forDay: day), 0)
+    }
+
+    @MainActor
+    func testRemovingDoesNotShiftSlotNumbers() {
+        // Diziden çıkarmak sonraki öğünlerin slot numarasını kaydırır ve
+        // "işaretlendi"/"değiştirildi" kayıtları yanlış öğüne bağlanırdı.
+        let model = AppModel()
+        let day = model.mealDay
+        let lastFood = model.menu(forDay: day)[3]
+        model.removeMeal(day: day, slot: 0)
+        let visible = model.visibleMenu(forDay: day)
+        XCTAssertEqual(visible.map(\.slot), [1, 2, 3])
+        XCTAssertEqual(visible.last?.food, lastFood)
+    }
+
+    @MainActor
+    func testRestoreBringsRemovedMealsBack() {
+        let model = AppModel()
+        let day = model.mealDay
+        model.removeMeal(day: day, slot: 0)
+        model.removeMeal(day: day, slot: 2)
+        XCTAssertEqual(model.removedCount(forDay: day), 2)
+        model.restoreMeals(day: day)
+        XCTAssertEqual(model.removedCount(forDay: day), 0)
+        XCTAssertEqual(model.visibleMenu(forDay: day).count, 4)
+    }
+
+    @MainActor
+    func testLogFoodAddsCatalogItemStraightToTheLog() {
+        // Yemek veritabanına yalnızca fotoğraf onay ekranından girilebiliyordu.
+        let model = AppModel()
+        let day = model.mealDay
+        model.logFood(FoodOption(id: "x", name: "Mercimek çorbası", kcal100: 65,
+                                 portionG: 250, portionName: "kase"), grams: 250)
+        XCTAssertEqual(model.extras(forDay: day).count, 1)
+        XCTAssertEqual(model.extras(forDay: day)[0].kcal, 163)
+        XCTAssertTrue(model.extras(forDay: day)[0].title.contains("Mercimek çorbası"))
+    }
+
     // MARK: Fotoğraftan öğün tahmini (US-029)
 
     private func analyzed(_ name: String, grams: Int, kcal100: Int,

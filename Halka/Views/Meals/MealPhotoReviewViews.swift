@@ -185,11 +185,18 @@ struct MealEstimateCard: View {
 struct FoodSearchSheet: View {
     @Environment(\.dismiss) private var dismiss
     let title: String
+    /// Porsiyon adımı: doğrudan günlüğe eklerken miktar sorulur, mevcut bir
+    /// satırı değiştirirken sorulmaz (porsiyon zaten o satırda ayarlanıyor).
+    var asksPortion = false
     let onPick: (FoodOption) -> Void
+    /// Porsiyon sorulduğunda kullanılan geri çağırma.
+    var onPickWithGrams: ((FoodOption, Int) -> Void)? = nil
 
     @State private var query = ""
     @State private var results: [FoodOption] = []
     @State private var searching = false
+    @State private var chosen: FoodOption? = nil
+    @State private var multiple: Double = 1
 
     var body: some View {
         ZStack {
@@ -206,6 +213,7 @@ struct FoodSearchSheet: View {
                 } else {
                     list
                 }
+                if let chosen { portionBar(chosen) }
             }
         }
         .task(id: query) {
@@ -280,13 +288,62 @@ struct FoodSearchSheet: View {
         .multilineTextAlignment(.center)
     }
 
+    /// Seçilen yemeğin porsiyonu — arama listesinin altında beliren şerit.
+    private func portionBar(_ option: FoodOption) -> some View {
+        let grams = Int((Double(option.portionG) * multiple).rounded())
+        let kcal = Int((Double(option.kcal100) * Double(grams) / 100).rounded())
+        return VStack(spacing: 10) {
+            HStack {
+                Text(option.name)
+                    .font(.h(13, .bold))
+                    .foregroundStyle(Color.inkBody)
+                Spacer()
+                Text("\(kcal) kcal · \(grams) g")
+                    .font(.h(12))
+                    .foregroundStyle(Color.green)
+            }
+            HStack(spacing: 6) {
+                ForEach(AnalyzedFood.steps, id: \.self) { step in
+                    let active = abs(multiple - step) < 0.01
+                    Button { multiple = step } label: {
+                        Text(AnalyzedFood.stepLabel(step))
+                            .font(.h(12, .bold))
+                            .foregroundStyle(active ? .white : Color.inkMid)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(active ? Color.coral : Color.bgField)
+                            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Button {
+                onPickWithGrams?(option, grams)
+                dismiss()
+            } label: {
+                Text("Günlüğe ekle").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .coralButton()
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 12)
+        .padding(.bottom, 18)
+        .background(Color.white.shadow(.drop(color: Color.ink.opacity(0.08), radius: 8, y: -2)))
+    }
+
     private var list: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
                 ForEach(results) { option in
                     Button {
-                        onPick(option)
-                        dismiss()
+                        if asksPortion {
+                            chosen = option
+                            multiple = 1
+                        } else {
+                            onPick(option)
+                            dismiss()
+                        }
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
@@ -304,6 +361,7 @@ struct FoodSearchSheet: View {
                         }
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
+                        .background(chosen?.id == option.id ? Color.coralBg : Color.white)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)

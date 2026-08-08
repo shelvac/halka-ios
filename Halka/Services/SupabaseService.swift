@@ -290,6 +290,8 @@ final class SupabaseService {
         var eaten: [String]
         var extras: [ExtraRow]
         var overrides: [String: String]
+        /// Menüden kaldırılan plan öğünleri (0014). Eski satırlarda yok.
+        var removed: [String]?
 
         struct ExtraRow: Codable {
             var day: Int
@@ -305,7 +307,7 @@ final class SupabaseService {
     func fetchMealState() async throws -> MealStateRow? {
         guard let client, let user = await currentUser() else { return nil }
         let rows: [MealStateRow] = try await client.from("meal_state")
-            .select("week_start,eaten,extras,overrides")
+            .select("week_start,eaten,extras,overrides,removed")
             .eq("user_id", value: user.id.uuidString)
             .limit(1)
             .execute()
@@ -315,7 +317,8 @@ final class SupabaseService {
 
     func saveMealState(weekStart: Date, eaten: [String],
                        extras: [MealStateRow.ExtraRow],
-                       overrides: [String: String]) async throws {
+                       overrides: [String: String],
+                       removed: [String]) async throws {
         guard let client, let user = await currentUser() else { return }
         let payload: [String: AnyJSON] = [
             "user_id": .string(user.id.uuidString.lowercased()),
@@ -325,7 +328,8 @@ final class SupabaseService {
                 .object(["day": .integer($0.day), "title": .string($0.title),
                          "kcal": .integer($0.kcal), "time": .string($0.time)])
             }),
-            "overrides": .object(overrides.mapValues { .string($0) })
+            "overrides": .object(overrides.mapValues { .string($0) }),
+            "removed": .array(removed.map { .string($0) })
         ]
         try await client.from("meal_state")
             .upsert(payload, onConflict: "user_id")

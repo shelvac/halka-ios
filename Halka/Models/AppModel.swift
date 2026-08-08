@@ -115,6 +115,10 @@ final class AppModel {
     var mealTimes = ["09:00", "13:30", "16:30", "19:30"]
     var eaten: Set<String> = []       // US-024: yenmiş öğünler kullanıcı verisi
     var overrides: [String: String] = [:]
+    /// Kullanıcının menüden kaldırdığı plan öğünleri ("gün-öğün").
+    /// Beğenilmeyen bir öğünü kaldırmanın tek yolu katalogdan başkasıyla
+    /// değiştirmekti; kaldırmak mümkün değildi (0014_meal_removed.sql).
+    var removedMeals: Set<String> = []
     /// Öğün kaydı sunucudan okundu mu? (`ringsLoaded` ile aynı gerekçe)
     var mealStateLoaded = false
     var mealSaveToken = 0
@@ -297,6 +301,7 @@ final class AppModel {
         eaten = []
         extras = []
         overrides = [:]
+        removedMeals = []
         water = 0
         exerciseBase = 0
         extraExerciseMin = 0

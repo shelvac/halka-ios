@@ -262,6 +262,7 @@ extension AppModel {
             if let row = try await SupabaseService.shared.fetchMealState(),
                row.week_start == Self.dayKeyFormatter.string(from: weekStart) {
                 eaten = Set(row.eaten)
+                removedMeals = Set(row.removed ?? [])
                 extras = row.extras.map {
                     ExtraMeal(day: $0.day, title: $0.title, kcal: $0.kcal, time: $0.time)
                 }
@@ -290,7 +291,8 @@ extension AppModel {
                 extras: extras.map {
                     .init(day: $0.day, title: $0.title, kcal: $0.kcal, time: $0.time)
                 },
-                overrides: overrides)
+                overrides: overrides,
+                removed: Array(removedMeals))
         } catch {
             AuthLog.warn("saveMealState", error)
         }

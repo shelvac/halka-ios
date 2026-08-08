@@ -105,6 +105,7 @@ struct MealDetailView: View {
 
 struct MealCatalogView: View {
     @Environment(AppModel.self) private var model
+    @State private var searchingDatabase = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -119,6 +120,35 @@ struct MealCatalogView: View {
                 .foregroundStyle(Color.sub)
                 .padding(.top, 2)
                 .padding(.bottom, 14)
+
+            // Aşağıdaki gruplar elle seçilmiş birkaç alternatif; asıl geniş
+            // liste yemek veritabanında. Oraya yalnızca fotoğraf onay
+            // ekranından girilebiliyordu, fotoğraf çekmeden ulaşılamıyordu.
+            Button { searchingDatabase = true } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Color.coral)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Yemek veritabanında ara")
+                            .font(.h(13))
+                            .foregroundStyle(Color.ink)
+                        Text("245 yemek · porsiyonunu seç, doğrudan günlüğe ekle")
+                            .font(.h(10.5, .semibold))
+                            .foregroundStyle(Color.sub)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .heavy))
+                        .foregroundStyle(Color.chevron)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity)
+                .card(18)
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 18)
 
             ForEach(Demo.catalog, id: \.0) { group in
                 VStack(alignment: .leading, spacing: 9) {
@@ -159,6 +189,14 @@ struct MealCatalogView: View {
                 }
                 .padding(.bottom, 18)
             }
+        }
+        .sheet(isPresented: $searchingDatabase) {
+            FoodSearchSheet(title: "Yemek veritabanı", asksPortion: true,
+                            onPick: { _ in },
+                            onPickWithGrams: { option, grams in
+                                model.logFood(option, grams: grams)
+                                model.mealView = .menu
+                            })
         }
     }
 }
@@ -319,7 +357,9 @@ struct MarketListPane: View {
 
     var body: some View {
         let day = model.mealDay
-        let menu = model.menu(forDay: day)
+        // Menüden kaldırılan öğünün malzemesini alışveriş listesine
+        // yazmanın anlamı yok.
+        let menu = model.visibleMenu(forDay: day)
         return VStack(alignment: .leading, spacing: 0) {
             BackRow(label: "Menüye dön") { model.mealView = .menu }
 
@@ -333,7 +373,7 @@ struct MarketListPane: View {
                 .padding(.top, 2)
                 .padding(.bottom, 14)
 
-            ForEach(Array(menu.enumerated()), id: \.offset) { slot, food in
+            ForEach(menu, id: \.slot) { slot, food in
                 let recipe = model.recipe(for: food, slot: slot)
                 VStack(alignment: .leading, spacing: 9) {
                     Text("\(Demo.mealLabels[slot]) · \(food)")
