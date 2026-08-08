@@ -355,11 +355,12 @@ struct BodyPane: View {
         let sign = delta.amount > 0 ? "+" : "−"
         let text = sign + AppModel.formatted(abs(delta.amount), decimals: decimals)
             + (unit.isEmpty ? "" : " " + unit) + (suffix.isEmpty ? "" : " " + suffix)
+        // `Bool?` üzerinde switch kapsayıcı sayılmıyor; if-let daha okunaklı.
         let colors: (bg: Color, fg: Color)
-        switch delta.isImprovement {
-        case true: colors = (.greenBg, .greenDark)
-        case false: colors = (.warnOrangeBg, .warnOrange)
-        case nil: colors = (.bgChip, .sub)
+        if let improvement = delta.isImprovement {
+            colors = improvement ? (.greenBg, .greenDark) : (.warnOrangeBg, .warnOrange)
+        } else {
+            colors = (.bgChip, .sub)
         }
         return Text(text)
             .font(.h(10.5))

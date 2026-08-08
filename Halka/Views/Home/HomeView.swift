@@ -75,7 +75,6 @@ struct HomeView: View {
 
 struct TodayView: View {
     @Environment(AppModel.self) private var model
-    @State private var editingSleep = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -90,16 +89,6 @@ struct TodayView: View {
                 .padding(.top, 14)
             streakCard
                 .padding(.top, 14)
-        }
-        .sheet(isPresented: $editingSleep) {
-            MeasurePickerSheet(
-                title: "Uyku",
-                unit: "sa",
-                range: 0...14,
-                allowsDecimal: true,
-                value: Binding(
-                    get: { model.sleepHours > 0 ? model.sleepHours : nil },
-                    set: { model.setSleepHours($0 ?? 0) }))
         }
     }
 
@@ -126,20 +115,16 @@ struct TodayView: View {
     private var activityStats: some View {
         if model.hkConnected {
             HStack(spacing: 0) {
-                // Uyku artık halka değil: hedefe koşulacak bir şey değil,
-                // olan bir şey. Ölçülüyor ama baskı yapmadan gösteriliyor.
-                // Saati geceleri takmayan kullanıcı uykusunu elle girebilsin;
-                // Health'ten veri geldiğinde o öncelikli olur.
-                Button { editingSleep = true } label: {
-                    statCell(icon: "moon.zzz.fill",
-                             value: model.sleepHours > 0
-                                 ? String(format: "%.1f", model.sleepHours) : "—",
-                             label: model.sleepHours > 0 ? "saat uyku" : "uyku ekle",
-                             color: .sleepPurple)
-                }
-                .buttonStyle(.plain)
-                Rectangle().fill(Color.hairline).frame(width: 1, height: 34)
+                // Uygulamayı üst üste kaç gün açtığın — alışkanlığın ölçüsü.
+                // Uyku buradaydı; hedefi olmayan bir ölçüyü öne çıkarmak yerine
+                // seri gösteriliyor. Uyku Health'ten okunmaya devam ediyor ve
+                // takvim detayında görünüyor.
                 statCell(icon: "flame.fill",
+                         value: "\(model.currentStreak)",
+                         label: "günlük seri",
+                         color: .coral)
+                Rectangle().fill(Color.hairline).frame(width: 1, height: 34)
+                statCell(icon: "bolt.fill",
                          value: Self.grouped(model.hkActiveEnergy),
                          label: "kcal aktif",
                          color: .warnOrange)
@@ -160,15 +145,15 @@ struct TodayView: View {
                             Text(workout.name)
                                 .font(.h(12.5, .bold))
                                 .foregroundStyle(Color.inkBody)
-                            Spacer()
-                            Text("\(workout.minutes) dk")
+                                .lineLimit(1)
+                            Spacer(minLength: 6)
+                            // Apple gibi: mesafeli antrenmanda km, diğerinde kcal öne çıkar.
+                            Text(workout.headline)
                                 .font(.h(12.5))
                                 .foregroundStyle(Color.ink)
-                            if workout.kcal > 0 {
-                                Text("· \(workout.kcal) kcal")
-                                    .font(.h(11, .bold))
-                                    .foregroundStyle(Color.sub)
-                            }
+                            Text("· \(workout.minutes) dk")
+                                .font(.h(11, .bold))
+                                .foregroundStyle(Color.sub)
                         }
                         .padding(.vertical, 11)
                         .overlay(alignment: .top) {
@@ -404,6 +389,8 @@ struct TodayView: View {
         .card(20)
     }
 
+    /// Marka mesajı. Seri sayısı istatistik satırında gösteriliyor; burada
+    /// tekrarlamak yerine yalnızca teşvik metni duruyor.
     private var streakCard: some View {
         HStack(spacing: 14) {
             ZStack {
@@ -416,7 +403,9 @@ struct TodayView: View {
             }
             .frame(width: 34, height: 34)
             VStack(alignment: .leading, spacing: 1) {
-                Text("12 günlük seri")
+                Text(model.currentStreak > 1
+                     ? "\(model.currentStreak) gündür buradasın"
+                     : "Hoş geldin")
                     .font(.h(15))
                     .foregroundStyle(Color.ink)
                 Text("Her gün %1 daha iyi — halkaları kapatmaya devam.")

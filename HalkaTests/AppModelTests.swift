@@ -271,15 +271,34 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.currentValue(.steps), 4000)
     }
 
+    // MARK: Seri (streak)
+
     @MainActor
-    func testManualSleepEntryIsClamped() {
+    func testStreakCountsConsecutiveVisitedDays() {
         let model = AppModel()
-        model.setSleepHours(7.5)
-        XCTAssertEqual(model.sleepHours, 7.5)
-        model.setSleepHours(-2)          // negatif olamaz
-        XCTAssertEqual(model.sleepHours, 0)
-        model.setSleepHours(30)          // gerçekçi üst sınır
-        XCTAssertEqual(model.sleepHours, 14)
+        let calendar = AppModel.appCalendar
+        func key(_ offset: Int) -> String {
+            AppModel.dayKeyFormatter.string(
+                from: calendar.date(byAdding: .day, value: offset, to: model.today)!)
+        }
+
+        XCTAssertEqual(model.currentStreak, 0)          // hiç ziyaret yok
+
+        model.visitedDays = [key(0), key(-1), key(-2)]
+        XCTAssertEqual(model.currentStreak, 3)
+
+        // Araya boşluk girerse seri kopar.
+        model.visitedDays = [key(0), key(-1), key(-3)]
+        XCTAssertEqual(model.currentStreak, 2)
+
+        // Bugün henüz işaretlenmediyse dünden sayar (kullanıcı açar açmaz
+        // serisini sıfırlanmış görmesin).
+        model.visitedDays = [key(-1), key(-2)]
+        XCTAssertEqual(model.currentStreak, 2)
+
+        // İki gün önce bırakılmışsa seri bitmiştir.
+        model.visitedDays = [key(-2), key(-3)]
+        XCTAssertEqual(model.currentStreak, 0)
     }
 
     func testWaterGoalScalesWithWeightAndIsClamped() {

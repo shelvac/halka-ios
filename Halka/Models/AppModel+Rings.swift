@@ -150,6 +150,42 @@ extension AppModel {
         return hkWorkouts.filter { Self.appCalendar.isDate($0.start, inSameDayAs: date) }
     }
 
+    /// Üst üste kaç gündür uygulama açılıyor.
+    ///
+    /// Bugünden geriye doğru sayar. Bugün henüz işaretlenmemişse (kayıt
+    /// yazılmadan önce) dünden başlar — kullanıcı uygulamayı açtığı anda
+    /// serisinin sıfırlandığını görmesin.
+    var currentStreak: Int {
+        guard !visitedDays.isEmpty else { return 0 }
+        let calendar = Self.appCalendar
+        var day = today
+        if !visitedDays.contains(Self.dayKeyFormatter.string(from: day)) {
+            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: day),
+                  visitedDays.contains(Self.dayKeyFormatter.string(from: yesterday))
+            else { return 0 }
+            day = yesterday
+        }
+        var count = 0
+        while visitedDays.contains(Self.dayKeyFormatter.string(from: day)) {
+            count += 1
+            guard let previous = calendar.date(byAdding: .day, value: -1, to: day) else { break }
+            day = previous
+        }
+        return count
+    }
+
+    /// Bugünü işaretler ve seriyi yeniden hesaplar.
+    func recordVisit() async {
+        guard supabaseReady else { return }
+        do {
+            try await SupabaseService.shared.markVisited(day: today)
+        } catch {
+            AuthLog.warn("markVisited", error)
+        }
+        let start = Self.appCalendar.date(byAdding: .day, value: -400, to: today) ?? today
+        visitedDays = await SupabaseService.shared.fetchVisitedDays(since: start)
+    }
+
     /// Seçili günde hiç kayıt var mı? (boş durum metni için)
     func hasData(forDay day: Int) -> Bool {
         fractions(forDay: day).contains { $0 > 0 }
@@ -194,17 +230,23 @@ extension AppModel {
 
         let rows: [SupabaseService.RingsRow] = totals.compactMap { day, snapshot in
             guard snapshot.hasAnyData else { return nil }
+            // BUGÜNÜ atla: bugünün değerleri `persistRings` ile yazılıyor ve
+            // kullanıcının elle girdiklerini içeriyor. Buradan yazmak, Health'te
+            // karşılığı olmayan (su, uyku) girdileri sıfırla eziyordu.
+            if Self.appCalendar.isDate(day, inSameDayAs: today) { return nil }
+
             let key = Self.dayKeyFormatter.string(from: day)
-            // Uygulamada zaten kayıt varsa beslenmeyi ondan koru.
-            let existingKcal = ringHistory[key]?.nutrition_kcal ?? 0
+            let existing = ringHistory[key]
+            // Health'te değeri olmayan alanlarda mevcut kaydı koru — beslenme
+            // zaten Health'te yok, su ve uyku da elle girilmiş olabilir.
             return SupabaseService.RingsRow(
                 day: key,
-                exercise_min: snapshot.exerciseMinutes,
-                water_ml: snapshot.waterML,
-                sleep_hours: snapshot.sleepHours,
-                nutrition_kcal: existingKcal,
-                steps: snapshot.steps,
-                active_energy_kcal: snapshot.activeEnergy)
+                exercise_min: max(snapshot.exerciseMinutes, existing?.exercise_min ?? 0),
+                water_ml: max(snapshot.waterML, existing?.water_ml ?? 0),
+                sleep_hours: max(snapshot.sleepHours, existing?.sleep_hours ?? 0),
+                nutrition_kcal: existing?.nutrition_kcal ?? 0,
+                steps: max(snapshot.steps, existing?.steps ?? 0),
+                active_energy_kcal: max(snapshot.activeEnergy, existing?.active_energy_kcal ?? 0))
         }
 
         do {

@@ -56,6 +56,8 @@ final class AppModel {
     /// Görüntülenen ayın kayıtları ("yyyy-MM-dd" → satır).
     var ringHistory: [String: SupabaseService.RingsRow] = [:]
     var ringSaveToken = 0
+    /// Uygulamanın açıldığı günler — seri hesabı için (0009_visited.sql).
+    var visitedDays: Set<String> = []
 
     var exerciseMinutes: Int { exerciseBase + extraExerciseMin }
 
@@ -91,13 +93,9 @@ final class AppModel {
         scheduleRingSave()
     }
 
-    /// Uykuyu elle ayarlar (US-025 — Health'te uyku kaydı olmayan kullanıcılar).
-    /// Health'ten veri geldiğinde `refreshFromHealthKit` bunun üzerine yazar:
-    /// ölçülen veri, tahmin edilenden önce gelir.
-    func setSleepHours(_ hours: Double) {
-        sleepHours = min(max(hours, 0), 14)
-        scheduleRingSave()
-    }
+    // Not: Uykunun elle girilmesi kaldırıldı (Simge'nin kararı) — hedefi
+    // olmayan bir ölçüyü öne çıkarmanın karşılığı yoktu. Uyku Health'ten
+    // okunmaya ve rings_daily'de saklanmaya devam ediyor.
 
     // MARK: Meals
     var mealDay: Int = (AppModel.appCalendar.component(.weekday, from: Date()) + 5) % 7

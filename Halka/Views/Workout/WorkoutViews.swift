@@ -176,14 +176,12 @@ struct WorkoutHomeView: View {
                                     .foregroundStyle(Color.faint)
                             }
                             Spacer()
-                            Text("\(workout.minutes) dk")
+                            Text(workout.headline)
                                 .font(.h(13))
                                 .foregroundStyle(Color.ink)
-                            if workout.kcal > 0 {
-                                Text("· \(workout.kcal) kcal")
-                                    .font(.h(10.5, .bold))
-                                    .foregroundStyle(Color.sub)
-                            }
+                            Text("· \(workout.minutes) dk")
+                                .font(.h(10.5, .bold))
+                                .foregroundStyle(Color.sub)
                         }
                         .padding(.vertical, 12)
                         .overlay(alignment: .top) {

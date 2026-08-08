@@ -257,6 +257,37 @@ final class SupabaseService {
             .execute()
     }
 
+    /// Bugünü "uygulama açıldı" olarak işaretler (seri hesabı için).
+    ///
+    /// Ayrı bir istek: `saveRings` bu sütunu hiç göndermiyor, böylece Health
+    /// aktarımı seriyi bozamıyor (upsert yalnızca gönderilen sütunları yazar).
+    func markVisited(day: Date) async throws {
+        guard let client, let user = await currentUser() else { return }
+        let payload: [String: AnyJSON] = [
+            "user_id": .string(user.id.uuidString.lowercased()),
+            "day": .string(Self.dayFormatter.string(from: day)),
+            "visited": .bool(true)
+        ]
+        try await client.from("rings_daily")
+            .upsert(payload, onConflict: "user_id,day")
+            .execute()
+    }
+
+    private struct VisitRow: Decodable { let day: String }
+
+    /// Uygulamanın açıldığı günler ("yyyy-MM-dd").
+    func fetchVisitedDays(since start: Date) async -> Set<String> {
+        guard let client, let user = await currentUser() else { return [] }
+        guard let rows: [VisitRow] = try? await client.from("rings_daily")
+            .select("day")
+            .eq("user_id", value: user.id.uuidString)
+            .eq("visited", value: true)
+            .gte("day", value: Self.dayFormatter.string(from: start))
+            .execute()
+            .value else { return [] }
+        return Set(rows.map(\.day))
+    }
+
     /// Birden çok günü tek istekte yazar (Apple Health geçmişi aktarımı).
     func saveRingsBatch(_ rows: [RingsRow], userID: String) async throws {
         guard let client, !rows.isEmpty else { return }

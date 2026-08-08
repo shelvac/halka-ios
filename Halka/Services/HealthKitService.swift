@@ -33,11 +33,25 @@ final class HealthKitService {
         let name: String
         let minutes: Int
         let kcal: Int
+        /// Yürüyüş/koşu/bisiklet/yüzme için mesafe; diğerlerinde `nil`.
+        let distanceKm: Double?
         let start: Date
+
+        /// Apple'ın Fitness uygulamasındaki gibi: mesafeli antrenmanda km,
+        /// diğerlerinde kalori öne çıkar.
+        var headline: String {
+            if let distanceKm, distanceKm > 0 {
+                return String(format: "%.2f", distanceKm).replacingOccurrences(of: ".", with: ",") + " km"
+            }
+            return kcal > 0 ? "\(kcal) kcal" : "\(minutes) dk"
+        }
     }
 
     private var readTypes: Set<HKObjectType> {
         [HKObjectType.workoutType(),
+         HKQuantityType(.distanceWalkingRunning),
+         HKQuantityType(.distanceCycling),
+         HKQuantityType(.distanceSwimming),
          HKQuantityType(.stepCount),
          HKQuantityType(.appleExerciseTime),
          HKQuantityType(.activeEnergyBurned),
@@ -176,11 +190,24 @@ final class HealthKitService {
         return workouts.map { workout in
             let kcal = workout.statistics(for: HKQuantityType(.activeEnergyBurned))?
                 .sumQuantity()?.doubleValue(for: .kilocalorie()) ?? 0
+            // Mesafe türe göre farklı bir ölçüde tutuluyor.
+            let distanceType: HKQuantityTypeIdentifier? = switch workout.workoutActivityType {
+            case .cycling: .distanceCycling
+            case .swimming: .distanceSwimming
+            case .downhillSkiing, .snowboarding: .distanceDownhillSnowSports
+            case .wheelchairRunPace, .wheelchairWalkPace: .distanceWheelchair
+            case .walking, .running, .hiking: .distanceWalkingRunning
+            default: nil
+            }
+            let meters = distanceType.flatMap {
+                workout.statistics(for: HKQuantityType($0))?.sumQuantity()?.doubleValue(for: .meter())
+            }
             return WorkoutSummary(
                 id: workout.uuid,
                 name: Self.name(for: workout.workoutActivityType),
                 minutes: Int((workout.duration / 60).rounded()),
                 kcal: Int(kcal.rounded()),
+                distanceKm: meters.map { $0 / 1000 },
                 start: workout.startDate)
         }
     }

@@ -140,14 +140,12 @@ struct CalendarPane: View {
                                 .font(.h(11.5, .bold))
                                 .foregroundStyle(Color.inkBody)
                             Spacer()
-                            Text("\(workout.minutes) dk")
+                            Text(workout.headline)
                                 .font(.h(11.5))
                                 .foregroundStyle(Color.ink)
-                            if workout.kcal > 0 {
-                                Text("· \(workout.kcal) kcal")
-                                    .font(.h(10.5, .bold))
-                                    .foregroundStyle(Color.sub)
-                            }
+                            Text("· \(workout.minutes) dk")
+                                .font(.h(10.5, .bold))
+                                .foregroundStyle(Color.sub)
                         }
                     }
                 }
