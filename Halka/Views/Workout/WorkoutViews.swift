@@ -116,8 +116,9 @@ struct WorkoutHomeView: View {
                 .padding(.bottom, 10)
             }
 
+            // Uygulama içi antrenmanlar
             if !model.workoutLog.isEmpty {
-                Text("Son antrenmanlar")
+                Text("Uygulamadan")
                     .font(.h(15))
                     .foregroundStyle(Color.ink)
                     .padding(.top, 8)
@@ -135,6 +136,56 @@ struct WorkoutHomeView: View {
                                 .foregroundStyle(Color.sub)
                         }
                         .padding(.vertical, 13)
+                        .overlay(alignment: .top) {
+                            if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .card(18)
+            }
+
+            // Apple Watch/iPhone antrenmanları — "hangi egzersizi yaptım"
+            // sorusunun geçmişe dönük cevabı (US-023).
+            if !model.hkWorkouts.isEmpty {
+                HStack {
+                    Text("Apple Health")
+                        .font(.h(15))
+                        .foregroundStyle(Color.ink)
+                    Spacer()
+                    Text("son 90 gün")
+                        .font(.h(10.5, .bold))
+                        .foregroundStyle(Color.faint)
+                }
+                .padding(.top, 18)
+                .padding(.bottom, 10)
+
+                VStack(spacing: 0) {
+                    ForEach(Array(model.hkWorkouts.enumerated()), id: \.element.id) { i, workout in
+                        HStack(spacing: 10) {
+                            Image(systemName: "figure.run")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(Color.coral)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(workout.name)
+                                    .font(.h(12.5, .bold))
+                                    .foregroundStyle(Color.inkSoft)
+                                Text(AppModel.measurementTitle(workout.start))
+                                    .font(.h(10.5, .bold))
+                                    .foregroundStyle(Color.faint)
+                            }
+                            Spacer()
+                            Text("\(workout.minutes) dk")
+                                .font(.h(13))
+                                .foregroundStyle(Color.ink)
+                            if workout.kcal > 0 {
+                                Text("· \(workout.kcal) kcal")
+                                    .font(.h(10.5, .bold))
+                                    .foregroundStyle(Color.sub)
+                            }
+                        }
+                        .padding(.vertical, 12)
                         .overlay(alignment: .top) {
                             if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
                         }

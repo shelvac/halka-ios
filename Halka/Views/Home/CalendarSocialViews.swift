@@ -127,6 +127,37 @@ struct CalendarPane: View {
                 }
             }
 
+            // O gün yapılan antrenmanlar — egzersiz halkasının açıklaması.
+            let dayWorkouts = model.workouts(forDay: day)
+            if !dayWorkouts.isEmpty {
+                VStack(spacing: 6) {
+                    ForEach(dayWorkouts) { workout in
+                        HStack(spacing: 8) {
+                            Image(systemName: "figure.run")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color.coral)
+                            Text(workout.name)
+                                .font(.h(11.5, .bold))
+                                .foregroundStyle(Color.inkBody)
+                            Spacer()
+                            Text("\(workout.minutes) dk")
+                                .font(.h(11.5))
+                                .foregroundStyle(Color.ink)
+                            if workout.kcal > 0 {
+                                Text("· \(workout.kcal) kcal")
+                                    .font(.h(10.5, .bold))
+                                    .foregroundStyle(Color.sub)
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity)
+                .background(Color.bgField)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+
             // Halka olmayan ölçüler: uyku ve aktif enerji.
             if dayStats.sleep > 0 || dayStats.energy > 0 {
                 HStack(spacing: 14) {
