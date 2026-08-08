@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -71,105 +72,194 @@ struct HealthView: View {
 
 // MARK: - Vücut
 
+/// US-025 — Vücut ölçümleri. Demo veri kaldırıldı: yeni kullanıcı boş
+/// başlıyor, ölçümü tartı ekranının fotoğrafından okutuyor ya da elle giriyor.
 struct BodyPane: View {
     @Environment(AppModel.self) private var model
-    @State private var showImporter = false
+    @State private var photoItem: PhotosPickerItem? = nil
+    @State private var review: BodyMeasurement? = nil
+    @State private var confirmDelete: UUID? = nil
 
     var body: some View {
         VStack(spacing: 0) {
-            // PDF upload
-            HStack {
-                Spacer()
-                Button { showImporter = true } label: {
-                    Text("PDF Yükle")
-                        .font(.h(12))
-                        .foregroundStyle(Color.coralDark)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Capsule().fill(Color.coralBg))
+            if let latest = model.latestMeasurement {
+                actionRow
+                    .padding(.bottom, 12)
+                weightCard(latest)
+                metricsCard(latest)
+                    .padding(.top, 12)
+                if model.bodyMeasurements.count > 1 {
+                    historyCard
+                        .padding(.top, 12)
                 }
-                .buttonStyle(.plain)
-            }
-            .padding(.bottom, 10)
-            .fileImporter(isPresented: $showImporter, allowedContentTypes: [.pdf]) { result in
-                if case .success(let url) = result {
-                    model.processBodyPdf(named: url.lastPathComponent)
-                }
+            } else {
+                emptyState
             }
 
-            if model.bodyPdfState == .processing {
-                processingBanner("\(model.bodyPdfName) ayrıştırılıyor — OCR metrikleri okuyor…")
-                    .padding(.bottom, 10)
+            if let error = model.bodyError {
+                Text(error)
+                    .font(.h(12, .semibold))
+                    .foregroundStyle(Color.warnDeep)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.warnFieldBg)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .padding(.top, 12)
             }
-            if model.bodyPdfState == .done {
-                doneBanner("\(model.bodyPdfName) işlendi — 17 metrik geçmişe kaydedildi")
-                    .padding(.bottom, 10)
+        }
+        .sheet(item: $review) { measurement in
+            ScaleReviewView(measurement: measurement,
+                            fromPhoto: measurement.source == .photo)
+                .environment(model)
+        }
+        .alert("Bu ölçümü silmek istiyor musun?", isPresented: Binding(
+            get: { confirmDelete != nil },
+            set: { if !$0 { confirmDelete = nil } })) {
+            Button("Vazgeç", role: .cancel) { confirmDelete = nil }
+            Button("Sil", role: .destructive) {
+                if let id = confirmDelete {
+                    Task { await model.deleteMeasurement(id) }
+                }
+                confirmDelete = nil
             }
-
-            weightCard
-            metricsCard
-                .padding(.top, 12)
+        }
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    review = await model.readScalePhoto(image)
+                }
+                photoItem = nil
+            }
         }
     }
 
-    private var weightCard: some View {
+    // MARK: Boş durum
+
+    private var emptyState: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "scalemass")
+                .font(.system(size: 34, weight: .light))
+                .foregroundStyle(Color.faint)
+                .padding(.top, 8)
+
+            Text("Henüz ölçüm yok")
+                .font(.h(17))
+                .foregroundStyle(Color.ink)
+
+            Text("Akıllı tartı uygulamanın ekran görüntüsünü yükle — değerleri "
+                 + "okuyup senin için doldurayım. Dilersen elle de girebilirsin.")
+                .font(.h(12.5, .semibold))
+                .foregroundStyle(Color.sub)
+                .multilineTextAlignment(.center)
+                .lineSpacing(4)
+                .padding(.horizontal, 10)
+
+            PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
+                HStack(spacing: 7) {
+                    if model.scaleBusy {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 13, weight: .bold))
+                    }
+                    Text(model.scaleBusy ? "Okunuyor…" : "Tartı fotoğrafı yükle")
+                }
+                .coralButton()
+            }
+            .buttonStyle(.plain)
+            .disabled(model.scaleBusy)
+            .padding(.top, 4)
+
+            Button {
+                review = BodyMeasurement(measuredAt: Date(), source: .manual)
+            } label: {
+                Text("Elle gir")
+                    .font(.h(12.5))
+                    .foregroundStyle(Color.coralDark)
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 8)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity)
+        .card(22)
+    }
+
+    // MARK: Eylemler
+
+    private var actionRow: some View {
+        HStack(spacing: 8) {
+            PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
+                HStack(spacing: 6) {
+                    if model.scaleBusy {
+                        ProgressView().scaleEffect(0.7)
+                    } else {
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    Text(model.scaleBusy ? "Okunuyor…" : "Fotoğraf yükle")
+                        .font(.h(12))
+                }
+                .foregroundStyle(Color.coralDark)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(Color.coralBg))
+            }
+            .buttonStyle(.plain)
+            .disabled(model.scaleBusy)
+
+            Button {
+                review = BodyMeasurement(measuredAt: Date(), source: .manual)
+            } label: {
+                Text("Elle gir")
+                    .font(.h(12))
+                    .foregroundStyle(Color.inkMid)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Color.bgChip))
+            }
+            .buttonStyle(.plain)
+            Spacer()
+        }
+    }
+
+    // MARK: Kilo kartı
+
+    private func weightCard(_ latest: BodyMeasurement) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Son tartım · 05.08.2026, 09:03")
+            Text("Son tartım · " + AppModel.measurementTitle(latest.measuredAt))
                 .font(.h(12, .bold))
                 .foregroundStyle(Color.sub)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("72.15")
+                Text(latest.weightKg.map { AppModel.formatted($0, decimals: 2) } ?? "—")
                     .font(.h(42))
                     .foregroundStyle(Color.ink)
                     .kerning(-1.5)
                 Text("kg").font(.h(15, .bold)).foregroundStyle(Color.sub)
                 Spacer()
-                Text("+2.15 kg · 16 Tem'den beri")
-                    .font(.h(11))
-                    .foregroundStyle(Color.goldDark)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Capsule().fill(Color.goldBg))
+                if let delta = latest.delta(forField: "weight", since: model.previousMeasurement),
+                   !delta.isFlat {
+                    deltaChip(delta, decimals: 2, unit: "kg",
+                              suffix: model.previousMeasurement
+                                  .map { "· " + Self.shortDate($0.measuredAt) + "'den beri" } ?? "")
+                }
             }
             .padding(.top, 4)
             .padding(.bottom, 12)
 
-            // BMI band with marker (BMI 26.2 → 44.8% across the band, from the prototype)
-            VStack(spacing: 6) {
-                GeometryReader { geo in
-                    ZStack(alignment: .topLeading) {
-                        HStack(spacing: 3) {
-                            UnevenRoundedRectangle(cornerRadii: .init(topLeading: 4, bottomLeading: 4))
-                                .fill(Color.bmiLow)
-                            Rectangle().fill(Color.bmiOk)
-                            Rectangle().fill(Color.bmiHigh)
-                            UnevenRoundedRectangle(cornerRadii: .init(bottomTrailing: 4, topTrailing: 4))
-                                .fill(Color.bmiObese)
-                        }
-                        .frame(height: 8)
-                        .padding(.top, 4)
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.ink)
-                            .frame(width: 4, height: 16)
-                            .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(.white, lineWidth: 2))
-                            .offset(x: geo.size.width * 0.448 - 2)
-                    }
-                }
-                .frame(height: 16)
-                HStack {
-                    Text("Düşük"); Spacer(); Text("Sağlıklı"); Spacer(); Text("Yüksek"); Spacer(); Text("Obez")
-                }
-                .font(.h(9.5, .bold))
-                .foregroundStyle(Color.faint)
-            }
+            if let bmi = latest.bmi { bmiBand(bmi) }
 
             HStack {
-                statColumn("BMI", "26.2")
+                statColumn("BMI", latest.bmi.map { AppModel.formatted($0, decimals: 1) } ?? "—")
                 Spacer()
-                statColumn("30 günlük en iyi", "70.00 kg")
+                statColumn("30 günlük en iyi",
+                           model.bestWeightLast30Days
+                               .map { AppModel.formatted($0, decimals: 2) + " kg" } ?? "—")
                 Spacer()
-                statColumn("Metabolik yaş", "41")
+                statColumn("Metabolik yaş", latest.metabolicAge.map(String.init) ?? "—")
             }
             .padding(.top, 12)
             .overlay(alignment: .top) {
@@ -181,6 +271,39 @@ struct BodyPane: View {
         .card(22)
     }
 
+    /// BMI şeridi — işaretçi gerçek BMI'ya göre konumlanır (eskiden sabitti).
+    private func bmiBand(_ bmi: Double) -> some View {
+        // 15–40 aralığı şeride eşlenir; dışına taşanlar uçlara sabitlenir.
+        let position = min(max((bmi - 15) / 25, 0), 1)
+        return VStack(spacing: 6) {
+            GeometryReader { geo in
+                ZStack(alignment: .topLeading) {
+                    HStack(spacing: 3) {
+                        UnevenRoundedRectangle(cornerRadii: .init(topLeading: 4, bottomLeading: 4))
+                            .fill(Color.bmiLow)
+                        Rectangle().fill(Color.bmiOk)
+                        Rectangle().fill(Color.bmiHigh)
+                        UnevenRoundedRectangle(cornerRadii: .init(bottomTrailing: 4, topTrailing: 4))
+                            .fill(Color.bmiObese)
+                    }
+                    .frame(height: 8)
+                    .padding(.top, 4)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.ink)
+                        .frame(width: 4, height: 16)
+                        .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(.white, lineWidth: 2))
+                        .offset(x: geo.size.width * position - 2)
+                }
+            }
+            .frame(height: 16)
+            HStack {
+                Text("Düşük"); Spacer(); Text("Sağlıklı"); Spacer(); Text("Yüksek"); Spacer(); Text("Obez")
+            }
+            .font(.h(9.5, .bold))
+            .foregroundStyle(Color.faint)
+        }
+    }
+
     private func statColumn(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.h(10, .bold)).foregroundStyle(Color.faint)
@@ -188,18 +311,31 @@ struct BodyPane: View {
         }
     }
 
-    private var metricsCard: some View {
+    // MARK: Ölçüm listesi
+
+    private func metricsCard(_ latest: BodyMeasurement) -> some View {
         VStack(spacing: 0) {
-            ForEach(Array(Demo.bodyMetrics.enumerated()), id: \.element.id) { i, metric in
-                let colors = statusColors(metric.status)
+            ForEach(Array(latest.fields.dropFirst().enumerated()), id: \.element.id) { i, field in
                 HStack(spacing: 10) {
-                    Text(metric.name)
+                    Text(field.label)
                         .font(.h(13, .bold))
                         .foregroundStyle(Color.inkBody)
                     Spacer()
-                    (Text(metric.value).font(.h(15)).foregroundColor(.ink)
-                     + Text(" \(metric.unit)").font(.h(10, .bold)).foregroundColor(.faint))
-                    StatusChip(text: metric.status, bg: colors.bg, fg: colors.fg, minWidth: 62)
+                    if let value = field.value {
+                        (Text(AppModel.formatted(value, decimals: field.decimals))
+                            .font(.h(15)).foregroundColor(.ink)
+                         + Text(field.unit.isEmpty ? "" : " \(field.unit)")
+                            .font(.h(10, .bold)).foregroundColor(.faint))
+                    } else {
+                        Text("—").font(.h(15)).foregroundStyle(Color.faint)
+                    }
+                    // Bir önceki ölçüme göre değişim.
+                    if let delta = latest.delta(forField: field.id,
+                                                since: model.previousMeasurement),
+                       !delta.isFlat {
+                        deltaChip(delta, decimals: field.decimals, unit: "", suffix: "")
+                            .frame(minWidth: 62)
+                    }
                 }
                 .padding(.vertical, 13)
                 .overlay(alignment: .top) {
@@ -210,6 +346,83 @@ struct BodyPane: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 6)
         .card(22)
+    }
+
+    /// Değişim rozeti. Renk "iyiye mi gidiyor" bilgisinden gelir — kilo düşüşü
+    /// herkes için iyi olmayabilir, o yüzden kilo ve BMI nötr (gri) gösterilir.
+    private func deltaChip(_ delta: BodyMeasurement.Delta, decimals: Int,
+                           unit: String, suffix: String) -> some View {
+        let sign = delta.amount > 0 ? "+" : "−"
+        let text = sign + AppModel.formatted(abs(delta.amount), decimals: decimals)
+            + (unit.isEmpty ? "" : " " + unit) + (suffix.isEmpty ? "" : " " + suffix)
+        let colors: (bg: Color, fg: Color)
+        switch delta.isImprovement {
+        case true: colors = (.greenBg, .greenDark)
+        case false: colors = (.warnOrangeBg, .warnOrange)
+        case nil: colors = (.bgChip, .sub)
+        }
+        return Text(text)
+            .font(.h(10.5))
+            .foregroundStyle(colors.fg)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(colors.bg))
+    }
+
+    // MARK: Geçmiş
+
+    private var historyCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Ölçüm geçmişi")
+                .font(.h(14))
+                .foregroundStyle(Color.ink)
+                .padding(.bottom, 4)
+
+            ForEach(Array(model.bodyMeasurements.enumerated()), id: \.element.id) { i, item in
+                let previous = i + 1 < model.bodyMeasurements.count
+                    ? model.bodyMeasurements[i + 1] : nil
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(AppModel.measurementTitle(item.measuredAt))
+                            .font(.h(12.5, .bold))
+                            .foregroundStyle(Color.inkBody)
+                        if item.source == .photo {
+                            Text("Fotoğraftan")
+                                .font(.h(10, .bold))
+                                .foregroundStyle(Color.faint)
+                        }
+                    }
+                    Spacer()
+                    Text(item.weightKg.map { AppModel.formatted($0, decimals: 2) + " kg" } ?? "—")
+                        .font(.h(14))
+                        .foregroundStyle(Color.ink)
+                    if let delta = item.delta(forField: "weight", since: previous),
+                       !delta.isFlat {
+                        deltaChip(delta, decimals: 2, unit: "", suffix: "")
+                    }
+                    Button { confirmDelete = item.id } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color.faint)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.vertical, 12)
+                .overlay(alignment: .top) {
+                    if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
+                }
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+        .card(22)
+    }
+
+    private static func shortDate(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "tr_TR")
+        f.dateFormat = "d MMM"
+        return f.string(from: date)
     }
 }
 

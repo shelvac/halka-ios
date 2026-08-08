@@ -34,6 +34,7 @@ extension AppModel {
         // Halka verisi ve Apple Health'i arka planda tazele — giriş beklemesin.
         Task { [weak self] in
             await self?.loadRingHistory()
+            await self?.loadBodyMeasurements()
             await self?.refreshFromHealthKit()
         }
     }

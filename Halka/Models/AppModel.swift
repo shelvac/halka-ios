@@ -59,7 +59,7 @@ final class AppModel {
 
     var exerciseMinutes: Int { exerciseBase + extraExerciseMin }
 
-    /// Ring fractions [exercise, water, sleep, nutrition] for today.
+    /// Bugünün halka oranları [egzersiz, su, adım, beslenme].
     var todayFractions: [Double] {
         [Double(exerciseMinutes) / goal(for: .exercise),
          Double(water) / goal(for: .water),
@@ -177,9 +177,14 @@ final class AppModel {
 
     // MARK: Health
     var healthPane: HealthPane = .body
+    /// US-025 — Vücut ölçümleri (yeniden eskiye). Yeni kullanıcıda BOŞ:
+    /// demo kilo geçmişi kaldırıldı, veriyi kullanıcı ekliyor.
+    var bodyMeasurements: [BodyMeasurement] = []
+    var scaleBusy = false
+    var bodyError: String? = nil
+    /// Onay bekleyen tartı fotoğrafı (kaydedilince yüklenir).
+    var pendingScalePhoto: UIImage? = nil
     var supplements: [Supplement] = Demo.initialSupplements
-    var bodyPdfState: ProcessState = .idle
-    var bodyPdfName = ""
     var bloodPdfState: ProcessState = .idle
     var bloodPdfName = ""
     var healthShotState: ProcessState = .idle

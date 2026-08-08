@@ -280,6 +280,124 @@ final class SupabaseService {
         await currentUser()?.id.uuidString
     }
 
+    // MARK: Vücut ölçümleri (US-025)
+
+    private struct BodyRow: Codable {
+        let id: UUID
+        let measured_at: String
+        let weight_kg: Double?
+        let bmi: Double?
+        let fat_percent: Double?
+        let fat_mass_kg: Double?
+        let skeletal_muscle_percent: Double?
+        let skeletal_muscle_kg: Double?
+        let muscle_percent: Double?
+        let muscle_mass_kg: Double?
+        let visceral_fat: Double?
+        let water_percent: Double?
+        let water_mass_kg: Double?
+        let bmr_kcal: Int?
+        let obesity_percent: Double?
+        let bone_mass_kg: Double?
+        let protein_percent: Double?
+        let lean_mass_kg: Double?
+        let metabolic_age: Int?
+        let source: String
+        let photo_path: String?
+    }
+
+    /// Ölçümler, yeniden eskiye. Karşılaştırma için sıra önemli.
+    func fetchBodyMeasurements(limit: Int = 60) async -> [BodyMeasurement] {
+        guard let client, let user = await currentUser() else { return [] }
+        guard let rows: [BodyRow] = try? await client.from("body_measurements")
+            .select()
+            .eq("user_id", value: user.id.uuidString)
+            .order("measured_at", ascending: false)
+            .limit(limit)
+            .execute()
+            .value else { return [] }
+
+        return rows.map { row in
+            BodyMeasurement(
+                id: row.id,
+                measuredAt: Self.timestamp(row.measured_at) ?? Date(),
+                weightKg: row.weight_kg,
+                bmi: row.bmi,
+                fatPercent: row.fat_percent,
+                fatMassKg: row.fat_mass_kg,
+                skeletalMusclePercent: row.skeletal_muscle_percent,
+                skeletalMuscleKg: row.skeletal_muscle_kg,
+                musclePercent: row.muscle_percent,
+                muscleMassKg: row.muscle_mass_kg,
+                visceralFat: row.visceral_fat,
+                waterPercent: row.water_percent,
+                waterMassKg: row.water_mass_kg,
+                bmrKcal: row.bmr_kcal,
+                obesityPercent: row.obesity_percent,
+                boneMassKg: row.bone_mass_kg,
+                proteinPercent: row.protein_percent,
+                leanMassKg: row.lean_mass_kg,
+                metabolicAge: row.metabolic_age,
+                source: BodyMeasurement.Source(rawValue: row.source) ?? .manual,
+                photoPath: row.photo_path)
+        }
+    }
+
+    /// Ölçümü kaydeder. Aynı zaman damgası tekrar gelirse günceller
+    /// (fotoğraf yeniden yüklenirse kopya oluşmasın).
+    func saveBodyMeasurement(_ measurement: BodyMeasurement) async throws {
+        guard let client, let user = await currentUser() else { return }
+        func num(_ value: Double?) -> AnyJSON { value.map { .double($0) } ?? .null }
+        func int(_ value: Int?) -> AnyJSON { value.map { .integer($0) } ?? .null }
+
+        let payload: [String: AnyJSON] = [
+            "user_id": .string(user.id.uuidString.lowercased()),
+            "measured_at": .string(ISO8601DateFormatter().string(from: measurement.measuredAt)),
+            "weight_kg": num(measurement.weightKg),
+            "bmi": num(measurement.bmi),
+            "fat_percent": num(measurement.fatPercent),
+            "fat_mass_kg": num(measurement.fatMassKg),
+            "skeletal_muscle_percent": num(measurement.skeletalMusclePercent),
+            "skeletal_muscle_kg": num(measurement.skeletalMuscleKg),
+            "muscle_percent": num(measurement.musclePercent),
+            "muscle_mass_kg": num(measurement.muscleMassKg),
+            "visceral_fat": num(measurement.visceralFat),
+            "water_percent": num(measurement.waterPercent),
+            "water_mass_kg": num(measurement.waterMassKg),
+            "bmr_kcal": int(measurement.bmrKcal),
+            "obesity_percent": num(measurement.obesityPercent),
+            "bone_mass_kg": num(measurement.boneMassKg),
+            "protein_percent": num(measurement.proteinPercent),
+            "lean_mass_kg": num(measurement.leanMassKg),
+            "metabolic_age": int(measurement.metabolicAge),
+            "source": .string(measurement.source.rawValue),
+            "photo_path": measurement.photoPath.map { .string($0) } ?? .null
+        ]
+        try await client.from("body_measurements")
+            .upsert(payload, onConflict: "user_id,measured_at")
+            .execute()
+    }
+
+    func deleteBodyMeasurement(id: UUID) async throws {
+        guard let client else { return }
+        try await client.from("body_measurements")
+            .delete()
+            .eq("id", value: id.uuidString)
+            .execute()
+    }
+
+    /// Tartı ekranı fotoğrafını saklar (kaynağı doğrulanabilsin diye).
+    @discardableResult
+    func uploadScalePhoto(_ data: Data, measuredAt: Date) async throws -> String {
+        guard let client, let user = await currentUser() else { return "" }
+        let stamp = Int(measuredAt.timeIntervalSince1970)
+        let path = "\(user.id.uuidString.lowercased())/\(stamp).jpg"
+        try await client.storage.from("scale-photos").upload(
+            path, data: data,
+            options: FileOptions(cacheControl: "3600", contentType: "image/jpeg", upsert: true))
+        return path
+    }
+
     // MARK: Profil fotoğrafı (US-016)
 
     /// Fotoğrafı `avatars` bucket'ına yükler ve yolunu profile yazar.

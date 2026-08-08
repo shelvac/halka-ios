@@ -304,6 +304,80 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.goal(for: .steps), 8000)    // az hareketli
     }
 
+    // MARK: Vücut ölçümleri (US-025)
+
+    private func measurement(weight: Double, fat: Double, muscle: Double,
+                             at date: Date = Date()) -> BodyMeasurement {
+        var m = BodyMeasurement(measuredAt: date)
+        m.weightKg = weight
+        m.fatPercent = fat
+        m.musclePercent = muscle
+        return m
+    }
+
+    func testEmptyMeasurementIsRejected() {
+        let empty = BodyMeasurement(measuredAt: Date())
+        XCTAssertTrue(empty.isEmpty)
+        var one = empty
+        one.weightKg = 70
+        XCTAssertFalse(one.isEmpty)
+    }
+
+    func testDeltaDirectionReflectsWhetherHigherIsBetter() {
+        let previous = measurement(weight: 72.15, fat: 35.7, muscle: 59.8)
+        let current = measurement(weight: 71.10, fat: 35.2, muscle: 60.4)
+
+        // Kilo nötr: azalması herkes için "iyi" sayılmaz.
+        let weight = current.delta(forField: "weight", since: previous)
+        XCTAssertEqual(weight?.amount ?? 0, -1.05, accuracy: 0.001)
+        XCTAssertNil(weight?.isImprovement)
+
+        // Yağ oranı düştü → iyileşme.
+        XCTAssertEqual(current.delta(forField: "fatPercent", since: previous)?.isImprovement, true)
+        // Kas oranı arttı → iyileşme.
+        XCTAssertEqual(current.delta(forField: "musclePercent", since: previous)?.isImprovement, true)
+    }
+
+    func testDeltaIsNilWithoutPreviousMeasurement() {
+        let current = measurement(weight: 70, fat: 30, muscle: 60)
+        XCTAssertNil(current.delta(forField: "weight", since: nil))
+    }
+
+    @MainActor
+    func testBestWeightUsesLast30DaysOnly() {
+        let model = AppModel()
+        let old = Date().addingTimeInterval(-60 * 24 * 3600)
+        model.bodyMeasurements = [
+            measurement(weight: 71.1, fat: 35, muscle: 60),
+            measurement(weight: 70.0, fat: 35, muscle: 60,
+                        at: Date().addingTimeInterval(-5 * 24 * 3600)),
+            measurement(weight: 65.0, fat: 35, muscle: 60, at: old)   // 30 günden eski
+        ]
+        XCTAssertEqual(model.bestWeightLast30Days, 70.0)
+        XCTAssertEqual(model.latestMeasurement?.weightKg, 71.1)
+        XCTAssertEqual(model.previousMeasurement?.weightKg, 70.0)
+    }
+
+    // MARK: Tartı fotoğrafı ayrıştırma
+
+    func testScaleOCRNormalizesTurkishCharacters() {
+        // "İ" küçültülünce birleşik nokta bırakıyordu; eşleşme kaçıyordu.
+        XCTAssertEqual(ScaleOCR.normalized("İskelet Kası Ağırlığı"), "iskelet kasi agirligi")
+        XCTAssertEqual(ScaleOCR.normalized("Yağsız Vücut Ağırlığı"), "yagsiz vucut agirligi")
+        XCTAssertEqual(ScaleOCR.normalized("Obezite Derecesi"), "obezite derecesi")
+    }
+
+    func testScaleOCRPicksValueIgnoringUnitsInParentheses() {
+        XCTAssertEqual(ScaleOCR.number(in: "Ağırlık(Kg) 70.55", isPercent: false), 70.55)
+        XCTAssertEqual(ScaleOCR.number(in: "Metabolizma(Kcal/gün) 1404.0", isPercent: nil), 1404)
+        XCTAssertEqual(ScaleOCR.number(in: "Su(%) 47,4", isPercent: true), 47.4)
+        // Karşılaştırma satırında güncel değer sağda durur.
+        XCTAssertEqual(ScaleOCR.number(in: "72.15 Ağırlık(Kg) -1.05 71.10", isPercent: false), 71.10)
+        // Yüzde alanında 100'ün üstü okunursa güvenilmez.
+        XCTAssertNil(ScaleOCR.number(in: "Yağ(%) 350", isPercent: true))
+        XCTAssertNil(ScaleOCR.number(in: "Protein(%)", isPercent: true))
+    }
+
     // MARK: Auth hata mesajları
     //
     // Sunucudan gelen İngilizce hatalar kullanıcıya Türkçe ve eyleme dönük

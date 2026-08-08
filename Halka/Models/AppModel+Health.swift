@@ -45,14 +45,8 @@ extension AppModel {
 
     // MARK: PDF upload simulations
 
-    func processBodyPdf(named name: String) {
-        bodyPdfName = name
-        bodyPdfState = .processing
-        Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2.2))
-            self?.bodyPdfState = .done
-        }
-    }
+    // Not: Vücut ölçümü için sahte PDF akışı kaldırıldı — yerini tartı
+    // fotoğrafının gerçek OCR ile okunması aldı (ScaleOCR, US-025).
 
     func processBloodPdf(named name: String) {
         bloodPdfName = name
