@@ -528,7 +528,11 @@ final class AppModelTests: XCTestCase {
                                                portionName: "kase"))
         let item = model.mealAnalysis!.items[0]
         XCTAssertEqual(item.name, "Mercimek çorbası")
-        XCTAssertEqual(item.grams, 500)          // 2 kase (300/150 = 2 kat)
+        // Tabaktaki madde miktarı (300 g) korunuyor ama yeni yemeğin porsiyon
+        // adımına oturtuluyor: 250 g'lık kaseye en yakın kat 1 kase.
+        // Eski porsiyon KATINI (2) taşımak 500 g verirdi — tabakta o kadar
+        // yemek yokken miktarı ikiye katlamak olurdu.
+        XCTAssertEqual(item.grams, 250)
         XCTAssertTrue(model.mealAnalysisEdited)
     }
 
