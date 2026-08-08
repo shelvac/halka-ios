@@ -106,21 +106,13 @@ struct TodayView: View {
         }
     }
 
-    /// Halka üstte ortada, dört ölçü altında 2×2.
-    ///
-    /// Eskiden halkanın yanındaki dar sütundaydı; sayılar sıkışıyordu ve
-    /// halka olması gerekenden küçük kalıyordu. Enerji dengesi kartı hemen
-    /// altına geldiği için ölçüler de aynı okuma hattında duruyor.
     private var ringsCard: some View {
-        VStack(spacing: 16) {
-            RingStack(fractions: model.todayFractions, size: 196)
-
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
-                                GridItem(.flexible(), spacing: 12)],
-                      spacing: 14) {
+        HStack(spacing: 16) {
+            RingStack(fractions: model.todayFractions, size: 176)
+            VStack(alignment: .leading, spacing: 13) {
                 ForEach(RingKind.allCases, id: \.self) { kind in
-                    // Egzersiz detaya götürüyor; diğerlerinin açılacak bir
-                    // alt kırılımı yok.
+                    // Egzersiz satırı detaya götürüyor; diğerlerinin
+                    // açılacak bir alt kırılımı yok.
                     if kind == .exercise {
                         Button { showWorkouts = true } label: {
                             HStack(spacing: 4) {
@@ -128,16 +120,15 @@ struct TodayView: View {
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 9, weight: .heavy))
                                     .foregroundStyle(Color.chevron)
-                                Spacer(minLength: 0)
                             }
                         }
                         .buttonStyle(.plain)
                     } else {
                         legendRow(kind)
-                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(18)
         .card(22)
