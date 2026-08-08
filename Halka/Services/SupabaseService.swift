@@ -767,6 +767,82 @@ final class SupabaseService {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    // MARK: Plan sihirbazı (US-030)
+
+    /// Beslenme protokolleri. Katalog herkese açık okunur.
+    func fetchProtocols() async -> [DietProtocol] {
+        guard let client else { return [] }
+        guard let rows: [DietProtocol] = try? await client.from("diet_protocols")
+            .select("key,name,summary,evidence,evidence_note,source_url,carb_pct_min,carb_pct_max,fat_pct_min,fat_pct_max,protein_pct_min,protein_pct_max,protein_g_per_kg,favor_categories,limit_categories,avoid_categories,contraindications,needs_doctor,warning,phases")
+            .order("sort_order")
+            .execute()
+            .value else { return [] }
+        return rows
+    }
+
+    private struct PrefsRow: Decodable {
+        let goal: String
+        let protocol_key: String?
+        let diet_style: String
+        let allergies: [String]
+        let dislikes: [String]
+        let meals_per_day: Int
+        let meal_times: [String]
+        let eating_out_days: Int
+        let workout_days: Int
+        let equipment: String
+        let injuries: [String]
+        let health_flags: [String]
+    }
+
+    func fetchPlanPreferences() async -> PlanPreferences? {
+        guard let client, let user = await currentUser() else { return nil }
+        guard let rows: [PrefsRow] = try? await client.from("plan_preferences")
+            .select("goal,protocol_key,diet_style,allergies,dislikes,meals_per_day,meal_times,eating_out_days,workout_days,equipment,injuries,health_flags")
+            .eq("user_id", value: user.id.uuidString)
+            .limit(1)
+            .execute()
+            .value,
+            let row = rows.first else { return nil }
+
+        var prefs = PlanPreferences()
+        prefs.goal = PlanPreferences.Goal(rawValue: row.goal) ?? .lose
+        prefs.protocolKey = row.protocol_key
+        prefs.dietStyle = PlanPreferences.DietStyle(rawValue: row.diet_style) ?? .omnivore
+        prefs.allergies = Set(row.allergies)
+        prefs.dislikes = Set(row.dislikes)
+        prefs.mealsPerDay = row.meals_per_day
+        prefs.mealTimes = row.meal_times
+        prefs.eatingOutDays = row.eating_out_days
+        prefs.workoutDays = row.workout_days
+        prefs.equipment = PlanPreferences.Equipment(rawValue: row.equipment) ?? .home
+        prefs.injuries = Set(row.injuries)
+        prefs.healthFlags = Set(row.health_flags)
+        return prefs
+    }
+
+    func savePlanPreferences(_ prefs: PlanPreferences) async throws {
+        guard let client, let user = await currentUser() else { return }
+        let payload: [String: AnyJSON] = [
+            "user_id": .string(user.id.uuidString.lowercased()),
+            "goal": .string(prefs.goal.rawValue),
+            "protocol_key": prefs.protocolKey.map { AnyJSON.string($0) } ?? .null,
+            "diet_style": .string(prefs.dietStyle.rawValue),
+            "allergies": .array(prefs.allergies.sorted().map { .string($0) }),
+            "dislikes": .array(prefs.dislikes.sorted().map { .string($0) }),
+            "meals_per_day": .integer(prefs.mealsPerDay),
+            "meal_times": .array(prefs.mealTimes.map { .string($0) }),
+            "eating_out_days": .integer(prefs.eatingOutDays),
+            "workout_days": .integer(prefs.workoutDays),
+            "equipment": .string(prefs.equipment.rawValue),
+            "injuries": .array(prefs.injuries.sorted().map { .string($0) }),
+            "health_flags": .array(prefs.healthFlags.sorted().map { .string($0) })
+        ]
+        try await client.from("plan_preferences")
+            .upsert(payload, onConflict: "user_id")
+            .execute()
+    }
+
     // MARK: SSO (US-018 · Google · Apple)
 
     /// Sağlayıcıyla giriş — ASWebAuthenticationSession üzerinden, dönüşte

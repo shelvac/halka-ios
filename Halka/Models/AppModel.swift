@@ -132,6 +132,9 @@ final class AppModel {
     /// Kullanıcı tahmini düzeltti mi? Doğruluk ölçümünün tek sinyali.
     var mealAnalysisEdited = false
 
+    /// Plan sihirbazının kaydettiği tercihler (US-030).
+    var planPreferences: PlanPreferences? = nil
+
     // MARK: Coach
     var messages: [CoachMessage] = Demo.initialMessages()
     var coachTyping = false

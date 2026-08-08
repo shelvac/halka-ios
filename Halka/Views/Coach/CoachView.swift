@@ -3,6 +3,8 @@ import SwiftUI
 /// AI Koç chat: greeting + plan cards, quick chips, weekly workout/meal flows.
 struct CoachView: View {
     @Environment(AppModel.self) private var model
+    /// Plan sihirbazı (US-030).
+    @State private var showWizard = false
 
     private let quickChips = ["Haftalık antrenman planı", "Haftalık besin planı", "Motivasyon lazım"]
 
@@ -38,6 +40,7 @@ struct CoachView: View {
                 .onChange(of: model.messages.count) {
                     withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
+                .sheet(isPresented: $showWizard) { PlanWizardView() }
                 .onChange(of: model.coachTyping) {
                     withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
@@ -96,6 +99,17 @@ struct CoachView: View {
                 }
             }
             Spacer()
+            // Sihirbaz koçun içinden açılıyor: plan kurma isteğinin doğal yeri.
+            Button { showWizard = true } label: {
+                Text("Planım")
+                    .font(.h(12, .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Color.coral))
+                    .shadow(color: Color.coral.opacity(0.3), radius: 5, y: 3)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.vertical, 12)
     }
