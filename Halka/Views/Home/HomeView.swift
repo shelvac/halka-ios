@@ -81,15 +81,17 @@ struct TodayView: View {
     var body: some View {
         VStack(spacing: 0) {
             ringsCard
+            // US-027 — halkanın hemen altında: beslenme ve egzersiz burada
+            // buluşuyor ve halkalarda olmayan tek bilgi bu.
+            //
+            // Buradaki "hedef kartları" ızgarası kaldırıldı: halkanın
+            // yanındaki liste zaten "1.240 / 2.000 ml" diyordu, ızgara aynı
+            // dört sayıyı ikinci kez yazıp ekranın yarısını kaplıyordu.
+            EnergyBalanceCard()
+                .padding(.top, 12)
             activityStats
                 .padding(.top, 12)
             quickActions
-                .padding(.top, 12)
-            goalGrid
-                .padding(.top, 14)
-            // US-027 — beslenme ve egzersizin buluştuğu yer; halkaların
-            // altında duruyor çünkü ikisinden de besleniyor.
-            EnergyBalanceCard()
                 .padding(.top, 12)
             weekStrip
                 .padding(.top, 14)
@@ -308,65 +310,6 @@ struct TodayView: View {
             .padding(.vertical, 9)
             .background(Capsule().fill(Color.white))
             .shadow(color: Color.ink.opacity(0.05), radius: 3, y: 1)
-    }
-
-    private var goalGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())], spacing: 10) {
-            ForEach(RingKind.allCases, id: \.self) { kind in
-                if kind == .exercise {
-                    Button { showWorkouts = true } label: { goalCard(kind) }
-                        .buttonStyle(.plain)
-                } else {
-                    goalCard(kind)
-                }
-            }
-        }
-    }
-
-    private func goalCard(_ kind: RingKind) -> some View {
-        let color: Color = switch kind {
-        case .exercise: .coral
-        case .water: .waterBlue
-        case .steps: .stepPurple
-        case .nutrition: .green
-        }
-        let cur = model.currentValue(kind)
-        let goalValue = model.goal(for: kind)
-        let pct = min(cur / goalValue, 1)
-        let big = Self.grouped(Int(cur))
-        let remaining = max(goalValue - cur, 0)
-        let leftText = pct >= 1
-            ? "Hedef tamamlandı"
-            : "Kalan: \(Self.grouped(Int(remaining))) \(kind.unit)"
-
-        return VStack(alignment: .leading, spacing: 0) {
-            Text(kind.name)
-                .font(.h(11, .bold))
-                .foregroundStyle(Color.sub)
-            Text("\(big) \(kind.unit)")
-                .font(.h(19))
-                .foregroundStyle(Color.ink)
-                .kerning(-0.4)
-                .padding(.top, 2)
-                .padding(.bottom, 8)
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.hairline2)
-                    Capsule().fill(color)
-                        .frame(width: geo.size.width * pct)
-                }
-            }
-            .frame(height: 6)
-            .animation(.easeOut(duration: 0.4), value: pct)
-            Text(leftText)
-                .font(.h(10, .bold))
-                .foregroundStyle(Color.faint)
-                .padding(.top, 6)
-        }
-        .padding(.horizontal, 15)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .card(18)
     }
 
     private var weekStrip: some View {
