@@ -22,9 +22,11 @@ jobs:
       REF: urrjkubdngoszkttpeph
     steps:
       - uses: actions/checkout@v4
+      # Sürüm sabit: "latest" ile kurulum adımı ara sıra düşüyor ve
+      # dağıtım hiç denenmeden başarısız oluyordu.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.31.4
 
       - name: Dağıt
         env:
