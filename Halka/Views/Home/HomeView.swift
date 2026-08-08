@@ -75,6 +75,8 @@ struct HomeView: View {
 
 struct TodayView: View {
     @Environment(AppModel.self) private var model
+    /// Egzersiz detayı — halkaya, hedef kartına ya da listeye dokununca açılır.
+    @State private var showWorkouts = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -90,6 +92,12 @@ struct TodayView: View {
             streakCard
                 .padding(.top, 14)
         }
+        .sheet(isPresented: $showWorkouts) {
+            WorkoutDaySheet(dayTitle: "Bugün",
+                            workouts: model.todayWorkouts,
+                            exerciseMinutes: model.exerciseMinutes,
+                            exerciseGoal: Int(model.goal(for: .exercise)))
+        }
     }
 
     private var ringsCard: some View {
@@ -97,7 +105,21 @@ struct TodayView: View {
             RingStack(fractions: model.todayFractions, size: 176)
             VStack(alignment: .leading, spacing: 13) {
                 ForEach(RingKind.allCases, id: \.self) { kind in
-                    legendRow(kind)
+                    // Egzersiz satırı detaya götürüyor; diğerlerinin
+                    // açılacak bir alt kırılımı yok.
+                    if kind == .exercise {
+                        Button { showWorkouts = true } label: {
+                            HStack(spacing: 4) {
+                                legendRow(kind)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 9, weight: .heavy))
+                                    .foregroundStyle(Color.chevron)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        legendRow(kind)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -134,37 +156,12 @@ struct TodayView: View {
             .card(18)
 
             // Apple Watch'ta yapılan antrenmanlar — egzersiz halkasının
-            // "neden dolu" sorusunun cevabı.
+            // "neden dolu" sorusunun cevabı. Dokununca tam detay açılır.
             if !model.todayWorkouts.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(Array(model.todayWorkouts.enumerated()), id: \.element.id) { i, workout in
-                        HStack(spacing: 10) {
-                            Image(systemName: "figure.run")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(Color.coral)
-                            Text(workout.name)
-                                .font(.h(12.5, .bold))
-                                .foregroundStyle(Color.inkBody)
-                                .lineLimit(1)
-                            Spacer(minLength: 6)
-                            // Apple gibi: mesafeli antrenmanda km, diğerinde kcal öne çıkar.
-                            Text(workout.headline)
-                                .font(.h(12.5))
-                                .foregroundStyle(Color.ink)
-                            Text("· \(workout.minutes) dk")
-                                .font(.h(11, .bold))
-                                .foregroundStyle(Color.sub)
-                        }
-                        .padding(.vertical, 11)
-                        .overlay(alignment: .top) {
-                            if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
-                        }
-                    }
+                WorkoutSummaryCard(title: "Bugünkü antrenmanlar",
+                                   workouts: model.todayWorkouts) {
+                    showWorkouts = true
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 3)
-                .frame(maxWidth: .infinity)
-                .card(18)
                 .padding(.top, 10)
             }
         } else {
@@ -312,7 +309,12 @@ struct TodayView: View {
     private var goalGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible())], spacing: 10) {
             ForEach(RingKind.allCases, id: \.self) { kind in
-                goalCard(kind)
+                if kind == .exercise {
+                    Button { showWorkouts = true } label: { goalCard(kind) }
+                        .buttonStyle(.plain)
+                } else {
+                    goalCard(kind)
+                }
             }
         }
     }

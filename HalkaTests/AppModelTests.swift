@@ -470,4 +470,41 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(high.status, "Yüksek")
         XCTAssertEqual(high.refPosition, 0.98, accuracy: 0.001) // clamp üst sınırı
     }
+
+    // MARK: Antrenman detayı (US-023)
+
+    private func workout(name: String, minutes: Int, kcal: Int,
+                         km: Double?) -> HealthKitService.WorkoutSummary {
+        HealthKitService.WorkoutSummary(
+            id: UUID(), name: name, minutes: minutes, kcal: kcal,
+            distanceKm: km, start: Date(timeIntervalSince1970: 0),
+            symbol: "figure.walk")
+    }
+
+    func testDistanceWorkoutLeadsWithKilometres() {
+        // Apple gibi: mesafeli antrenmanda büyük değer km, kalori alt satırda.
+        let walk = workout(name: "Yürüyüş", minutes: 22, kcal: 96, km: 1.36)
+        XCTAssertEqual(walk.headline, "1,36 km")
+        XCTAssertTrue(walk.detailLine.contains("22 dk"))
+        XCTAssertTrue(walk.detailLine.contains("96 kcal"))
+    }
+
+    func testNonDistanceWorkoutLeadsWithCalories() {
+        let yoga = workout(name: "Yoga", minutes: 45, kcal: 311, km: nil)
+        XCTAssertEqual(yoga.headline, "311 kcal")
+        // Kalori zaten büyük değerde; alt satırda tekrarlanmaz.
+        XCTAssertEqual(yoga.detailLine, "45 dk")
+    }
+
+    func testLongWorkoutShowsHoursAndPace() {
+        let run = workout(name: "Koşu", minutes: 95, kcal: 700, km: 12.0)
+        XCTAssertEqual(run.durationText, "1 sa 35 dk")
+        XCTAssertEqual(run.paceText, "7'55\"/km")
+    }
+
+    func testPaceIsHiddenWhenDistanceIsNegligible() {
+        // 40 m'lik bir kayıtta "dk/km" anlamsız bir sayı üretirdi.
+        let stroll = workout(name: "Yürüyüş", minutes: 3, kcal: 8, km: 0.04)
+        XCTAssertNil(stroll.paceText)
+    }
 }

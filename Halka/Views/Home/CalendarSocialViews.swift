@@ -4,11 +4,22 @@ import SwiftUI
 
 struct CalendarPane: View {
     @Environment(AppModel.self) private var model
+    /// Seçili günün antrenman detayı.
+    @State private var showWorkouts = false
 
     var body: some View {
         VStack(spacing: 12) {
             calendarCard
             detailCard
+        }
+        .sheet(isPresented: $showWorkouts) {
+            let day = model.selectedCalendarDay
+            WorkoutDaySheet(
+                dayTitle: model.dayTitle(forDay: day),
+                workouts: model.workouts(forDay: day),
+                exerciseMinutes: Int((model.fractions(forDay: day)[0]
+                                      * model.goal(for: .exercise)).rounded()),
+                exerciseGoal: Int(model.goal(for: .exercise)))
         }
     }
 
@@ -128,32 +139,39 @@ struct CalendarPane: View {
             }
 
             // O gün yapılan antrenmanlar — egzersiz halkasının açıklaması.
+            // Ana ekrandakiyle aynı kart; dokununca tam detay açılır.
             let dayWorkouts = model.workouts(forDay: day)
             if !dayWorkouts.isEmpty {
-                VStack(spacing: 6) {
-                    ForEach(dayWorkouts) { workout in
-                        HStack(spacing: 8) {
-                            Image(systemName: "figure.run")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(Color.coral)
-                            Text(workout.name)
+                Button { showWorkouts = true } label: {
+                    VStack(spacing: 0) {
+                        HStack(spacing: 6) {
+                            Text("Antrenmanlar")
                                 .font(.h(11.5, .bold))
-                                .foregroundStyle(Color.inkBody)
+                                .foregroundStyle(Color.sub)
                             Spacer()
-                            Text(workout.headline)
-                                .font(.h(11.5))
-                                .foregroundStyle(Color.ink)
-                            Text("· \(workout.minutes) dk")
+                            Text("Detay")
                                 .font(.h(10.5, .bold))
                                 .foregroundStyle(Color.sub)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 9, weight: .heavy))
+                                .foregroundStyle(Color.chevron)
+                        }
+                        .padding(.bottom, 4)
+                        ForEach(Array(dayWorkouts.enumerated()), id: \.element.id) { i, workout in
+                            WorkoutRow(workout: workout, compact: true)
+                                .padding(.vertical, 7)
+                                .overlay(alignment: .top) {
+                                    if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
+                                }
                         }
                     }
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.bgField)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 12)
-                .frame(maxWidth: .infinity)
-                .background(Color.bgField)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .buttonStyle(.plain)
             }
 
             // Halka olmayan ölçüler: uyku ve aktif enerji.

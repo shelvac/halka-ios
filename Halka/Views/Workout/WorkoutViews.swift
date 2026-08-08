@@ -163,27 +163,34 @@ struct WorkoutHomeView: View {
 
                 VStack(spacing: 0) {
                     ForEach(Array(model.hkWorkouts.enumerated()), id: \.element.id) { i, workout in
-                        HStack(spacing: 10) {
-                            Image(systemName: "figure.run")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(Color.coral)
+                        HStack(spacing: 11) {
+                            ZStack {
+                                Circle().fill(Color.coralBg).frame(width: 34, height: 34)
+                                // Türe özel simge — hepsi koşu ikonuyken
+                                // Yoga ile HIIT ayırt edilemiyordu.
+                                Image(systemName: workout.symbol)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Color.coral)
+                            }
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(workout.name)
                                     .font(.h(12.5, .bold))
                                     .foregroundStyle(Color.inkSoft)
-                                Text(AppModel.measurementTitle(workout.start))
+                                Text("\(AppModel.measurementTitle(workout.start)) · \(workout.timeText)")
                                     .font(.h(10.5, .bold))
                                     .foregroundStyle(Color.faint)
                             }
-                            Spacer()
-                            Text(workout.headline)
-                                .font(.h(13))
-                                .foregroundStyle(Color.ink)
-                            Text("· \(workout.minutes) dk")
-                                .font(.h(10.5, .bold))
-                                .foregroundStyle(Color.sub)
+                            Spacer(minLength: 6)
+                            VStack(alignment: .trailing, spacing: 1) {
+                                Text(workout.headline)
+                                    .font(.h(13))
+                                    .foregroundStyle(Color.coral)
+                                Text(workout.detailLine)
+                                    .font(.h(10, .bold))
+                                    .foregroundStyle(Color.sub)
+                            }
                         }
-                        .padding(.vertical, 12)
+                        .padding(.vertical, 11)
                         .overlay(alignment: .top) {
                             if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
                         }

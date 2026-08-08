@@ -36,14 +36,53 @@ final class HealthKitService {
         /// Yürüyüş/koşu/bisiklet/yüzme için mesafe; diğerlerinde `nil`.
         let distanceKm: Double?
         let start: Date
+        /// Türe özel SF Symbol — listede hepsinin aynı koşu ikonuyla
+        /// görünmesi Yoga'yla HIIT'i ayırt edilemez kılıyordu.
+        let symbol: String
 
         /// Apple'ın Fitness uygulamasındaki gibi: mesafeli antrenmanda km,
         /// diğerlerinde kalori öne çıkar.
         var headline: String {
-            if let distanceKm, distanceKm > 0 {
-                return String(format: "%.2f", distanceKm).replacingOccurrences(of: ".", with: ",") + " km"
-            }
+            if let distanceKm, distanceKm > 0 { return Self.km(distanceKm) }
             return kcal > 0 ? "\(kcal) kcal" : "\(minutes) dk"
+        }
+
+        /// "1,36 km" — Türkçe ondalık ayırıcı.
+        static func km(_ value: Double) -> String {
+            String(format: "%.2f", value).replacingOccurrences(of: ".", with: ",") + " km"
+        }
+
+        /// Başlangıç saati: "14:45".
+        var timeText: String {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "tr_TR")
+            f.dateFormat = "HH:mm"
+            return f.string(from: start)
+        }
+
+        /// Süre: 95 dk → "1 sa 35 dk".
+        var durationText: String {
+            minutes >= 60
+                ? "\(minutes / 60) sa \(minutes % 60) dk"
+                : "\(minutes) dk"
+        }
+
+        /// Kilometre başına tempo — yalnızca mesafeli ve anlamlı olduğunda.
+        var paceText: String? {
+            guard let distanceKm, distanceKm >= 0.2, minutes > 0 else { return nil }
+            let secondsPerKm = Double(minutes) * 60 / distanceKm
+            guard secondsPerKm < 3600 else { return nil }
+            let m = Int(secondsPerKm) / 60, s = Int(secondsPerKm) % 60
+            return String(format: "%d'%02d\"/km", m, s)
+        }
+
+        /// Kartın altındaki ayrıntı satırı — büyük değerde ne yazıyorsa
+        /// burada tekrar edilmez.
+        var detailLine: String {
+            var parts = [durationText]
+            if distanceKm != nil && kcal > 0 { parts.append("\(kcal) kcal") }
+            if let paceText { parts.append(paceText) }
+            return parts.joined(separator: " · ")
         }
     }
 
@@ -208,7 +247,37 @@ final class HealthKitService {
                 minutes: Int((workout.duration / 60).rounded()),
                 kcal: Int(kcal.rounded()),
                 distanceKm: meters.map { $0 / 1000 },
-                start: workout.startDate)
+                start: workout.startDate,
+                symbol: Self.symbol(for: workout.workoutActivityType))
+        }
+    }
+
+    /// Antrenman türünün simgesi. Apple'ın Fitness listesindeki gibi her tür
+    /// kendi ikonuyla görünür; bilinmeyen tür genel bir simgeye düşer.
+    private static func symbol(for type: HKWorkoutActivityType) -> String {
+        switch type {
+        case .walking, .hiking: return "figure.walk"
+        case .running: return "figure.run"
+        case .cycling: return "figure.outdoor.cycle"
+        case .swimming: return "figure.pool.swim"
+        case .traditionalStrengthTraining: return "dumbbell.fill"
+        case .functionalStrengthTraining: return "figure.strengthtraining.functional"
+        case .highIntensityIntervalTraining: return "figure.highintensity.intervaltraining"
+        case .yoga: return "figure.yoga"
+        case .pilates: return "figure.pilates"
+        case .cardioDance: return "figure.dance"
+        case .elliptical: return "figure.elliptical"
+        case .rowing: return "figure.rower"
+        case .stairClimbing: return "figure.stair.stepper"
+        case .coreTraining: return "figure.core.training"
+        case .flexibility, .cooldown: return "figure.flexibility"
+        case .mixedCardio: return "figure.mixed.cardio"
+        case .tennis: return "figure.tennis"
+        case .basketball: return "figure.basketball"
+        case .soccer: return "figure.soccer"
+        case .volleyball: return "figure.volleyball"
+        case .boxing, .kickboxing: return "figure.boxing"
+        default: return "figure.mixed.cardio"
         }
     }
 
