@@ -230,15 +230,18 @@ final class SupabaseService {
     }
 
     /// Bir tarih aralığındaki günlük kayıtlar (takvim geçmişi için).
-    func fetchRings(from start: Date, to end: Date) async -> [String: RingsRow] {
+    /// Hata **yutulmaz**: ağ koptuğunda boş sözlük dönmek "bu kullanıcının
+    /// hiç verisi yok" anlamına gelirdi ve ardından gelen kayıt, duran veriyi
+    /// sıfırla ezerdi. Çağıran tarafın başarısızlığı görmesi şart.
+    func fetchRings(from start: Date, to end: Date) async throws -> [String: RingsRow] {
         guard let client, let user = await currentUser() else { return [:] }
-        guard let rows: [RingsRow] = try? await client.from("rings_daily")
+        let rows: [RingsRow] = try await client.from("rings_daily")
             .select("day,exercise_min,water_ml,sleep_hours,nutrition_kcal,steps,active_energy_kcal")
             .eq("user_id", value: user.id.uuidString)
             .gte("day", value: Self.dayFormatter.string(from: start))
             .lte("day", value: Self.dayFormatter.string(from: end))
             .execute()
-            .value else { return [:] }
+            .value
         return Dictionary(rows.map { ($0.day, $0) }, uniquingKeysWith: { _, last in last })
     }
 
@@ -276,6 +279,56 @@ final class SupabaseService {
         ]
         try await client.from("rings_daily")
             .upsert(payload, onConflict: "user_id,day")
+            .execute()
+    }
+
+    // MARK: Öğün kaydı (0010_meal_state.sql)
+
+    /// Haftalık öğün durumu — işaretlenen öğünler, ekstralar, menü değişiklikleri.
+    struct MealStateRow: Codable {
+        var week_start: String
+        var eaten: [String]
+        var extras: [ExtraRow]
+        var overrides: [String: String]
+
+        struct ExtraRow: Codable {
+            var day: Int
+            var title: String
+            var kcal: Int
+            var time: String
+        }
+    }
+
+    /// Kayıtlı öğün durumu. Bulunamazsa `nil` — çağıran taraf bunu "kayıt yok"
+    /// olarak ele alır; hata durumunda ise atar, çünkü boş dönmek kullanıcının
+    /// işaretlerini silmek anlamına gelirdi.
+    func fetchMealState() async throws -> MealStateRow? {
+        guard let client, let user = await currentUser() else { return nil }
+        let rows: [MealStateRow] = try await client.from("meal_state")
+            .select("week_start,eaten,extras,overrides")
+            .eq("user_id", value: user.id.uuidString)
+            .limit(1)
+            .execute()
+            .value
+        return rows.first
+    }
+
+    func saveMealState(weekStart: Date, eaten: [String],
+                       extras: [MealStateRow.ExtraRow],
+                       overrides: [String: String]) async throws {
+        guard let client, let user = await currentUser() else { return }
+        let payload: [String: AnyJSON] = [
+            "user_id": .string(user.id.uuidString.lowercased()),
+            "week_start": .string(Self.dayFormatter.string(from: weekStart)),
+            "eaten": .array(eaten.map { .string($0) }),
+            "extras": .array(extras.map {
+                .object(["day": .integer($0.day), "title": .string($0.title),
+                         "kcal": .integer($0.kcal), "time": .string($0.time)])
+            }),
+            "overrides": .object(overrides.mapValues { .string($0) })
+        ]
+        try await client.from("meal_state")
+            .upsert(payload, onConflict: "user_id")
             .execute()
     }
 

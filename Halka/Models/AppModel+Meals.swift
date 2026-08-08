@@ -18,8 +18,21 @@ extension AppModel {
     func toggleEaten(day: Int, slot: Int) {
         let key = "\(day)-\(slot)"
         if eaten.contains(key) { eaten.remove(key) } else { eaten.insert(key) }
+        scheduleMealSave()
         // Beslenme halkasını etkiliyorsa günlük kayda yaz (US-024).
         if day == todayWeekdayIndex { scheduleRingSave() }
+    }
+
+    /// Öğün kaydını gecikmeli yazar — arka arkaya işaretlemede her dokunuş
+    /// için istek atmamak adına (`scheduleRingSave` ile aynı desen).
+    func scheduleMealSave() {
+        mealSaveToken += 1
+        let token = mealSaveToken
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self, self.mealSaveToken == token else { return }
+            await self.persistMealState()
+        }
     }
 
     func extras(forDay day: Int) -> [ExtraMeal] {
@@ -76,6 +89,7 @@ extension AppModel {
     func adoptCatalogMeal() {
         guard let sel = mealSelection, sel.fromCatalog else { return }
         overrides["\(mealDay)-\(sel.mealIndex)"] = sel.food
+        scheduleMealSave()
         mealView = .menu
         mealSelection = nil
     }
@@ -98,6 +112,8 @@ extension AppModel {
                                 title: "Fotoğraftan öğün — \(est.items[0].0)",
                                 kcal: est.total,
                                 time: Self.nowHHmm()))
+        scheduleMealSave()
+        if mealDay == todayWeekdayIndex { scheduleRingSave() }
         photoData = nil
         photoState = .idle
         mealView = .menu
@@ -110,6 +126,8 @@ extension AppModel {
 
     func deleteExtra(_ id: UUID) {
         extras.removeAll { $0.id == id }
+        scheduleMealSave()
+        scheduleRingSave()
     }
 
     // MARK: Market list

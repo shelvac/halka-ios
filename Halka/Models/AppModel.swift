@@ -56,6 +56,13 @@ final class AppModel {
     /// Görüntülenen ayın kayıtları ("yyyy-MM-dd" → satır).
     var ringHistory: [String: SupabaseService.RingsRow] = [:]
     var ringSaveToken = 0
+    /// Sunucudaki kayıt bu oturumda **başarıyla** okundu mu?
+    ///
+    /// Okumadan yazmak veri kaybettiriyordu: açılışta Health tazelemesi
+    /// (`MainTabView.task`) ile kayıt yükleme yarışıyor, tazeleme önce
+    /// biterse bellekteki sıfırlar sunucudaki suyun/öğünün üstüne yazılıyordu.
+    /// Bu bayrak açılmadan hiçbir şey kaydedilmez.
+    var ringsLoaded = false
     /// Uygulamanın açıldığı günler — seri hesabı için (0009_visited.sql).
     var visitedDays: Set<String> = []
 
@@ -105,6 +112,9 @@ final class AppModel {
     var mealTimes = ["09:00", "13:30", "16:30", "19:30"]
     var eaten: Set<String> = []       // US-024: yenmiş öğünler kullanıcı verisi
     var overrides: [String: String] = [:]
+    /// Öğün kaydı sunucudan okundu mu? (`ringsLoaded` ile aynı gerekçe)
+    var mealStateLoaded = false
+    var mealSaveToken = 0
     var marketChecked: Set<String> = []
     var extras: [ExtraMeal] = []
     var photoData: Data? = nil
@@ -142,6 +152,8 @@ final class AppModel {
     var hkWorkouts: [HealthKitService.WorkoutSummary] = []
     /// Geçmiş aktarımı bu oturumda yapıldı mı? (her tazelemede tekrarlanmasın)
     var healthBackfillDone = false
+    /// Antrenman izni bu oturumda yeniden istendi mi? (her tazelemede sorulmasın)
+    var healthWorkoutAccessRequested = false
 
     /// İzin diyaloğunu tetikler (Profil'deki "Bağlan" düğmesi).
     func connectHealthKit() {
@@ -168,7 +180,19 @@ final class AppModel {
         if snapshot.exerciseMinutes > 0 { exerciseBase = snapshot.exerciseMinutes }
         if snapshot.sleepHours > 0 { sleepHours = snapshot.sleepHours }
         if snapshot.waterML > 0 { water = max(water, snapshot.waterML) }
-        hkWorkouts = await HealthKitService.shared.fetchWorkouts(days: 90)
+
+        var workouts = await HealthKitService.shared.fetchWorkouts(days: 90)
+        // Antrenman okuma izni uygulamaya sonradan eklendi. Daha önce Health'e
+        // bağlanmış kullanıcıya bu tür hiç sorulmadığı için sorgu sessizce boş
+        // dönüyordu — egzersiz dakikası doluyken "antrenman yok" görünüyordu.
+        // HealthKit okuma izninin durumu sorgulanamaz (Apple gizler), o yüzden
+        // tek çare istemek; zaten verilmişse iletişim kutusu açılmaz.
+        if workouts.isEmpty && !healthWorkoutAccessRequested {
+            healthWorkoutAccessRequested = true
+            try? await HealthKitService.shared.requestAuthorization()
+            workouts = await HealthKitService.shared.fetchWorkouts(days: 90)
+        }
+        hkWorkouts = workouts
         await persistRings()
         // Geçmişi bir kez aktar: takvim ilk açılışta dolu gelsin.
         if !healthBackfillDone { await backfillFromHealthKit() }
@@ -259,6 +283,22 @@ final class AppModel {
         userName = "Simge"
         userFullName = "Simge Helvacı"
         pendingEmail = ""
+        // Bir sonraki oturum kendi verisini okumadan yazmasın.
+        ringsLoaded = false
+        mealStateLoaded = false
+        eaten = []
+        extras = []
+        overrides = [:]
+        water = 0
+        exerciseBase = 0
+        extraExerciseMin = 0
+        sleepHours = 0
+        hkSteps = 0
+        hkActiveEnergy = 0
+        hkWorkouts = []
+        ringHistory = [:]
+        visitedDays = []
+        healthBackfillDone = false
     }
 
     // MARK: Shared helpers

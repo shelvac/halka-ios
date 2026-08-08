@@ -32,9 +32,13 @@ extension AppModel {
         role = .user
         screen = .app
         // Halka verisi ve Apple Health'i arka planda tazele — giriş beklemesin.
+        // Sıra önemli: önce kayıtlar okunur, sonra Health tazelenir.
+        // `persistRings` zaten `ringsLoaded` olmadan yazmıyor, ama sıralamayı
+        // da doğru tutmak beklemeyi kısaltıyor.
         Task { [weak self] in
             await self?.recordVisit()
             await self?.loadRingHistory()
+            await self?.loadMealState()
             await self?.loadBodyMeasurements()
             await self?.refreshFromHealthKit()
         }

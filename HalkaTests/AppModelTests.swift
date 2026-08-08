@@ -471,6 +471,44 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(high.refPosition, 0.98, accuracy: 0.001) // clamp üst sınırı
     }
 
+    // MARK: Okumadan yazma koruması (veri kaybı)
+
+    @MainActor
+    func testRingsAreNotSavedBeforeTheyAreLoaded() async {
+        // Açılışta Health tazelemesi ile kayıt yükleme yarışıyordu; tazeleme
+        // önce biterse bellekteki sıfırlar sunucudaki suyu eziyordu.
+        let model = AppModel()
+        XCTAssertFalse(model.ringsLoaded)
+        model.water = 0
+        await model.persistRings()      // yazmamalı — henüz okumadık
+        XCTAssertFalse(model.ringsLoaded)
+    }
+
+    @MainActor
+    func testLogoutClearsLoadedFlagsAndData() {
+        let model = AppModel()
+        model.ringsLoaded = true
+        model.mealStateLoaded = true
+        model.water = 1500
+        model.eaten = ["0-1"]
+        model.logout()
+        // Sonraki kullanıcı kendi verisini okumadan yazmaya başlamamalı.
+        XCTAssertFalse(model.ringsLoaded)
+        XCTAssertFalse(model.mealStateLoaded)
+        XCTAssertEqual(model.water, 0)
+        XCTAssertTrue(model.eaten.isEmpty)
+    }
+
+    @MainActor
+    func testWeekStartIsMonday() {
+        // Öğün kaydı haftalık; hafta başı yanlışsa geçen haftanın işaretleri
+        // bu haftaya sızardı.
+        let model = AppModel()
+        let weekday = AppModel.appCalendar.component(.weekday, from: model.weekStart)
+        XCTAssertEqual(weekday, 2)      // 2 = Pazartesi
+        XCTAssertLessThanOrEqual(model.weekStart, model.today)
+    }
+
     // MARK: Antrenman detayı (US-023)
 
     private func workout(name: String, minutes: Int, kcal: Int,

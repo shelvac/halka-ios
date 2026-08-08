@@ -191,24 +191,83 @@ extension AppModel {
     // MARK: Yükleme
 
     /// Görüntülenen ayın kayıtlarını çeker.
+    ///
+    /// Başarısız olursa `ringsLoaded` açılmaz ve hiçbir şey kaydedilmez:
+    /// ağ koptuğunda "veri yok" sanıp sunucudaki kaydı sıfırla ezmek,
+    /// kullanıcının günlük emeğini silmek demekti.
     func loadRingHistory() async {
-        guard supabaseReady else { return }
+        guard supabaseReady else {
+            ringsLoaded = true      // demo modu: kaydetme zaten devre dışı
+            return
+        }
         let calendar = Self.appCalendar
         guard let start = calendar.date(from: calendar.dateComponents([.year, .month],
                                                                       from: visibleMonth)),
               let end = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: start)
         else { return }
-        ringHistory = await SupabaseService.shared.fetchRings(from: start, to: end)
+        do {
+            ringHistory = try await SupabaseService.shared.fetchRings(from: start, to: end)
+        } catch {
+            AuthLog.warn("fetchRings", error)
+            return
+        }
 
         // Bugünün kaydı varsa canlı değerlere yükle — uygulama kapanıp
         // açılınca su/uyku sıfırlanmasın.
         if let row = ringHistory[todayKey] {
-            water = row.water_ml
-            exerciseBase = row.exercise_min
-            sleepHours = row.sleep_hours
+            water = max(water, row.water_ml)
+            exerciseBase = max(exerciseBase, row.exercise_min)
+            sleepHours = max(sleepHours, row.sleep_hours)
             // Health bağlı değilse kayıtlı değerler gösterilsin (sıfır sanılmasın).
             if hkSteps == 0 { hkSteps = row.steps }
             if hkActiveEnergy == 0 { hkActiveEnergy = row.active_energy_kcal }
+        }
+        // Ancak buradan sonra yazmak güvenli.
+        ringsLoaded = true
+    }
+
+    /// Kayıtlı öğün durumunu geri yükler (0010_meal_state.sql).
+    ///
+    /// Öğün ızgarası haftalık olduğu için kayıt da haftalık: `week_start`
+    /// bu haftaya ait değilse yok sayılır, yoksa geçen haftanın işaretleri
+    /// bu haftaya sızardı.
+    func loadMealState() async {
+        guard supabaseReady else { mealStateLoaded = true; return }
+        do {
+            if let row = try await SupabaseService.shared.fetchMealState(),
+               row.week_start == Self.dayKeyFormatter.string(from: weekStart) {
+                eaten = Set(row.eaten)
+                extras = row.extras.map {
+                    ExtraMeal(day: $0.day, title: $0.title, kcal: $0.kcal, time: $0.time)
+                }
+                overrides = row.overrides
+            }
+        } catch {
+            AuthLog.warn("fetchMealState", error)
+            return                  // okuyamadıysak yazmıyoruz
+        }
+        mealStateLoaded = true
+    }
+
+    /// İçinde bulunulan haftanın pazartesisi.
+    var weekStart: Date {
+        let calendar = Self.appCalendar
+        return calendar.date(from: calendar.dateComponents(
+            [.yearForWeekOfYear, .weekOfYear], from: today)) ?? today
+    }
+
+    func persistMealState() async {
+        guard supabaseReady, mealStateLoaded else { return }
+        do {
+            try await SupabaseService.shared.saveMealState(
+                weekStart: weekStart,
+                eaten: Array(eaten),
+                extras: extras.map {
+                    .init(day: $0.day, title: $0.title, kcal: $0.kcal, time: $0.time)
+                },
+                overrides: overrides)
+        } catch {
+            AuthLog.warn("saveMealState", error)
         }
     }
 
@@ -219,7 +278,9 @@ extension AppModel {
     /// Beslenme aktarılmıyor — o veri Health'te değil, uygulamada tutuluyor;
     /// mevcut kayıt varsa korunur.
     func backfillFromHealthKit(days: Int = 90) async {
-        guard supabaseReady, HealthKitService.shared.isAvailable else { return }
+        // `ringHistory` okunmadan aktarım yapmak, geçmiş günlerdeki elle
+        // girilmiş su/beslenme değerlerini "mevcut kayıt yok" sanıp silerdi.
+        guard supabaseReady, ringsLoaded, HealthKitService.shared.isAvailable else { return }
         guard let userID = await SupabaseService.shared.currentUserID() else { return }
 
         let totals = await HealthKitService.shared.fetchDailyTotals(days: days)
@@ -282,7 +343,9 @@ extension AppModel {
     }
 
     func persistRings() async {
-        guard supabaseReady else { return }
+        // Okumadan yazma. Bu tek satır, açılışta bellekteki sıfırların
+        // sunucudaki suyu/öğünü ezmesini engelliyor.
+        guard supabaseReady, ringsLoaded else { return }
         do {
             try await SupabaseService.shared.saveRings(
                 day: today,

@@ -274,15 +274,25 @@ struct WorkoutDaySheet: View {
         .card(18)
     }
 
+    /// Egzersiz dakikası varken antrenman listesinin boş olması, "hiç
+    /// antrenman yapılmadı" değil "izin verilmedi" demektir; kullanıcıyı
+    /// yanlış sonuca bırakmamak için ayrı metin gösteriliyor.
+    private var missingPermission: Bool { exerciseMinutes > 0 }
+
     private var emptyCard: some View {
         VStack(spacing: 6) {
-            Image(systemName: "figure.mixed.cardio")
+            Image(systemName: missingPermission ? "lock.open.trianglebadge.exclamationmark"
+                                                : "figure.mixed.cardio")
                 .font(.system(size: 24, weight: .light))
                 .foregroundStyle(Color.chevron)
-            Text("Bu gün kayıtlı antrenman yok")
+            Text(missingPermission
+                 ? "Antrenman listesi okunamıyor"
+                 : "Bu gün kayıtlı antrenman yok")
                 .font(.h(12.5, .bold))
                 .foregroundStyle(Color.sub)
-            Text("Apple Watch ya da iPhone'da başlattığın antrenmanlar burada listelenir.")
+            Text(missingPermission
+                 ? "Egzersiz dakikan geliyor ama antrenman kayıtları gelmiyor. Sağlık uygulaması › Profil › Uygulamalar › Halka'dan \"Antrenmanlar\" iznini aç."
+                 : "Apple Watch ya da iPhone'da başlattığın antrenmanlar burada listelenir.")
                 .font(.h(11, .semibold))
                 .foregroundStyle(Color.faint)
                 .multilineTextAlignment(.center)
