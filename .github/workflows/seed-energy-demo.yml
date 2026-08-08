@@ -1,0 +1,86 @@
+# Enerji dengesi tahminini test edebilmek için geçmiş günlere öğün kalorisi
+# yazar. Tahmin en az 3 günlük öğün kaydı istiyor; gerçek kullanımda bu 3 gün
+# beklemek demek.
+#
+# Yalnızca `nutrition_kcal` sütununa dokunur — halkaların geri kalanı, adım,
+# egzersiz ve aktif enerji Apple Health'ten gelen GERÇEK veridir, korunur.
+# `mode: clear` yazılanı geri alır (o günlerin kalorisini sıfırlar).
+name: Enerji demo verisi
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "Uygulamada giriş yaptığın e-posta"
+        required: true
+        default: "simgehelvaci@gmail.com"
+      mode:
+        description: "seed = geçmiş 3 güne kalori yaz · clear = geri al"
+        required: true
+        default: "seed"
+        type: choice
+        options: [seed, clear]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Uygula
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EMAIL: ${{ inputs.email }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -u
+          if [ "$MODE" = "clear" ]; then
+            VALUES="(1,0),(2,0),(3,0)"
+          else
+            # Gerçekçi bir aralık: 1.650-1.840 kcal.
+            VALUES="(1,1720),(2,1840),(3,1650)"
+          fi
+
+          cat > q.sql <<SQL
+          with target as (
+            select id from auth.users where lower(email) = lower('$EMAIL')
+          ), days(ago, kcal) as (
+            values $VALUES
+          )
+          insert into public.rings_daily (user_id, day, nutrition_kcal)
+          select t.id,
+                 ((now() at time zone 'Europe/Istanbul')::date - d.ago),
+                 d.kcal
+          from target t, days d
+          on conflict (user_id, day)
+            do update set nutrition_kcal = excluded.nutrition_kcal
+          returning day, nutrition_kcal;
+          SQL
+
+          BODY=$(jq -Rs '{query: .}' q.sql)
+          CODE=$(curl -s -o out.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            "https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph/database/query" \
+            -d "$BODY")
+
+          echo "## Enerji demo verisi · \`$MODE\`" > r.md
+          echo "" >> r.md
+          echo "- E-posta: \`$EMAIL\`" >> r.md
+          echo "- HTTP \`$CODE\`" >> r.md
+          echo "" >> r.md
+          echo '```json' >> r.md
+          head -c 2000 out.json >> r.md
+          echo "" >> r.md
+          echo '```' >> r.md
+          if [ "$CODE" = "200" ] || [ "$CODE" = "201" ]; then
+            echo "- ✅ Uygulandı. Uygulamayı tamamen kapatıp açman gerekiyor." >> r.md
+          else
+            echo "- ❌ Hata" >> r.md
+          fi
+          cat r.md
+          gh issue comment 34 --repo "$REPO" --body-file r.md
+          [ "$CODE" = "200" ] || [ "$CODE" = "201" ]
