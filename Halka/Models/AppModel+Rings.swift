@@ -12,13 +12,10 @@ extension AppModel {
         return calendar
     }
 
-    static let dayKeyFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
+    /// Gün anahtarı — sunucuya yazarken kullanılanın **aynı** örneği.
+    /// İki ayrı formatlayıcı tutmak, saat dilimleri ayrıştığında verinin
+    /// yanlış güne yazılmasına yol açmıştı.
+    static var dayKeyFormatter: DateFormatter { SupabaseService.dayFormatter }
 
     var today: Date { Self.appCalendar.startOfDay(for: Date()) }
 

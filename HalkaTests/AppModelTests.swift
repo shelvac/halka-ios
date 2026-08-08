@@ -271,6 +271,24 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.currentValue(.steps), 4000)
     }
 
+    // MARK: Gün anahtarı (saat dilimi tuzağı)
+
+    @MainActor
+    func testDayKeyMatchesBetweenModelAndService() {
+        let model = AppModel()
+        // Yazarken ve okurken AYNI anahtar üretilmeli. Ayrıştıklarında veri
+        // bir önceki güne yazılıp bugün aranıyor ve kaybolmuş görünüyordu.
+        XCTAssertEqual(AppModel.dayKeyFormatter.string(from: model.today),
+                       SupabaseService.dayFormatter.string(from: model.today))
+    }
+
+    @MainActor
+    func testTodayKeyIsTodaysLocalDate() {
+        let model = AppModel()
+        let expected = SupabaseService.dayFormatter.string(from: Date())
+        XCTAssertEqual(model.todayKey, expected)
+    }
+
     // MARK: Seri (streak)
 
     @MainActor

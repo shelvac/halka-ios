@@ -141,11 +141,17 @@ final class SupabaseService {
         let health_consent_at: String?
     }
 
-    private static let dayFormatter: DateFormatter = {
+    /// Gün anahtarı ("yyyy-MM-dd") — uygulamanın TEK kaynağı.
+    ///
+    /// Dikkat: saat dilimi **yerel**. Eskiden UTC'ye sabitti ve `AppModel`
+    /// yerel formatlayıcı kullanıyordu; "bugün" yerel gece yarısı olduğu için
+    /// UTC'de bir önceki güne düşüyordu. Sonuç: veri "2026-08-07" satırına
+    /// yazılıp "2026-08-08" olarak aranıyor, bulunamıyor ve kaybolmuş
+    /// görünüyordu (su, uyku, seri hepsi bundan etkilendi).
+    static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(secondsFromGMT: 0)
         f.dateFormat = "yyyy-MM-dd"
         return f
     }()
