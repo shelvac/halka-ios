@@ -26,6 +26,8 @@ struct WorkoutRootView: View {
 
 struct WorkoutHomeView: View {
     @Environment(AppModel.self) private var model
+    /// Geçmiş günler kapalı başlar — sekme bugünle açılsın.
+    @State private var showPast = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -146,61 +148,102 @@ struct WorkoutHomeView: View {
                 .card(18)
             }
 
-            // Apple Watch/iPhone antrenmanları — "hangi egzersizi yaptım"
-            // sorusunun geçmişe dönük cevabı (US-023).
-            if !model.hkWorkouts.isEmpty {
-                HStack {
-                    Text("Apple Health")
-                        .font(.h(15))
+            // Apple Watch/iPhone antrenmanları (US-023).
+            //
+            // Eskiden 90 günün tamamı düz tek liste hâlinde akıyordu; hepsi
+            // aynı güne aitmiş gibi görünüyordu. Artık ekran bugünle açılıyor,
+            // geçmiş ayrı ve gün gün — istenmedikçe başka tarih görünmüyor.
+            if model.hkConnected {
+                appleHealthSection
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var appleHealthSection: some View {
+        let past = model.pastWorkoutDays
+
+        HStack {
+            Text("Apple Health")
+                .font(.h(15))
+                .foregroundStyle(Color.ink)
+            Spacer()
+            Text("Bugün")
+                .font(.h(10.5, .bold))
+                .foregroundStyle(Color.faint)
+        }
+        .padding(.top, 18)
+        .padding(.bottom, 10)
+
+        if model.todayWorkouts.isEmpty {
+            HStack(spacing: 10) {
+                Image(systemName: "figure.mixed.cardio")
+                    .font(.system(size: 15, weight: .light))
+                    .foregroundStyle(Color.chevron)
+                Text("Bugün henüz antrenman yok")
+                    .font(.h(12, .bold))
+                    .foregroundStyle(Color.sub)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity)
+            .card(18)
+        } else {
+            dayCard(model.todayWorkouts)
+        }
+
+        if !past.isEmpty {
+            // Geçmiş kapalı geliyor: "Egzersize girince diğer tarihleri
+            // görmemeliyim" — açmak kullanıcının kararı.
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { showPast.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Text("Geçmiş antrenmanlar")
+                        .font(.h(13))
                         .foregroundStyle(Color.ink)
+                    Text("\(past.count) gün")
+                        .font(.h(10, .bold))
+                        .foregroundStyle(Color.sub)
                     Spacer()
-                    Text("son 90 gün")
-                        .font(.h(10.5, .bold))
-                        .foregroundStyle(Color.faint)
+                    Image(systemName: showPast ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 11, weight: .heavy))
+                        .foregroundStyle(Color.chevron)
                 }
                 .padding(.top, 18)
                 .padding(.bottom, 10)
+            }
+            .buttonStyle(.plain)
 
-                VStack(spacing: 0) {
-                    ForEach(Array(model.hkWorkouts.enumerated()), id: \.element.id) { i, workout in
-                        HStack(spacing: 11) {
-                            ZStack {
-                                Circle().fill(Color.coralBg).frame(width: 34, height: 34)
-                                // Türe özel simge — hepsi koşu ikonuyken
-                                // Yoga ile HIIT ayırt edilemiyordu.
-                                Image(systemName: workout.symbol)
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(Color.coral)
-                            }
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(workout.name)
-                                    .font(.h(12.5, .bold))
-                                    .foregroundStyle(Color.inkSoft)
-                                Text("\(AppModel.measurementTitle(workout.start)) · \(workout.timeText)")
-                                    .font(.h(10.5, .bold))
-                                    .foregroundStyle(Color.faint)
-                            }
-                            Spacer(minLength: 6)
-                            VStack(alignment: .trailing, spacing: 1) {
-                                Text(workout.headline)
-                                    .font(.h(13))
-                                    .foregroundStyle(Color.coral)
-                                Text(workout.detailLine)
-                                    .font(.h(10, .bold))
-                                    .foregroundStyle(Color.sub)
-                            }
-                        }
-                        .padding(.vertical, 11)
-                        .overlay(alignment: .top) {
-                            if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
-                        }
-                    }
+            if showPast {
+                ForEach(past, id: \.date) { group in
+                    Text(AppModel.workoutDayTitle(group.date))
+                        .font(.h(11.5, .bold))
+                        .foregroundStyle(Color.sub)
+                        .padding(.leading, 4)
+                        .padding(.bottom, 6)
+                    dayCard(group.items)
+                        .padding(.bottom, 12)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 6)
-                .card(18)
             }
         }
+    }
+
+    private func dayCard(_ items: [HealthKitService.WorkoutSummary]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { i, workout in
+                WorkoutRow(workout: workout)
+                    .padding(.vertical, 11)
+                    .overlay(alignment: .top) {
+                        if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
+                    }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 3)
+        .frame(maxWidth: .infinity)
+        .card(18)
     }
 }
 

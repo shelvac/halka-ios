@@ -540,6 +540,37 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(run.paceText, "7'55\"/km")
     }
 
+    @MainActor
+    func testPastWorkoutsAreGroupedByDayNewestFirst() {
+        // Egzersiz sekmesinde 90 günün antrenmanları düz bir liste hâlinde
+        // akıyor, hepsi aynı güne aitmiş gibi görünüyordu.
+        let model = AppModel()
+        let calendar = AppModel.appCalendar
+        func at(_ daysAgo: Int, hour: Int) -> Date {
+            let day = calendar.date(byAdding: .day, value: -daysAgo, to: model.today)!
+            return calendar.date(byAdding: .hour, value: hour, to: day)!
+        }
+        model.hkWorkouts = [
+            .init(id: UUID(), name: "Yoga", minutes: 30, kcal: 100,
+                  distanceKm: nil, start: at(0, hour: 9), symbol: "figure.yoga"),
+            .init(id: UUID(), name: "Koşu", minutes: 20, kcal: 200,
+                  distanceKm: 3, start: at(1, hour: 8), symbol: "figure.run"),
+            .init(id: UUID(), name: "Yürüyüş", minutes: 15, kcal: 60,
+                  distanceKm: 1, start: at(1, hour: 18), symbol: "figure.walk"),
+            .init(id: UUID(), name: "HIIT", minutes: 25, kcal: 180,
+                  distanceKm: nil, start: at(3, hour: 12), symbol: "figure.run")
+        ]
+        XCTAssertEqual(model.todayWorkouts.count, 1)
+
+        let past = model.pastWorkoutDays
+        XCTAssertEqual(past.count, 2)                 // bugün gruplara girmez
+        XCTAssertEqual(past[0].items.count, 2)        // dün iki antrenman
+        XCTAssertGreaterThan(past[0].date, past[1].date)
+        // Gün içinde de yeniden eskiye.
+        XCTAssertEqual(past[0].items[0].name, "Yürüyüş")
+        XCTAssertEqual(AppModel.workoutDayTitle(past[0].date), "Dün")
+    }
+
     func testPaceIsHiddenWhenDistanceIsNegligible() {
         // 40 m'lik bir kayıtta "dk/km" anlamsız bir sayı üretirdi.
         let stroll = workout(name: "Yürüyüş", minutes: 3, kcal: 8, km: 0.04)

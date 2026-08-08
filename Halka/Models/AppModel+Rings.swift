@@ -147,6 +147,30 @@ extension AppModel {
         return hkWorkouts.filter { Self.appCalendar.isDate($0.start, inSameDayAs: date) }
     }
 
+    /// Bugün dışındaki antrenmanlar, güne göre gruplanmış (yeniden eskiye).
+    ///
+    /// Egzersiz sekmesindeki liste düz bir akıştı: 90 günün antrenmanları
+    /// arka arkaya diziliyor ve hepsi aynı güne aitmiş gibi görünüyordu.
+    var pastWorkoutDays: [(date: Date, items: [HealthKitService.WorkoutSummary])] {
+        let calendar = Self.appCalendar
+        let past = hkWorkouts.filter { !calendar.isDate($0.start, inSameDayAs: today) }
+        let grouped = Dictionary(grouping: past) { calendar.startOfDay(for: $0.start) }
+        return grouped
+            .map { (date: $0.key, items: $0.value.sorted { $0.start > $1.start }) }
+            .sorted { $0.date > $1.date }
+    }
+
+    /// Grup başlığı: "Dün" / "7 Ağustos Cuma".
+    static func workoutDayTitle(_ date: Date) -> String {
+        let calendar = appCalendar
+        if calendar.isDateInYesterday(date) { return "Dün" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "tr_TR")
+        f.dateFormat = calendar.isDate(date, equalTo: Date(), toGranularity: .year)
+            ? "d MMMM EEEE" : "d MMMM yyyy"
+        return f.string(from: date)
+    }
+
     /// Üst üste kaç gündür uygulama açılıyor.
     ///
     /// Bugünden geriye doğru sayar. Bugün henüz işaretlenmemişse (kayıt
