@@ -25,23 +25,52 @@ const PROVIDER = Deno.env.get("MEAL_AI_PROVIDER") ?? "gemini";
 const MODEL = Deno.env.get("MEAL_AI_MODEL") ?? "gemini-3.5-flash";
 const DAILY_QUOTA = Number(Deno.env.get("MEAL_AI_DAILY_QUOTA") ?? "3");
 
-const PROMPT = `Bu bir yemek fotoğrafı. Türkiye'de yaygın yemekleri tanıyorsun.
+/// Katalog sözlüğü — modele "şu adlardan seç" demenin karşılığı.
+///
+/// Neden: serbest metin ad döndürüldüğünde eşleştirmeyi biz yapıyorduk ve
+/// bulanık eşleşme yanlış kayda düşebiliyordu. "yoğurt" araması `%yogurt%`
+/// içeren kayıtlara düşüp "Yoğurt çorbası"nı seçiyordu — bir kase sade
+/// yoğurt çorba olarak kaydediliyordu. Model listeden seçince eşleşme
+/// tanım gereği doğru oluyor.
+let catalogCache: { names: string[]; at: number } | null = null;
+
+async function catalogNames(admin: ReturnType<typeof createClient>): Promise<string[]> {
+  const FRESH_MS = 10 * 60 * 1000;
+  if (catalogCache && Date.now() - catalogCache.at < FRESH_MS) return catalogCache.names;
+  const { data } = await admin.from("foods").select("name").order("name").limit(1000);
+  const names = (data ?? []).map((r: { name: string }) => r.name);
+  if (names.length) catalogCache = { names, at: Date.now() };
+  return names;
+}
+
+function buildPrompt(names: string[]): string {
+  return `Bu bir yemek fotoğrafı. Türkiye'de yaygın yemekleri tanıyorsun.
 
 Görevin: tabaktaki her ayrı yiyeceği ve içeceği tespit et, her biri için
 gerçekçi bir gram miktarı tahmin et.
 
-Kurallar:
-- Yemek adlarını TÜRKÇE ve yaygın kullanılan hâliyle yaz ("bulgur pilavı",
-  "ızgara köfte", "cacık"). Marka adı yazma.
+ÖNEMLİ — yemek adı seçimi:
+- Aşağıdaki KATALOG listesinden birebir kopyalayarak "catalog_name" alanına yaz.
+- Listede tam karşılığı yoksa en yakın GENEL adı seç ("Yoğurt", "Çorba",
+  "Sebze yemeği" gibi). Yanlış ama spesifik bir ad seçmektense genel ad daha iyi.
+- Sade yoğurt gördüğünde "Yoğurt" seç; "Yoğurt çorbası" yalnızca sıcak,
+  sulu, kaşıkla içilen bir çorba ise geçerlidir.
+- Listede hiçbir makul karşılık yoksa catalog_name'i BOŞ bırak ve gerçek adı
+  "custom_name" alanına yaz.
+
+Diğer kurallar:
 - Karışık tabağı bileşenlerine ayır: "pilav üstü tavuk" yerine ayrı ayrı
-  "pirinç pilavı" ve "tavuk sote" gibi.
+  "Pirinç pilavı" ve "Tavuk sote".
 - Gram tahmininde tabak, çatal, bardak gibi referansları kullan. Emin
   değilsen Türkiye'deki tipik porsiyonu esas al.
 - Görselde yemek yoksa items boş dizi dönsün.
 - confidence: 0-1 arası, tanımadaki güvenin.
-- kcal_estimate: yalnızca yedek olarak kullanılacak, o miktar için toplam
-  kalori tahminin.
-- Uydurma. Göremediğin bir şeyi ekleme.`;
+- kcal_estimate: yalnızca catalog_name boşsa kullanılacak yedek tahmin.
+- Uydurma. Göremediğin bir şeyi ekleme.
+
+KATALOG:
+${names.join(" | ")}`;
+}
 
 const SCHEMA = {
   type: "object",
@@ -51,12 +80,13 @@ const SCHEMA = {
       items: {
         type: "object",
         properties: {
-          name: { type: "string" },
+          catalog_name: { type: "string" },
+          custom_name: { type: "string" },
           grams: { type: "number" },
           kcal_estimate: { type: "number" },
           confidence: { type: "number" },
         },
-        required: ["name", "grams", "kcal_estimate", "confidence"],
+        required: ["catalog_name", "custom_name", "grams", "kcal_estimate", "confidence"],
       },
     },
     note: { type: "string" },
@@ -64,7 +94,13 @@ const SCHEMA = {
   required: ["items"],
 };
 
-type AiItem = { name: string; grams: number; kcal_estimate: number; confidence: number };
+type AiItem = {
+  catalog_name: string;
+  custom_name: string;
+  grams: number;
+  kcal_estimate: number;
+  confidence: number;
+};
 
 /// Türkçe'ye özel sadeleştirme. `toLowerCase()` yetmiyor: "İ" harfi
 /// "i" + birleşik nokta üretiyor ve hiçbir kayda eşleşmiyor.
@@ -76,7 +112,7 @@ function searchKey(text: string): string {
   return [...text].map((c) => map[c] ?? c).join("").toLowerCase().trim();
 }
 
-async function callGemini(imageB64: string, mime: string): Promise<{ items: AiItem[]; note?: string }> {
+async function callGemini(imageB64: string, mime: string, prompt: string): Promise<{ items: AiItem[]; note?: string }> {
   const key = Deno.env.get("GEMINI_API_KEY");
   if (!key) throw new Error("GEMINI_API_KEY tanımlı değil");
   const res = await fetch(
@@ -86,7 +122,7 @@ async function callGemini(imageB64: string, mime: string): Promise<{ items: AiIt
       headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{
-          parts: [{ text: PROMPT }, { inline_data: { mime_type: mime, data: imageB64 } }],
+          parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: imageB64 } }],
         }],
         generationConfig: {
           responseMimeType: "application/json",
@@ -137,30 +173,40 @@ Deno.serve(async (req) => {
     const { image, mime } = await req.json();
     if (!image) throw new Error("Fotoğraf yok");
 
-    const ai = await callGemini(image, mime ?? "image/jpeg");
+    const names = await catalogNames(admin);
+    const ai = await callGemini(image, mime ?? "image/jpeg", buildPrompt(names));
     const aiItems: AiItem[] = Array.isArray(ai.items) ? ai.items : [];
 
     // Kataloğa bağla: kalori bizim tablomuzdan gelsin.
     const items = [];
     for (const item of aiItems) {
-      const key = searchKey(String(item.name ?? ""));
+      const chosen = String(item.catalog_name ?? "").trim();
+      const custom = String(item.custom_name ?? "").trim();
+      const key = searchKey(chosen || custom);
       if (!key) continue;
       const grams = Math.max(1, Math.round(Number(item.grams) || 0));
 
+      const columns = "id,name,kcal_100g,protein_100g,carb_100g,fat_100g,portion_g,portion_name";
       let { data: rows } = await admin.from("foods")
-        .select("id,name,kcal_100g,protein_100g,carb_100g,fat_100g,portion_g,portion_name")
-        .eq("search_key", key).limit(1);
-      if (!rows?.length) {
-        // Tam eşleşme yoksa içeren kayıt ("izgara kofte" → "kofte").
-        const r = await admin.from("foods")
-          .select("id,name,kcal_100g,protein_100g,carb_100g,fat_100g,portion_g,portion_name")
-          .ilike("search_key", `%${key}%`).limit(1);
-        rows = r.data ?? [];
+        .select(columns).eq("search_key", key).limit(1);
+
+      // Bulanık eşleşme yalnızca model listeden seçemediğinde. Serbest
+      // metinde `%yogurt%` "Yoğurt çorbası"na düşebiliyordu; bu yüzden
+      // önce kelime başı aranıyor, ancak o da yoksa içeren kayda bakılıyor.
+      if (!rows?.length && !chosen) {
+        const prefix = await admin.from("foods")
+          .select(columns).ilike("search_key", `${key}%`).order("search_key").limit(1);
+        rows = prefix.data ?? [];
+        if (!rows.length) {
+          const contains = await admin.from("foods")
+            .select(columns).ilike("search_key", `%${key}%`).order("search_key").limit(1);
+          rows = contains.data ?? [];
+        }
       }
       const food = rows?.[0];
       const fallbackKcal = Math.max(0, Math.round(Number(item.kcal_estimate) || 0));
       items.push({
-        name: food?.name ?? item.name,
+        name: food?.name ?? (custom || chosen),
         matched: !!food,
         food_id: food?.id ?? null,
         grams,
