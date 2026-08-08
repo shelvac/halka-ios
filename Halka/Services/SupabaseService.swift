@@ -624,6 +624,145 @@ final class SupabaseService {
         await signOut()
     }
 
+    // MARK: Yemek fotoğrafı analizi (US-029)
+
+    private struct AnalyzeResponse: Decodable {
+        struct Item: Decodable {
+            let name: String
+            let matched: Bool
+            let food_id: String?
+            let grams: Int
+            let kcal_100g: Int
+            let portion_g: Int
+            let portion_name: String
+            let confidence: Double
+        }
+        let items: [Item]
+        let note: String?
+        let log_id: String?
+        let used: Int?
+        let quota: Int?
+    }
+
+    private struct AnalyzeError: Decodable {
+        let error: String?
+        let message: String?
+    }
+
+    enum MealAnalysisError: LocalizedError {
+        case quota(String)
+        case failed(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .quota(let text), .failed(let text): return text
+            }
+        }
+    }
+
+    /// Fotoğrafı Edge Function'a gönderip tahmini alır.
+    ///
+    /// Sağlayıcı anahtarı burada YOK — istek sunucuya gidiyor, sağlayıcıyı
+    /// ve günlük kotayı sunucu belirliyor. Uygulamada bir hata olsa bile kota
+    /// aşılamaz.
+    func analyzeMeal(imageData: Data) async throws -> MealAnalysis {
+        guard let client else {
+            throw MealAnalysisError.failed("Sunucu bağlantısı yok.")
+        }
+        let body: [String: AnyJSON] = [
+            "image": .string(imageData.base64EncodedString()),
+            "mime": .string("image/jpeg")
+        ]
+        let response = try await client.functions.invoke(
+            "analyze-meal",
+            options: FunctionInvokeOptions(body: body)
+        ) { data, urlResponse in
+            (data, (urlResponse as? HTTPURLResponse)?.statusCode ?? 200)
+        }
+
+        let (data, status) = response
+        guard status < 400 else {
+            let detail = try? JSONDecoder().decode(AnalyzeError.self, from: data)
+            let text = detail?.message ?? detail?.error ?? "Tahmin alınamadı."
+            throw status == 429 ? MealAnalysisError.quota(text) : MealAnalysisError.failed(text)
+        }
+
+        let decoded = try JSONDecoder().decode(AnalyzeResponse.self, from: data)
+        return MealAnalysis(
+            items: decoded.items.map {
+                AnalyzedFood(name: $0.name, foodID: $0.food_id, matched: $0.matched,
+                             grams: $0.grams, kcal100: $0.kcal_100g,
+                             portionG: $0.portion_g, portionName: $0.portion_name,
+                             confidence: $0.confidence)
+            },
+            note: decoded.note,
+            logID: decoded.log_id,
+            usedToday: decoded.used ?? 0,
+            quota: decoded.quota ?? 0)
+    }
+
+    private struct FoodRow: Decodable {
+        let id: String
+        let name: String
+        let kcal_100g: Int
+        let portion_g: Int
+        let portion_name: String
+    }
+
+    /// Katalogda arama.
+    ///
+    /// Arama anahtarı sadeleştirilmiş sütunda tutuluyor; Türkçe'de
+    /// `lowercased()` "İ" harfini "i" + birleşik nokta yapıyor ve hiçbir
+    /// kayda eşleşmiyor (aynı tuzağa tartı OCR'ında da düşmüştük).
+    func searchFoods(_ query: String, limit: Int = 30) async -> [FoodOption] {
+        guard let client else { return [] }
+        let key = Self.searchKey(query)
+        guard !key.isEmpty else { return [] }
+        guard let rows: [FoodRow] = try? await client.from("foods")
+            .select("id,name,kcal_100g,portion_g,portion_name")
+            .ilike("search_key", pattern: "%\(key)%")
+            .order("search_key")
+            .limit(limit)
+            .execute()
+            .value else { return [] }
+        return rows.map {
+            FoodOption(id: $0.id, name: $0.name, kcal100: $0.kcal_100g,
+                       portionG: $0.portion_g, portionName: $0.portion_name)
+        }
+    }
+
+    /// Kullanıcının düzeltmesini kayda işler — doğruluğu ölçebilmek ve
+    /// ileride kişiselleştirebilmek için. Fotoğraf saklanmıyor, yalnızca
+    /// bu metin çifti.
+    func recordMealCorrection(logID: String, finalItems: [AnalyzedFood],
+                              corrected: Bool) async {
+        guard let client else { return }
+        let payload: [String: AnyJSON] = [
+            "final_items": .array(finalItems.map {
+                .object(["name": .string($0.name),
+                         "grams": .integer($0.grams),
+                         "kcal": .integer($0.kcal),
+                         "matched": .bool($0.matched)])
+            }),
+            "corrected": .bool(corrected)
+        ]
+        _ = try? await client.from("meal_photo_log")
+            .update(payload)
+            .eq("id", value: logID)
+            .execute()
+    }
+
+    /// Türkçe'ye özel sadeleştirme (sunucudaki `searchKey` ile aynı eşleme).
+    static func searchKey(_ text: String) -> String {
+        let map: [Character: Character] = [
+            "İ": "i", "I": "i", "ı": "i", "Ş": "s", "ş": "s", "Ğ": "g", "ğ": "g",
+            "Ü": "u", "ü": "u", "Ö": "o", "ö": "o", "Ç": "c", "ç": "c", "Â": "a", "â": "a"
+        ]
+        return String(text.map { map[$0] ?? $0 })
+            .lowercased(with: Locale(identifier: "en_US_POSIX"))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     // MARK: SSO (US-018 · Google · Apple)
 
     /// Sağlayıcıyla giriş — ASWebAuthenticationSession üzerinden, dönüşte

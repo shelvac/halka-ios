@@ -168,6 +168,8 @@ struct MealCatalogView: View {
 struct PhotoLogView: View {
     @Environment(AppModel.self) private var model
     @State private var pickerItem: PhotosPickerItem? = nil
+    /// AI çalışmadığında elle yemek ekleme.
+    @State private var manualAdd = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -177,7 +179,7 @@ struct PhotoLogView: View {
                 .font(.h(22))
                 .foregroundStyle(Color.ink)
                 .kerning(-0.5)
-            Text("Öğününü fotoğrafla — Vision AI porsiyon ve kalori tahmini yapar")
+            Text("Öğününü fotoğrafla — yapay zekâ yiyecekleri ve porsiyonu tahmin eder, sen onaylarsın")
                 .font(.h(12, .semibold))
                 .foregroundStyle(Color.sub)
                 .padding(.top, 2)
@@ -196,7 +198,7 @@ struct PhotoLogView: View {
                     HStack(spacing: 12) {
                         SpinnerArc(size: 22)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("Vision AI analiz ediyor…")
+                            Text("Fotoğraf inceleniyor…")
                                 .font(.h(13))
                                 .foregroundStyle(Color.ink)
                             Text("Yiyecekler ve porsiyon tanımlanıyor")
@@ -212,15 +214,21 @@ struct PhotoLogView: View {
                 }
 
                 if model.photoState == .done {
-                    estimateCard
-                        .padding(.top, 12)
-
-                    Button { model.savePhotoMeal() } label: {
-                        Text("Günlüğe kaydet").frame(maxWidth: .infinity)
+                    if let error = model.mealAnalysisError {
+                        photoErrorCard(error)
+                            .padding(.top, 12)
                     }
-                    .buttonStyle(.plain)
-                    .coralButton()
-                    .padding(.top, 12)
+                    if let analysis = model.mealAnalysis, !analysis.items.isEmpty {
+                        MealEstimateCard(analysis: analysis)
+                            .padding(.top, 12)
+
+                        Button { model.savePhotoMeal() } label: {
+                            Text("Günlüğe kaydet").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.plain)
+                        .coralButton()
+                        .padding(.top, 12)
+                    }
 
                     Button {
                         pickerItem = nil
@@ -269,44 +277,39 @@ struct PhotoLogView: View {
         }
     }
 
-    private var estimateCard: some View {
-        let estimate = model.currentPhotoEstimate
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("AI tahmini").font(.h(13)).foregroundStyle(Color.ink)
-                Spacer()
-                Text("±%15 doğruluk")
-                    .font(.h(10))
-                    .foregroundStyle(Color.greenDark)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(Color.greenBg))
+    /// Tahmin alınamadıysa sebebini söyle — sessizce boş ekran gösterme.
+    private func photoErrorCard(_ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 7) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.warnOrange)
+                Text("Tahmin alınamadı")
+                    .font(.h(13))
+                    .foregroundStyle(Color.ink)
             }
-            .padding(.bottom, 10)
-            VStack(spacing: 7) {
-                ForEach(estimate.items, id: \.0) { item in
-                    HStack {
-                        Text(item.0).font(.h(12.5, .bold)).foregroundStyle(Color.inkBody)
-                        Spacer()
-                        Text(item.1).font(.h(12)).foregroundStyle(Color.sub)
-                    }
-                }
+            Text(text)
+                .font(.h(11.5, .semibold))
+                .foregroundStyle(Color.sub)
+                .fixedSize(horizontal: false, vertical: true)
+            // Yine de elle ekleyebilsin: AI'ın çalışmaması öğün kaydını
+            // tamamen engellememeli.
+            Button { manualAdd = true } label: {
+                Text("Elle ekle")
+                    .font(.h(12, .bold))
+                    .foregroundStyle(Color.coral)
             }
-            .padding(.bottom, 12)
-            HStack {
-                Text("Toplam").font(.h(13)).foregroundStyle(Color.ink)
-                Spacer()
-                Text("~\(estimate.total) kcal").font(.h(13)).foregroundStyle(Color.coral)
-            }
-            .padding(.top, 10)
-            .overlay(alignment: .top) {
-                Rectangle().fill(Color.hairline).frame(height: 1)
-            }
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 15)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .card(18)
+        .sheet(isPresented: $manualAdd) {
+            FoodSearchSheet(title: "Yemek ekle") { model.addItem($0) }
+        }
     }
+
 }
 
 // MARK: - Market list (day's ingredients, checkable)

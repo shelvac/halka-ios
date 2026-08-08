@@ -122,6 +122,11 @@ final class AppModel {
     var extras: [ExtraMeal] = []
     var photoData: Data? = nil
     var photoState: PhotoState = .idle
+    /// US-029 — fotoğraftan gelen tahmin, onay bekliyor.
+    var mealAnalysis: MealAnalysis? = nil
+    var mealAnalysisError: String? = nil
+    /// Kullanıcı tahmini düzeltti mi? Doğruluk ölçümünün tek sinyali.
+    var mealAnalysisEdited = false
 
     // MARK: Coach
     var messages: [CoachMessage] = Demo.initialMessages()

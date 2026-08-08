@@ -77,11 +77,6 @@ struct ExtraMeal: Identifiable, Equatable {
     var time: String
 }
 
-struct PhotoEstimate {
-    var items: [(String, String)]
-    var total: Int
-}
-
 // MARK: - Coach
 
 enum CoachRole { case user, coach, ask, plan, week, menu }

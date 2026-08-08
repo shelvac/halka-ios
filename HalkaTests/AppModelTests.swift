@@ -471,6 +471,85 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(high.refPosition, 0.98, accuracy: 0.001) // clamp üst sınırı
     }
 
+    // MARK: Fotoğraftan öğün tahmini (US-029)
+
+    private func analyzed(_ name: String, grams: Int, kcal100: Int,
+                          portionG: Int, matched: Bool = true,
+                          confidence: Double = 0.9) -> AnalyzedFood {
+        AnalyzedFood(name: name, matched: matched, grams: grams, kcal100: kcal100,
+                     portionG: portionG, portionName: "porsiyon", confidence: confidence)
+    }
+
+    func testKcalFollowsGrams() {
+        // Porsiyon değişince kalori yeniden hesaplanmalı; sunucudan gelen
+        // sabit sayıyı taşımak düzeltmeyi anlamsız kılardı.
+        var item = analyzed("Bulgur pilavı", grams: 150, kcal100: 138, portionG: 150)
+        XCTAssertEqual(item.kcal, 207)
+        item.grams = 75
+        XCTAssertEqual(item.kcal, 104)
+    }
+
+    func testPortionTextUsesFractions() {
+        XCTAssertEqual(analyzed("Pilav", grams: 75, kcal100: 138, portionG: 150).portionText,
+                       "½ porsiyon · 75 g")
+        XCTAssertEqual(analyzed("Pilav", grams: 225, kcal100: 138, portionG: 150).portionText,
+                       "1½ porsiyon · 225 g")
+    }
+
+    func testTotalIsShownAsRangeNotSingleNumber() {
+        // Porsiyon fotoğraftan tahmin ediliyor; tek sayı belirsizliği gizlerdi.
+        let analysis = MealAnalysis(
+            items: [analyzed("Köfte", grams: 150, kcal100: 215, portionG: 150),
+                    analyzed("Pilav", grams: 150, kcal100: 138, portionG: 150)],
+            note: nil, logID: nil, usedToday: 1, quota: 3)
+        XCTAssertEqual(analysis.totalKcal, 530)
+        let range = analysis.kcalRange
+        XCTAssertLessThan(range.low, analysis.totalKcal)
+        XCTAssertGreaterThan(range.high, analysis.totalKcal)
+    }
+
+    @MainActor
+    func testReplacingFoodRefitsPortionToTheNewDish() {
+        // Çorbanın 150 g'ı ile pilavın 150 g'ı aynı şey değil; gramajı
+        // aynen taşımak yanıltıcı olurdu.
+        let model = AppModel()
+        model.mealAnalysis = MealAnalysis(
+            items: [analyzed("Pilav", grams: 300, kcal100: 138, portionG: 150)],
+            note: nil, logID: nil, usedToday: 1, quota: 3)
+        let id = model.mealAnalysis!.items[0].id
+        model.replaceItem(id, with: FoodOption(id: "x", name: "Mercimek çorbası",
+                                               kcal100: 65, portionG: 250,
+                                               portionName: "kase"))
+        let item = model.mealAnalysis!.items[0]
+        XCTAssertEqual(item.name, "Mercimek çorbası")
+        XCTAssertEqual(item.grams, 500)          // 2 kase (300/150 = 2 kat)
+        XCTAssertTrue(model.mealAnalysisEdited)
+    }
+
+    @MainActor
+    func testEachAnalyzedFoodBecomesItsOwnLogEntry() {
+        // Tek satırda toplasaydık kullanıcı yalnızca birini silemezdi.
+        let model = AppModel()
+        model.mealDay = model.todayWeekdayIndex
+        model.mealAnalysis = MealAnalysis(
+            items: [analyzed("Köfte", grams: 150, kcal100: 215, portionG: 150),
+                    analyzed("Cacık", grams: 150, kcal100: 45, portionG: 150)],
+            note: nil, logID: nil, usedToday: 1, quota: 3)
+        let before = model.extras.count
+        model.savePhotoMeal()
+        XCTAssertEqual(model.extras.count, before + 2)
+        XCTAssertNil(model.mealAnalysis)          // onay ekranı kapanır
+        XCTAssertEqual(model.photoState, .idle)
+    }
+
+    func testSearchKeyFlattensTurkishCharacters() {
+        // Türkçe'de lowercased() "İ" harfini "i" + birleşik nokta yapıyor ve
+        // hiçbir kayda eşleşmiyor — tartı OCR'ında da aynı tuzağa düşmüştük.
+        XCTAssertEqual(SupabaseService.searchKey("İzgara Köfte"), "izgara kofte")
+        XCTAssertEqual(SupabaseService.searchKey("Şehriyeli Pilav"), "sehriyeli pilav")
+        XCTAssertEqual(SupabaseService.searchKey("  Çiğ Köfte "), "cig kofte")
+    }
+
     // MARK: Enerji dengesi ve kilo tahmini (US-027)
 
     private func testProfile() -> Profile {

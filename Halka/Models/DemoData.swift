@@ -60,11 +60,6 @@ enum Demo {
     ]
 
     /// Rotating fake Vision AI estimates.
-    static let photoEstimates: [PhotoEstimate] = [
-        PhotoEstimate(items: [("Izgara köfte (4 adet)", "~310 kcal"), ("Pirinç pilavı (1 porsiyon)", "~210 kcal"), ("Mevsim salata", "~60 kcal")], total: 580),
-        PhotoEstimate(items: [("Karışık pizza (2 dilim)", "~440 kcal"), ("Ayran (1 bardak)", "~90 kcal")], total: 530),
-        PhotoEstimate(items: [("Mantı (1 porsiyon)", "~480 kcal"), ("Yoğurtlu sos", "~110 kcal")], total: 590)
-    ]
 
     // MARK: Health
 

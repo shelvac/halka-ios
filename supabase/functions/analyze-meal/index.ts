@@ -158,15 +158,23 @@ Deno.serve(async (req) => {
         rows = r.data ?? [];
       }
       const food = rows?.[0];
+      const fallbackKcal = Math.max(0, Math.round(Number(item.kcal_estimate) || 0));
       items.push({
         name: food?.name ?? item.name,
         matched: !!food,
         food_id: food?.id ?? null,
         grams,
         // Eşleşme varsa katalogdan, yoksa AI'ın kendi tahmini.
-        kcal: food
-          ? Math.round((food.kcal_100g * grams) / 100)
-          : Math.max(0, Math.round(Number(item.kcal_estimate) || 0)),
+        kcal: food ? Math.round((food.kcal_100g * grams) / 100) : fallbackKcal,
+        // Porsiyon değiştiğinde kaloriyi uygulama yeniden hesaplayabilsin
+        // diye 100 g başına değer de gönderiliyor. Eşleşme yoksa AI'ın
+        // tahmininden geriye doğru türetiliyor.
+        kcal_100g: food
+          ? food.kcal_100g
+          : (grams > 0 ? Math.round((fallbackKcal * 100) / grams) : 0),
+        protein_100g: food?.protein_100g ?? null,
+        carb_100g: food?.carb_100g ?? null,
+        fat_100g: food?.fat_100g ?? null,
         portion_g: food?.portion_g ?? grams,
         portion_name: food?.portion_name ?? "porsiyon",
         confidence: Math.min(1, Math.max(0, Number(item.confidence) || 0)),
