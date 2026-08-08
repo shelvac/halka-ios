@@ -831,3 +831,189 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(stroll.paceText)
     }
 }
+
+// MARK: - Kural tabanlı plan üretimi (US-032 · US-033)
+
+final class PlanGeneratorTests: XCTestCase {
+
+    private func food(_ id: String, _ name: String, _ category: String,
+                      kcal: Int, protein: Double = 5, portion: Int = 150,
+                      tags: [String] = []) -> PlanFood {
+        PlanFood(id: id, name: name, category: category, kcal100: kcal,
+                 protein100: protein, carb100: 20, fat100: 5,
+                 portionG: portion, portionName: "porsiyon", tags: tags)
+    }
+
+    private var catalog: [PlanFood] {
+        [food("1", "Izgara köfte", "et", kcal: 215, tags: ["et", "kirmizi_et"]),
+         food("2", "Tavuk sote", "et", kcal: 145, tags: ["et"]),
+         food("3", "Bulgur pilavı", "pilav", kcal: 138, tags: ["vegan", "vejetaryen"]),
+         food("4", "Beyaz peynir", "sut", kcal: 265, portion: 30, tags: ["sut", "vejetaryen"]),
+         food("5", "Tam buğday ekmeği", "ekmek", kcal: 245, portion: 50,
+              tags: ["gluten", "vegan", "vejetaryen"]),
+         food("6", "Elma", "meyve", kcal: 52, portion: 180, tags: ["vegan", "vejetaryen"]),
+         food("7", "Mercimek çorbası", "corba", kcal: 65, portion: 250,
+              tags: ["vegan", "vejetaryen"]),
+         food("8", "Çoban salata", "salata", kcal: 35, portion: 200,
+              tags: ["vegan", "vejetaryen"]),
+         food("9", "Ceviz", "kuruyemis", kcal: 654, portion: 30,
+              tags: ["findik", "vegan", "vejetaryen"]),
+         food("10", "Bira", "icecek", kcal: 43, portion: 330, tags: ["alkol", "vegan"])]
+    }
+
+    private var prefs: PlanPreferences {
+        var p = PlanPreferences()
+        p.mealsPerDay = 4
+        p.mealTimes = ["08:30", "13:00", "16:30", "20:00"]
+        return p
+    }
+
+    func testVeganStyleRemovesAnimalFoods() {
+        var p = prefs
+        p.dietStyle = .vegan
+        let pool = MealPlanGenerator.pool(from: catalog, prefs: p, protocolItem: nil)
+        XCTAssertFalse(pool.contains { $0.name == "Izgara köfte" })
+        XCTAssertFalse(pool.contains { $0.name == "Beyaz peynir" })
+        XCTAssertTrue(pool.contains { $0.name == "Bulgur pilavı" })
+    }
+
+    func testAllergyRemovesMatchingTag() {
+        var p = prefs
+        p.allergies = ["Gluten"]
+        let pool = MealPlanGenerator.pool(from: catalog, prefs: p, protocolItem: nil)
+        XCTAssertFalse(pool.contains { $0.name == "Tam buğday ekmeği" })
+    }
+
+    func testFreeTextDislikeIsMatchedByName() {
+        // Kullanıcı listede olmayan bir şey yazdıysa etiket yok, ada bakmak
+        // tek yol ("Ceviz" → kuruyemiş etiketi genel kalırdı).
+        var p = prefs
+        p.dislikes = ["Ceviz"]
+        let pool = MealPlanGenerator.pool(from: catalog, prefs: p, protocolItem: nil)
+        XCTAssertFalse(pool.contains { $0.name == "Ceviz" })
+        XCTAssertTrue(pool.contains { $0.name == "Elma" })
+    }
+
+    func testAlcoholAndDrinksNeverEnterThePlan() {
+        let pool = MealPlanGenerator.pool(from: catalog, prefs: prefs, protocolItem: nil)
+        XCTAssertFalse(pool.contains { $0.name == "Bira" })
+    }
+
+    func testPlanCoversSevenDaysWithAllMeals() {
+        let plan = MealPlanGenerator.generate(
+            foods: catalog, prefs: prefs, protocolItem: nil, kcalTarget: 1800,
+            weightKg: 68, weekStart: Date(timeIntervalSince1970: 1_754_611_200))
+        XCTAssertEqual(plan.days.count, 7)
+        XCTAssertTrue(plan.days.allSatisfy { $0.meals.count == 4 })
+        XCTAssertTrue(plan.days.allSatisfy { day in day.meals.allSatisfy { !$0.items.isEmpty } })
+    }
+
+    func testSameWeekProducesSamePlan() {
+        // Her açılışta menü değişirse kullanıcı dünkü planını bulamaz.
+        let week = Date(timeIntervalSince1970: 1_754_611_200)
+        let a = MealPlanGenerator.generate(foods: catalog, prefs: prefs, protocolItem: nil,
+                                           kcalTarget: 1800, weightKg: 68, weekStart: week)
+        let b = MealPlanGenerator.generate(foods: catalog, prefs: prefs, protocolItem: nil,
+                                           kcalTarget: 1800, weightKg: 68, weekStart: week)
+        XCTAssertEqual(a, b)
+    }
+
+    func testDifferentWeeksProduceDifferentPlans() {
+        let week1 = Date(timeIntervalSince1970: 1_754_611_200)
+        let week2 = week1.addingTimeInterval(7 * 86_400)
+        let a = MealPlanGenerator.generate(foods: catalog, prefs: prefs, protocolItem: nil,
+                                           kcalTarget: 1800, weightKg: 68, weekStart: week1)
+        let b = MealPlanGenerator.generate(foods: catalog, prefs: prefs, protocolItem: nil,
+                                           kcalTarget: 1800, weightKg: 68, weekStart: week2)
+        XCTAssertNotEqual(a.days, b.days)
+    }
+
+    func testPortionsAreRoundedToMeasurableAmounts() {
+        // "137 gram pilav" ölçülemez; 25 g'ın katları kullanılıyor.
+        let plan = MealPlanGenerator.generate(
+            foods: catalog, prefs: prefs, protocolItem: nil, kcalTarget: 1800,
+            weightKg: 68, weekStart: Date(timeIntervalSince1970: 1_754_611_200))
+        let grams = plan.days.flatMap { $0.meals }.flatMap { $0.items }.map(\.grams)
+        XCTAssertFalse(grams.isEmpty)
+        XCTAssertTrue(grams.allSatisfy { $0 % 25 == 0 })
+    }
+
+    // MARK: Antrenman
+
+    private func exercise(_ id: String, _ region: String, needs: String = "none",
+                          level: String = "Başlangıç",
+                          mechanic: String = "compound") -> PlanExercise {
+        PlanExercise(id: id, name: id, nameTR: nil, region: region,
+                     equipment: "Ekipmansız", needs: needs, level: level,
+                     category: "Kuvvet", mechanic: mechanic)
+    }
+
+    private var gym: [PlanExercise] {
+        var list: [PlanExercise] = []
+        for region in ["Göğüs", "Omuz", "Triceps", "Sırt", "Biceps", "Trapez",
+                       "Ön Bacak", "Arka Bacak", "Kalça", "Baldır", "Karın", "Bel"] {
+            for i in 0..<3 {
+                list.append(exercise("\(region)-\(i)", region,
+                                     needs: i == 0 ? "none" : "gym"))
+            }
+        }
+        return list
+    }
+
+    func testEquipmentFilterRespectsWhatUserHas() {
+        var p = PlanPreferences()
+        p.equipment = .none
+        let pool = WorkoutPlanGenerator.pool(from: gym, prefs: p, beginner: true)
+        XCTAssertTrue(pool.allSatisfy { $0.needs == "none" })
+    }
+
+    func testInjuryRemovesTheWholeRegion() {
+        // Sakat bölgeyi çalıştırmak iyileşmeyi geciktirir.
+        var p = PlanPreferences()
+        p.equipment = .gym
+        p.injuries = ["Diz"]
+        let pool = WorkoutPlanGenerator.pool(from: gym, prefs: p, beginner: false)
+        XCTAssertFalse(pool.contains { $0.region == "Ön Bacak" })
+        XCTAssertFalse(pool.contains { $0.region == "Arka Bacak" })
+        XCTAssertTrue(pool.contains { $0.region == "Göğüs" })
+    }
+
+    func testSessionCountMatchesRequestedDays() {
+        var p = PlanPreferences()
+        p.equipment = .gym
+        p.workoutDays = 4
+        let plan = WorkoutPlanGenerator.generate(
+            exercises: gym, prefs: p, activity: .moderate,
+            weekStart: Date(timeIntervalSince1970: 1_754_611_200))
+        XCTAssertEqual(plan.sessions.count, 4)
+        XCTAssertEqual(plan.restDays.count, 3)
+        // Günler haftaya yayılmalı, arka arkaya yığılmamalı.
+        XCTAssertEqual(Set(plan.sessions.map(\.day)).count, 4)
+    }
+
+    func testWeeklyCardioMeetsWhoMinimum() {
+        // DSÖ 2020: haftada en az 150 dk orta şiddet aerobik.
+        var p = PlanPreferences()
+        p.equipment = .gym
+        p.workoutDays = 3
+        let plan = WorkoutPlanGenerator.generate(
+            exercises: gym, prefs: p, activity: .moderate,
+            weekStart: Date(timeIntervalSince1970: 1_754_611_200))
+        XCTAssertGreaterThanOrEqual(plan.weeklyCardioMinutes, 150)
+    }
+
+    func testBeginnerGetsFullBodyAndFewerSets() {
+        // Yeni başlayanda itme/çekme ayrımı gereksiz karmaşıklık; sıklık
+        // daha değerli (ACSM başlangıç için 2-3 gün, 2-4 set).
+        let split = WorkoutPlanGenerator.split(days: 3, beginner: true)
+        XCTAssertTrue(split.allSatisfy { $0.title == "Tüm vücut" })
+        var p = PlanPreferences()
+        p.equipment = .gym
+        p.workoutDays = 3
+        let plan = WorkoutPlanGenerator.generate(
+            exercises: gym, prefs: p, activity: .sedentary,
+            weekStart: Date(timeIntervalSince1970: 1_754_611_200))
+        let sets = plan.sessions.flatMap { $0.exercises }.map(\.sets)
+        XCTAssertTrue(sets.allSatisfy { $0 == 2 })
+    }
+}

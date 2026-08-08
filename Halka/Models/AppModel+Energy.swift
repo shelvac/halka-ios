@@ -121,3 +121,33 @@ extension AppModel {
         }
     }
 }
+
+// MARK: - Plan üretimi (US-032 · US-033)
+
+extension AppModel {
+
+    /// Sihirbaz tamamlanınca haftanın menüsünü ve antrenmanını kurar.
+    ///
+    /// Üretim tamamen istemcide ve kural tabanlı: AI çağrısı yok, maliyet yok,
+    /// çevrimdışı çalışır ve hedefi tutturması garanti.
+    func buildWeeklyPlan(_ prefs: PlanPreferences) async {
+        planBusy = true
+        defer { planBusy = false }
+
+        let foods = await SupabaseService.shared.fetchPlanFoods()
+        let exercises = await SupabaseService.shared.fetchPlanExercises()
+        let protocols = await SupabaseService.shared.fetchProtocols()
+        let chosen = protocols.first { $0.key == prefs.protocolKey }
+
+        mealPlan = MealPlanGenerator.generate(
+            foods: foods, prefs: prefs, protocolItem: chosen,
+            kcalTarget: profile.calorieGoal ?? Int(RingKind.nutrition.goal),
+            weightKg: profile.weightKg, weekStart: weekStart)
+
+        workoutPlan = WorkoutPlanGenerator.generate(
+            exercises: exercises, prefs: prefs,
+            activity: profile.activityLevel, weekStart: weekStart)
+
+        planPreferences = prefs
+    }
+}

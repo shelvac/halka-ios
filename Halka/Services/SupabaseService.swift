@@ -843,6 +843,30 @@ final class SupabaseService {
             .execute()
     }
 
+    /// Plan üreticisi için tüm yemek kataloğu (225 satır — tek seferde).
+    func fetchPlanFoods() async -> [PlanFood] {
+        guard let client else { return [] }
+        guard let rows: [PlanFood] = try? await client.from("foods")
+            .select("id,name,category,kcal_100g,protein_100g,carb_100g,fat_100g,portion_g,portion_name,tags")
+            .limit(1000)
+            .execute()
+            .value else { return [] }
+        return rows
+    }
+
+    /// Egzersiz havuzu — yalnızca kuvvet hareketleri gerekiyor ama filtre
+    /// istemcide, çünkü sakatlık ve ekipman kuralları orada uygulanıyor.
+    func fetchPlanExercises() async -> [PlanExercise] {
+        guard let client else { return [] }
+        guard let rows: [PlanExercise] = try? await client.from("exercises")
+            .select("id,name,name_tr,region,equipment,needs,level,category,mechanic")
+            .eq("category", value: "Kuvvet")
+            .limit(2000)
+            .execute()
+            .value else { return [] }
+        return rows
+    }
+
     // MARK: SSO (US-018 · Google · Apple)
 
     /// Sağlayıcıyla giriş — ASWebAuthenticationSession üzerinden, dönüşte

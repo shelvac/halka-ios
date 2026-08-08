@@ -5,6 +5,7 @@ struct CoachView: View {
     @Environment(AppModel.self) private var model
     /// Plan sihirbazı (US-030).
     @State private var showWizard = false
+    @State private var showPlan = false
 
     private let quickChips = ["Haftalık antrenman planı", "Haftalık besin planı", "Motivasyon lazım"]
 
@@ -41,6 +42,7 @@ struct CoachView: View {
                     withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
                 .sheet(isPresented: $showWizard) { PlanWizardView() }
+                .fullScreenCover(isPresented: $showPlan) { PlanResultView() }
                 .onChange(of: model.coachTyping) {
                     withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
@@ -100,8 +102,12 @@ struct CoachView: View {
             }
             Spacer()
             // Sihirbaz koçun içinden açılıyor: plan kurma isteğinin doğal yeri.
-            Button { showWizard = true } label: {
-                Text("Planım")
+            // Plan varsa doğrudan açılıyor; her seferinde sihirbazı baştan
+            // doldurtmak anlamsız olurdu.
+            Button {
+                if model.mealPlan == nil { showWizard = true } else { showPlan = true }
+            } label: {
+                Text(model.mealPlan == nil ? "Planım oluştur" : "Planım")
                     .font(.h(12, .bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)

@@ -134,6 +134,10 @@ final class AppModel {
 
     /// Plan sihirbazının kaydettiği tercihler (US-030).
     var planPreferences: PlanPreferences? = nil
+    /// Üretilen haftalık menü ve antrenman (US-032 · US-033).
+    var mealPlan: WeekMealPlan? = nil
+    var workoutPlan: WeekWorkoutPlan? = nil
+    var planBusy = false
 
     // MARK: Coach
     var messages: [CoachMessage] = Demo.initialMessages()

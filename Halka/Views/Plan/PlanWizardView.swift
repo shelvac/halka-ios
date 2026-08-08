@@ -23,6 +23,7 @@ struct PlanWizardView: View {
     @State private var allergyDraft = ""
     @State private var dislikeDraft = ""
     @State private var editingMeal: MealTimeEdit? = nil
+    @State private var showResult = false
 
     /// Düzenlenen öğün saati (sheet için).
     struct MealTimeEdit: Identifiable {
@@ -55,6 +56,9 @@ struct PlanWizardView: View {
                 }
                 footer
             }
+        }
+        .fullScreenCover(isPresented: $showResult, onDismiss: { dismiss() }) {
+            PlanResultView()
         }
         .sheet(item: $editingMeal) { edit in
             TimePickerSheet(title: Self.mealLabel(edit.index, of: prefs.mealsPerDay),
@@ -128,7 +132,7 @@ struct PlanWizardView: View {
             Button {
                 if step == .review { save() } else { advance() }
             } label: {
-                Text(step == .review ? (saving ? "Kaydediliyor…" : "Tercihlerimi kaydet")
+                Text(step == .review ? (saving ? "Plan hazırlanıyor…" : "Planımı oluştur")
                                      : "Devam")
                     .frame(maxWidth: .infinity)
             }
@@ -318,8 +322,7 @@ struct PlanWizardView: View {
                     phaseCard(phases)
                 }
             }
-            // Plan üreticisi henüz yazılmadı; olmayan bir şeyi vaat etmiyoruz.
-            infoBox("Tercihlerin kaydedilecek. Haftalık besin ve antrenman programını üreten kısım sıradaki adım.")
+            infoBox("Tercihlerin kaydedilecek ve bu haftanın menüsü ile antrenman programı hemen kurulacak.")
         }
     }
 
@@ -768,9 +771,9 @@ struct PlanWizardView: View {
         saving = true
         Task {
             try? await SupabaseService.shared.savePlanPreferences(prefs)
-            model.planPreferences = prefs
+            await model.buildWeeklyPlan(prefs)
             saving = false
-            dismiss()
+            showResult = true
         }
     }
 
