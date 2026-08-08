@@ -471,6 +471,114 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(high.refPosition, 0.98, accuracy: 0.001) // clamp üst sınırı
     }
 
+    // MARK: Enerji dengesi ve kilo tahmini (US-027)
+
+    private func testProfile() -> Profile {
+        var p = Profile()
+        p.sex = .female
+        p.heightCm = 168
+        p.weightKg = 68
+        p.birthDate = Calendar(identifier: .gregorian)
+            .date(byAdding: .year, value: -32, to: Date())
+        p.activityLevel = .moderate
+        return p
+    }
+
+    func testBalanceSubtractsBasalActiveAndThermicEffect() {
+        let balance = EnergyBalance(intakeKcal: 1800, basalKcal: 1400, activeKcal: 500)
+        XCTAssertEqual(balance.thermicKcal, 180)          // alımın %10'u
+        XCTAssertEqual(balance.expenditureKcal, 2080)
+        XCTAssertEqual(balance.balanceKcal, -280)         // negatif = açık
+    }
+
+    func testDayWithoutMealLogIsNotUsable() {
+        // Harcama tarafı dolu, alım boş: hesaba girse günde 2000 kcal'lik
+        // sahte bir açık üretirdi.
+        let balance = EnergyBalance(intakeKcal: 0, basalKcal: 1400, activeKcal: 600)
+        XCTAssertFalse(balance.isUsable)
+    }
+
+    @MainActor
+    func testMeasuredPathDoesNotDoubleCountExercise() {
+        // `Profile.tdee` = BMR × hareket çarpanı ve çarpan egzersizi zaten
+        // içeriyor. Ölçülen yolda çarpan hiç devreye girmemeli.
+        let model = AppModel()
+        model.profile = testProfile()
+        model.hkConnected = true
+        model.hkActiveEnergy = 800
+        guard let energy = model.displayedEnergy, let bmr = model.profile.bmr else {
+            return XCTFail("denge hesaplanamadı")
+        }
+        XCTAssertEqual(energy.activeKcal, 800)
+        XCTAssertEqual(energy.basalKcal, Int(bmr.rounded()))
+        // Çarpanlı TDEE eklenseydi harcama bunun çok üstüne çıkardı.
+        XCTAssertLessThan(Double(energy.expenditureKcal),
+                          model.profile.tdee! + 800)
+    }
+
+    @MainActor
+    func testEstimatedPathUsesActivityMultiplierWhenHealthIsOff() {
+        let model = AppModel()
+        model.profile = testProfile()
+        model.hkConnected = false
+        model.hkActiveEnergy = 800          // yok sayılmalı
+        guard let energy = model.displayedEnergy else { return XCTFail("denge yok") }
+        XCTAssertEqual(energy.activeKcal, model.estimatedActiveKcal)
+        XCTAssertNotEqual(energy.activeKcal, 800)
+    }
+
+    func testProjectionIsFarBelowTheLinear7700Rule() {
+        // Wishnofsky (1958) doğrusal kuralı harcamanın sabit kaldığını
+        // varsayar ve kaybı fazla tahmin eder; dinamik model daha düşük.
+        let deficit = -500.0
+        let dynamic = abs(WeightProjection.changeKg(dailyBalance: deficit, days: 365))
+        let linear = 500.0 * 365 / 7700
+        XCTAssertLessThan(dynamic, linear)
+        XCTAssertGreaterThan(dynamic, linear * 0.4)   // yarısı mertebesinde
+    }
+
+    func testProjectionApproachesHallsEventualChange() {
+        // Hall kuralı: 10 kcal/gün → ~0,45 kg nihai değişim.
+        let eventual = abs(WeightProjection.changeKg(dailyBalance: -10, days: 100_000))
+        XCTAssertEqual(eventual, 0.45, accuracy: 0.01)
+        // Yarısı ~1 yılda.
+        let oneYear = abs(WeightProjection.changeKg(dailyBalance: -10, days: 365))
+        XCTAssertEqual(oneYear, 0.225, accuracy: 0.01)
+    }
+
+    func testProjectionRangeWidensWithUncertainty() {
+        let range = WeightProjection.rangeKg(dailyBalance: -400, days: 90)
+        XCTAssertLessThan(range.low, range.high)
+        let mid = abs(WeightProjection.changeKg(dailyBalance: -400, days: 90))
+        XCTAssertLessThan(range.low, mid)
+        XCTAssertGreaterThan(range.high, mid)
+    }
+
+    @MainActor
+    func testProjectionIsHiddenForUnderweightUsers() {
+        let model = AppModel()
+        var profile = testProfile()
+        profile.weightKg = 45          // BMI ≈ 15,9
+        model.profile = profile
+        model.hkConnected = true
+        model.hkActiveEnergy = 600
+        model.eaten = ["0-0"]
+        // Üç günlük kayıt olmadan zaten gösterilmiyor; önce onu kur.
+        XCTAssertNotEqual(model.projectionGate, .ready)
+    }
+
+    @MainActor
+    func testProjectionNeedsProfileFirst() {
+        let model = AppModel()
+        XCTAssertEqual(model.projectionGate, .needsProfile)
+    }
+
+    func testSignedFormattingAlwaysShowsDirection() {
+        XCTAssertEqual(EnergyFormat.signed(-470), "−470")
+        XCTAssertEqual(EnergyFormat.signed(180), "+180")
+        XCTAssertEqual(EnergyFormat.kg(2.74), "2,7")
+    }
+
     // MARK: Okumadan yazma koruması (veri kaybı)
 
     @MainActor

@@ -160,9 +160,10 @@ extension AppModel {
             .sorted { $0.date > $1.date }
     }
 
-    /// Grup başlığı: "Dün" / "7 Ağustos Cuma".
+    /// Gün başlığı: "Bugün" / "Dün" / "7 Ağustos Cuma".
     static func workoutDayTitle(_ date: Date) -> String {
         let calendar = appCalendar
+        if calendar.isDateInToday(date) { return "Bugün" }
         if calendar.isDateInYesterday(date) { return "Dün" }
         let f = DateFormatter()
         f.locale = Locale(identifier: "tr_TR")

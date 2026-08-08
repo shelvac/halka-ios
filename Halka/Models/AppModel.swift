@@ -55,6 +55,9 @@ final class AppModel {
     var selectedCalendarDay: Int = AppModel.appCalendar.component(.day, from: Date())
     /// Görüntülenen ayın kayıtları ("yyyy-MM-dd" → satır).
     var ringHistory: [String: SupabaseService.RingsRow] = [:]
+    /// Son 7 günün kayıtları — enerji dengesi ortalaması için, ay
+    /// gezinmesinden bağımsız (US-027).
+    var recentRings: [String: SupabaseService.RingsRow] = [:]
     var ringSaveToken = 0
     /// Sunucudaki kayıt bu oturumda **başarıyla** okundu mu?
     ///
@@ -297,6 +300,7 @@ final class AppModel {
         hkActiveEnergy = 0
         hkWorkouts = []
         ringHistory = [:]
+        recentRings = [:]
         visitedDays = []
         healthBackfillDone = false
     }

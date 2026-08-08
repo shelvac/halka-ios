@@ -87,6 +87,10 @@ struct TodayView: View {
                 .padding(.top, 12)
             goalGrid
                 .padding(.top, 14)
+            // US-027 — beslenme ve egzersizin buluştuğu yer; halkaların
+            // altında duruyor çünkü ikisinden de besleniyor.
+            EnergyBalanceCard()
+                .padding(.top, 12)
             weekStrip
                 .padding(.top, 14)
             streakCard

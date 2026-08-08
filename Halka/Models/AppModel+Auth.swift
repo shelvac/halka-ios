@@ -38,6 +38,7 @@ extension AppModel {
         Task { [weak self] in
             await self?.recordVisit()
             await self?.loadRingHistory()
+            await self?.loadRecentRings()
             await self?.loadMealState()
             await self?.loadBodyMeasurements()
             await self?.refreshFromHealthKit()
