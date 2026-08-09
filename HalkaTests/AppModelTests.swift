@@ -885,6 +885,24 @@ final class PlanGeneratorTests: XCTestCase {
         XCTAssertFalse(pool.contains { $0.name == "Baklava" })
     }
 
+    /// "Yine adana urfa geliyor" — rol verisi YANLIŞ bile olsa (ana yemek
+    /// işaretli kebap) ad kilidi plana sokmaz. Veri kayarsa son savunma bu.
+    func testKebabIsBlockedByNameEvenWithWrongRole() {
+        let poisoned = catalog + [
+            food("90", "Adana kebap", "et", kcal: 280, tags: ["et", "kirmizi_et"],
+                 role: "ana"),
+            food("91", "Urfa kebabı", "et", kcal: 260, tags: ["et", "kirmizi_et"],
+                 role: "ana"),
+            food("92", "Kıymalı pide", "hamur", kcal: 265, tags: ["gluten"],
+                 role: "ana")
+        ]
+        let pool = MealPlanGenerator.pool(from: poisoned, prefs: prefs, protocolItem: nil)
+        XCTAssertFalse(pool.contains { $0.id == "90" })
+        XCTAssertFalse(pool.contains { $0.id == "91" })   // "kebabı" yazımı da
+        XCTAssertFalse(pool.contains { $0.id == "92" })
+        XCTAssertTrue(pool.contains { $0.name == "Izgara köfte" })  // meşru ana kalır
+    }
+
     func testMainMealHasExactlyOneMainDish() {
         // Asıl hata buydu: "İskender + Kavurma + Somon ızgara" aynı öğünde.
         let mains = Set(catalog.filter { $0.role == "ana" }.map(\.id))

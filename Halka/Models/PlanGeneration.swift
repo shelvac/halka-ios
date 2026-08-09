@@ -8,6 +8,27 @@ import Foundation
 // hedefi tutturması GARANTİ. (Bir dil modeli "1.780 kcal" der ama toplamı
 // tutmayabilir; burada toplam hesaplanarak kuruluyor.)
 
+/// Hiçbir üretim yolunun plana koyamayacağı yemekler — AD bazlı son kilit.
+///
+/// "Yine adana urfa geliyor, bir daha görmek istemiyorum": rol/etiket
+/// verisi ne derse desin (şema kayması, eksik migration, AI çıktısı) bu
+/// adları taşıyan hiçbir yemek plana giremez. Aynı liste üç yerde işler:
+/// kural tabanlı havuz filtresi, AI'ya giden dışlama listesi ve doğrulayıcı.
+/// Yemekler katalogda kalır — kullanıcı yediyse elle günlüğüne ekleyebilir.
+enum PlanBans {
+    static let processedMeat = ["sucuk", "salam", "sosis", "pastırma"]
+    /// "kebab" ünsüz yumuşamasını yakalar (Adana kebabı, tas kebabı).
+    static let fattyDishes = ["kebap", "kebab", "iskender", "döner", "kavurma",
+                              "kokoreç", "kızartma", "lahmacun", "pide",
+                              "börek", "gözleme"]
+    static let all = processedMeat + fattyDishes
+
+    static func hits(_ name: String) -> Bool {
+        let lowered = name.lowercased(with: Locale(identifier: "tr_TR"))
+        return all.contains { lowered.contains($0) }
+    }
+}
+
 /// Katalogdan gelen, üreticinin ihtiyaç duyduğu alanlarla yemek.
 struct PlanFood: Identifiable, Equatable, Decodable {
     let id: String
@@ -231,6 +252,9 @@ enum MealPlanGenerator {
             if food.tags.contains("islenmis_et") || food.tags.contains("kizartma") {
                 return false
             }
+            // Ad bazlı son kilit: rol/etiket verisi yanlış bile olsa kebap,
+            // döner, börek türü yemekler plana giremez.
+            if PlanBans.hits(food.name) { return false }
             return true
         }
     }

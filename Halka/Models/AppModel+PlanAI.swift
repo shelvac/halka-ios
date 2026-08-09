@@ -108,16 +108,15 @@ extension AppModel {
 
     /// Hiçbir diyet planında yeri olmayanlar — Simge'nin sözüyle: "diyetlerde
     /// asla sucuk salam olmaz". Her zaman yasak.
-    static let processedMeatBans = ["sucuk", "salam", "sosis", "pastırma"]
+    static let processedMeatBans = PlanBans.processedMeat
     /// Yağlı hazır yemekler — "kebap gibi yağlı şeyleri eklemesi doğru
-    /// değil": hedef ne olursa olsun diyet planına girmezler. "kebab",
-    /// ünsüz yumuşamasını da yakalar (Adana kebabı, tas kebabı).
-    static let fattyDishBans = ["kebap", "kebab", "iskender", "döner", "kavurma",
-                                "kokoreç", "kızartma", "lahmacun", "pide",
-                                "börek", "gözleme"]
+    /// değil": hedef ne olursa olsun diyet planına girmezler. Tek kaynak
+    /// PlanBans; kural tabanlı üreticinin havuz filtresi de aynı listeyi
+    /// kullanır.
+    static let fattyDishBans = PlanBans.fattyDishes
 
     static func bannedFoods(goal: PlanPreferences.Goal) -> [String] {
-        processedMeatBans + fattyDishBans
+        PlanBans.all
     }
 
     /// Alerji seçimlerinin isim-bazlı doğrulama anahtarları (PlanValidator).
@@ -414,7 +413,15 @@ extension AppModel {
     /// Girişte bu haftanın kayıtlı planını geri yükler.
     func loadPlanWeek() async {
         let saved = await SupabaseService.shared.fetchPlanWeek(weekStart: weekStart)
-        if let meals = saved.meals, !meals.days.isEmpty { mealPlan = meals }
+        if let meals = saved.meals, !meals.days.isEmpty {
+            // Yasak listesi genişlemeden ÖNCE kaydedilmiş bir planda kebap
+            // türü yemek kalmış olabilir — "bir daha görmek istemiyorum":
+            // kirli plan geri yüklenmez, kullanıcı tek dokunuşla yenisini kurar.
+            let tainted = meals.days.contains { day in
+                day.meals.contains { $0.items.contains { PlanBans.hits($0.name) } }
+            }
+            if !tainted { mealPlan = meals }
+        }
         if let workouts = saved.workouts { workoutPlan = workouts }
         var parts = Set<PlanPart>()
         if !(mealPlan?.days.isEmpty ?? true) { parts.insert(.meals) }
