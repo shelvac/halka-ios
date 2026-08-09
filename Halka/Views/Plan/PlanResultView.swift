@@ -19,7 +19,15 @@ struct PlanResultView: View {
             VStack(spacing: 0) {
                 header
                 if model.planBusy {
-                    Spacer(); SpinnerArc(size: 26); Spacer()
+                    Spacer()
+                    SpinnerArc(size: 26)
+                    // 7 model çağrısı 30-60 sn sürebiliyor; sessiz bir
+                    // spinner "dondu" hissi verirdi.
+                    Text("Gün \(min(model.planProgress + 1, 7))/7 hazırlanıyor…")
+                        .font(.h(12, .bold))
+                        .foregroundStyle(Color.sub)
+                        .padding(.top, 10)
+                    Spacer()
                 } else {
                     segment
                     dayStrip
@@ -126,6 +134,14 @@ struct PlanResultView: View {
             macroCard(plan, dayKcal: day.kcal)
             ForEach(day.meals) { meal in
                 mealCard(meal)
+            }
+            // Planın nereden geldiğini saklamıyoruz.
+            if let source = model.planSource {
+                noteBox(source == "ai"
+                    ? "Menü, diyetisyen kurallarıyla eğitilmiş yapay zekâ tarafından kuruldu ve her gün uygulamanın kendi kural denetiminden (tek ana yemek, protein karışımı yok, kahvaltı bütünlüğü, ±%5 kalori, alerjen taraması) geçti."
+                    : source == "mixed"
+                    ? "Bazı günler yapay zekâ ile kuruldu, denetimden geçemeyen günler kural tabanlı üreticiden geldi."
+                    : "Yapay zekâya ulaşılamadığı için menü kural tabanlı üreticiyle kuruldu.")
             }
             // Havuz daralırsa menü tekrara düşer; bunu saklamıyoruz.
             if plan.poolSize < 40 {

@@ -54,7 +54,8 @@ jobs:
               GEMINI_API_KEY="$GEMINI_API_KEY" \
               MEAL_AI_PROVIDER=gemini \
               MEAL_AI_MODEL=gemini-3.5-flash \
-              MEAL_AI_DAILY_QUOTA=20 >> secrets.log 2>&1
+              MEAL_AI_DAILY_QUOTA=20 \
+              PLAN_AI_DAILY_QUOTA=60 >> secrets.log 2>&1
             echo "- meal AI secrets: \`$?\`" >> r.md
           fi
 

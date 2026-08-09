@@ -867,6 +867,34 @@ final class SupabaseService {
         return rows
     }
 
+    /// AI günlük plan üretimi (US-034).
+    ///
+    /// Sunucudan dönen planın `rule_check` beyanına GÜVENİLMEZ — çağıran
+    /// taraf `PlanValidator` ile yeniden doğrular. Anahtar ve kota sunucuda.
+    private struct GeneratedDayResponse: Decodable {
+        let plan: DailyMealPlan
+    }
+
+    func generateMealPlanDay(inputJSON: String) async throws -> DailyMealPlan {
+        guard let client else {
+            throw MealAnalysisError.failed("Sunucu bağlantısı yok.")
+        }
+        let body: [String: AnyJSON] = ["input": .string(inputJSON)]
+        let response = try await client.functions.invoke(
+            "generate-meal-plan",
+            options: FunctionInvokeOptions(body: body)
+        ) { data, urlResponse in
+            (data, (urlResponse as? HTTPURLResponse)?.statusCode ?? 200)
+        }
+        let (data, status) = response
+        guard status < 400 else {
+            let detail = try? JSONDecoder().decode(AnalyzeError.self, from: data)
+            let text = detail?.message ?? detail?.error ?? "Plan üretilemedi."
+            throw status == 429 ? MealAnalysisError.quota(text) : MealAnalysisError.failed(text)
+        }
+        return try JSONDecoder().decode(GeneratedDayResponse.self, from: data).plan
+    }
+
     // MARK: SSO (US-018 · Google · Apple)
 
     /// Sağlayıcıyla giriş — ASWebAuthenticationSession üzerinden, dönüşte

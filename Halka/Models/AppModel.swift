@@ -138,6 +138,10 @@ final class AppModel {
     var mealPlan: WeekMealPlan? = nil
     var workoutPlan: WeekWorkoutPlan? = nil
     var planBusy = false
+    /// AI ile üretim sırasında hangi gündeyiz (0-7) — ilerleme göstergesi.
+    var planProgress = 0
+    /// Planın kaynağı: "ai" · "mixed" · "rules". Kullanıcıdan saklanmıyor.
+    var planSource: String? = nil
 
     // MARK: Coach
     var messages: [CoachMessage] = Demo.initialMessages()
@@ -353,6 +357,8 @@ final class AppModel {
         mealPlan = nil
         workoutPlan = nil
         planBusy = false
+        planProgress = 0
+        planSource = nil
 
         // Sağlık ve koç
         bodyMeasurements = []

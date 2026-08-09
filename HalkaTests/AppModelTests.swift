@@ -1131,3 +1131,108 @@ final class SessionResetTests: XCTestCase {
         XCTAssertEqual(model.screen, .login)
     }
 }
+
+// MARK: - AI plan doğrulayıcı ve dönüştürücü (US-034)
+
+final class PlanAITests: XCTestCase {
+
+    private func item(_ name: String, category: FoodCategory,
+                      protein: ProteinType = .yok, grams: Int = 150,
+                      kcal: Int = 200) -> FoodItem {
+        FoodItem(name: name, category: category, proteinType: protein,
+                 amount: 1, unit: .porsiyon, grams: grams, kcal: kcal,
+                 proteinG: 10, carbG: 10, fatG: 5)
+    }
+
+    private func day(meals: [Meal], kcal: Int) -> DailyMealPlan {
+        DailyMealPlan(day: .pazartesi, meals: meals,
+                      dayTotals: MacroTotals(kcal: kcal, proteinG: 90,
+                                             carbG: 150, fatG: 50),
+                      targetDeviationPct: 0,
+                      ruleCheck: RuleCheck(oneMainPerMeal: true, noProteinMixing: true,
+                                           breakfastIntegrity: true, kcalWithinTolerance: true,
+                                           allergensAbsent: true, protocolCompliant: true))
+    }
+
+    func testValidatorRejectsTwoMainsInOneMeal() {
+        // Asıl şikâyet: "İskender + Kavurma + Somon ızgara" aynı öğünde.
+        let lunch = Meal(mealType: .ogle, time: "13:00",
+                         items: [item("İskender kebap", category: .anaYemek, protein: .kirmiziEt),
+                                 item("Somon ızgara", category: .anaYemek, protein: .denizUrunu)],
+                         mealTotals: MacroTotals(kcal: 700, proteinG: 60, carbG: 30, fatG: 35))
+        let plan = day(meals: [lunch], kcal: 1800)
+        let errors = PlanValidator(targetKcal: 1800, allergenKeywords: [])
+            .validate(plan)
+        // Hem R1 (iki ana) hem R2 (kırmızı et + deniz ürünü) yakalanmalı.
+        XCTAssertTrue(errors.contains { if case .multipleMains = $0 { return true }; return false })
+        XCTAssertTrue(errors.contains { if case .proteinMixing = $0 { return true }; return false })
+    }
+
+    func testValidatorRejectsStewAtBreakfast() {
+        let breakfast = Meal(mealType: .kahvalti, time: "09:00",
+                             items: [item("Kavurma", category: .anaYemek, protein: .kirmiziEt)],
+                             mealTotals: MacroTotals(kcal: 400, proteinG: 30, carbG: 5, fatG: 30))
+        let errors = PlanValidator(targetKcal: 1800, allergenKeywords: [])
+            .validate(day(meals: [breakfast], kcal: 1800))
+        XCTAssertTrue(errors.contains { if case .breakfastViolation = $0 { return true }; return false })
+    }
+
+    func testValidatorCatchesAllergenByName() {
+        let snack = Meal(mealType: .araOgun, time: "16:30",
+                         items: [item("Ceviz", category: .atistirmalik, grams: 30, kcal: 196)],
+                         mealTotals: MacroTotals(kcal: 196, proteinG: 5, carbG: 4, fatG: 20))
+        let errors = PlanValidator(targetKcal: 196, allergenKeywords: ["ceviz"])
+            .validate(day(meals: [snack], kcal: 196))
+        XCTAssertTrue(errors.contains { if case .allergenPresent = $0 { return true }; return false })
+    }
+
+    func testValidatorEnforcesCalorieTolerance() {
+        let lunch = Meal(mealType: .ogle, time: "13:00",
+                         items: [item("Izgara tavuk", category: .anaYemek, protein: .beyazEt,
+                                      kcal: 1000)],
+                         mealTotals: MacroTotals(kcal: 1000, proteinG: 60, carbG: 0, fatG: 20))
+        // Hedef 1800, gün 1000 → %44 sapma. AI "kcal_within_tolerance: true"
+        // dese bile burada yakalanır — beyana güvenmiyoruz.
+        let errors = PlanValidator(targetKcal: 1800, allergenKeywords: [])
+            .validate(day(meals: [lunch], kcal: 1000))
+        XCTAssertTrue(errors.contains { if case .kcalOutOfTolerance = $0 { return true }; return false })
+    }
+
+    @MainActor
+    func testConversionKeepsUserMealTimesAndPortionLabels() {
+        let lunch = Meal(mealType: .ogle, time: "12:00",
+                         items: [FoodItem(name: "Bulgur pilavı", category: .yanYemek,
+                                          proteinType: .yok, amount: 4, unit: .yemekKasigi,
+                                          grams: 90, kcal: 108, proteinG: 3.6,
+                                          carbG: 21.6, fatG: 1.4)],
+                         mealTotals: MacroTotals(kcal: 108, proteinG: 3.6, carbG: 21.6, fatG: 1.4))
+        let converted = AppModel.plannedDay(
+            from: day(meals: [lunch], kcal: 108), dayIndex: 2,
+            times: ["08:30", "13:00", "16:30", "20:00"])
+        XCTAssertEqual(converted.day, 2)
+        // Model 12:00 dedi ama kullanıcı 08:30 seçmişti (ilk slot) — kullanıcı kazanır.
+        XCTAssertEqual(converted.meals[0].time, "08:30")
+        XCTAssertEqual(converted.meals[0].items[0].portionText, "4 yemek kaşığı")
+        XCTAssertEqual(converted.meals[0].items[0].kcal, 108)
+    }
+
+    @MainActor
+    func testHealthFlagsNeverLeaveTheDeviceAsLabels() {
+        // KVKK sözü: sağlık bayrağı gönderilmez. Modele giden yalnızca
+        // türetilmiş yiyecek kısıtları — "tansiyon" değil, "sucuk".
+        let exclusions = AppModel.aiExclusions(healthFlags: ["tansiyon", "gut"])
+        XCTAssertTrue(exclusions.contains("sucuk"))
+        XCTAssertTrue(exclusions.contains("sakatat"))
+        XCTAssertFalse(exclusions.contains { $0.contains("tansiyon") || $0.contains("gut") })
+    }
+
+    @MainActor
+    func testVeganStyleOverridesProtocolName() {
+        var prefs = PlanPreferences()
+        prefs.protocolKey = "akdeniz"
+        prefs.dietStyle = .vegan
+        XCTAssertEqual(AppModel.aiProtocolName(prefs), "Vegan")
+        prefs.dietStyle = .omnivore
+        XCTAssertEqual(AppModel.aiProtocolName(prefs), "Akdeniz")
+    }
+}

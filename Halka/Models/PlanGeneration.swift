@@ -49,8 +49,23 @@ struct PlannedItem: Identifiable, Equatable {
     let kcal: Int
     let portionName: String
     let portionG: Int
+    /// AI planında porsiyon metni modelden gelir ("2 adet", "4 yemek
+    /// kaşığı"); kural tabanlı yolda hesaplanır. Boşsa hesaplanan kullanılır.
+    let portionLabel: String?
+
+    init(id: String, name: String, grams: Int, kcal: Int,
+         portionName: String, portionG: Int, portionLabel: String? = nil) {
+        self.id = id
+        self.name = name
+        self.grams = grams
+        self.kcal = kcal
+        self.portionName = portionName
+        self.portionG = portionG
+        self.portionLabel = portionLabel
+    }
 
     var portionText: String {
+        if let portionLabel { return portionLabel }
         let multiple = Double(grams) / Double(max(1, portionG))
         let label: String
         switch multiple {
