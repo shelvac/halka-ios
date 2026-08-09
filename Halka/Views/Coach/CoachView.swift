@@ -98,21 +98,8 @@ struct CoachView: View {
                 }
             }
             Spacer()
-            // Sihirbaz koçun içinden açılıyor: plan kurma isteğinin doğal yeri.
-            // Plan varsa doğrudan açılıyor; her seferinde sihirbazı baştan
-            // doldurtmak anlamsız olurdu.
-            Button {
-                if model.mealPlan == nil { showWizard = true } else { showPlan = true }
-            } label: {
-                Text(model.mealPlan == nil ? "Planım oluştur" : "Planım")
-                    .font(.h(12, .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(Color.coral))
-                    .shadow(color: Color.coral.opacity(0.3), radius: 5, y: 3)
-            }
-            .buttonStyle(.plain)
+            // "Planım" düğmesi bilerek YOK (Simge'nin isteği): plan kurma da
+            // planı açma da sohbetin içinden yürüyor.
         }
         .padding(.vertical, 12)
     }
