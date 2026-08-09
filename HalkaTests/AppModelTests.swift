@@ -994,9 +994,12 @@ final class PlanGeneratorTests: XCTestCase {
         let plan = MealPlanGenerator.generate(
             foods: catalog, prefs: prefs, protocolItem: nil, kcalTarget: 1800,
             weightKg: 68, weekStart: Date(timeIntervalSince1970: 1_754_611_200))
-        let grams = plan.days.flatMap { $0.meals }.flatMap { $0.items }.map(\.grams)
-        XCTAssertFalse(grams.isEmpty)
-        XCTAssertTrue(grams.allSatisfy { $0 % 25 == 0 })
+        let items = plan.days.flatMap { $0.meals }.flatMap { $0.items }
+        XCTAssertFalse(items.isEmpty)
+        // Büyük porsiyonlar 25 g, küçükler (peynir, zeytin) 10 g adımla.
+        XCTAssertTrue(items.allSatisfy {
+            $0.grams % ($0.portionG >= 100 ? 25 : 10) == 0
+        })
     }
 
     // MARK: Antrenman
@@ -1076,5 +1079,55 @@ final class PlanGeneratorTests: XCTestCase {
             weekStart: Date(timeIntervalSince1970: 1_754_611_200))
         let sets = plan.sessions.flatMap { $0.exercises }.map(\.sets)
         XCTAssertTrue(sets.allSatisfy { $0 == 2 })
+    }
+}
+
+// MARK: - Oturumlar arası veri sızması
+
+final class SessionResetTests: XCTestCase {
+
+    @MainActor
+    func testSigningInAsAnotherUserClearsEverything() {
+        // Kullanıcı çıkış yapmadan başka bir hesapla girdiğinde önceki
+        // kişinin profil fotoğrafı, plan tercihleri ve ölçümleri ekranda
+        // kalıyordu — kafa karışıklığı değil, veri sızması.
+        let model = AppModel()
+        model.profile.fullName = "Simge Helvacı"
+        model.profile.weightKg = 68
+        model.avatarImage = UIImage()
+        model.userName = "Simge"
+        model.planPreferences = PlanPreferences()
+        model.mealPlan = WeekMealPlan(days: [], kcalTarget: 1800, proteinTarget: 90,
+                                      carbTarget: 200, fatTarget: 60, poolSize: 100)
+        model.workoutPlan = WeekWorkoutPlan(sessions: [], weeklyCardioMinutes: 150,
+                                            weeklySets: [:], note: "")
+        model.water = 1500
+        model.eaten = ["0-1"]
+        model.bodyMeasurements = [BodyMeasurement(measuredAt: Date())]
+
+        model.resetUserState()
+
+        XCTAssertNil(model.avatarImage)
+        XCTAssertNil(model.profile.weightKg)
+        XCTAssertEqual(model.profile.fullName, "")
+        XCTAssertNil(model.planPreferences)
+        XCTAssertNil(model.mealPlan)
+        XCTAssertNil(model.workoutPlan)
+        XCTAssertEqual(model.water, 0)
+        XCTAssertTrue(model.eaten.isEmpty)
+        XCTAssertTrue(model.bodyMeasurements.isEmpty)
+        XCTAssertFalse(model.ringsLoaded)
+        XCTAssertFalse(model.mealStateLoaded)
+    }
+
+    @MainActor
+    func testLogoutAlsoResets() {
+        let model = AppModel()
+        model.water = 1250
+        model.avatarImage = UIImage()
+        model.logout()
+        XCTAssertEqual(model.water, 0)
+        XCTAssertNil(model.avatarImage)
+        XCTAssertEqual(model.screen, .login)
     }
 }

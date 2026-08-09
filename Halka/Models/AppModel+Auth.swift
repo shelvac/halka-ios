@@ -28,6 +28,10 @@ extension AppModel {
 
     /// Oturum hazır — profil bilgisini yükleyip uygulamayı aç.
     func enterApp() async {
+        // Önceki oturumdan kalan HİÇBİR ŞEY taşınmasın: kullanıcı çıkış
+        // yapmadan başka bir hesapla girerse eski profil fotoğrafı ve plan
+        // tercihleri ekranda kalıyordu.
+        resetUserState()
         await loadProfile()
         role = .user
         screen = .app

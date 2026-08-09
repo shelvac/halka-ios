@@ -292,6 +292,7 @@ final class AppModel {
 
     func logout() {
         Task { await SupabaseService.shared.signOut() }
+        resetUserState()
         screen = .login
         role = .user
         tab = .home
@@ -299,16 +300,26 @@ final class AppModel {
         healthPane = .body
         authError = nil
         authInfo = nil
+    }
+
+    /// Bir kullanıcıya ait olan HER ŞEYİ temizler.
+    ///
+    /// Hem çıkışta hem de uygulamaya girerken çağrılıyor. İkincisi şart:
+    /// kullanıcı çıkış yapmadan başka bir hesapla girdiğinde önceki kişinin
+    /// profil fotoğrafı, plan tercihleri ve ölçümleri ekranda kalıyordu —
+    /// yalnızca kafa karıştırıcı değil, veri sızması.
+    ///
+    /// Yeni bir kullanıcı alanı eklenirse buraya da eklenmeli.
+    func resetUserState() {
+        // Kimlik ve profil
+        profile = Profile()
+        avatarImage = nil
         userName = "Simge"
         userFullName = "Simge Helvacı"
         pendingEmail = ""
-        // Bir sonraki oturum kendi verisini okumadan yazmasın.
-        ringsLoaded = false
-        mealStateLoaded = false
-        eaten = []
-        extras = []
-        overrides = [:]
-        removedMeals = []
+        profileError = nil
+
+        // Halkalar ve geçmiş
         water = 0
         exerciseBase = 0
         extraExerciseMin = 0
@@ -316,10 +327,41 @@ final class AppModel {
         hkSteps = 0
         hkActiveEnergy = 0
         hkWorkouts = []
+        hkConnected = false
         ringHistory = [:]
         recentRings = [:]
         visitedDays = []
+        ringsLoaded = false
         healthBackfillDone = false
+        healthWorkoutAccessRequested = false
+
+        // Öğünler
+        eaten = []
+        extras = []
+        overrides = [:]
+        removedMeals = []
+        marketChecked = []
+        mealStateLoaded = false
+        mealAnalysis = nil
+        mealAnalysisError = nil
+        mealAnalysisEdited = false
+        photoData = nil
+        photoState = .idle
+
+        // Plan
+        planPreferences = nil
+        mealPlan = nil
+        workoutPlan = nil
+        planBusy = false
+
+        // Sağlık ve koç
+        bodyMeasurements = []
+        pendingScalePhoto = nil
+        bodyError = nil
+        messages = Demo.initialMessages()
+        coachDraft = ""
+        coachTyping = false
+        pending = .none
     }
 
     // MARK: Shared helpers

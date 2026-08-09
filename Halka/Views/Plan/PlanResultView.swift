@@ -7,6 +7,7 @@ struct PlanResultView: View {
 
     @State private var tab: Pane = .meals
     @State private var selectedDay = 0
+    @State private var editingPlan = false
 
     enum Pane: String, CaseIterable { case meals, workouts
         var title: String { self == .meals ? "Beslenme" : "Antrenman" }
@@ -53,6 +54,13 @@ struct PlanResultView: View {
             }
             Spacer()
         }
+        .overlay(alignment: .leading) {
+            // Plan tek seferlik bir karar değil: tercihler değişir, hedef
+            // değişir, sıkılırsın. Her zaman yeniden kurulabilmeli.
+            Button("Yeniden kur") { editingPlan = true }
+                .font(.h(13))
+                .foregroundStyle(Color.sub)
+        }
         .overlay(alignment: .trailing) {
             Button("Kapat") { dismiss() }
                 .font(.h(13))
@@ -61,6 +69,9 @@ struct PlanResultView: View {
         .padding(.horizontal, 18)
         .padding(.top, 18)
         .padding(.bottom, 14)
+        .sheet(isPresented: $editingPlan) {
+            PlanWizardView(presentsResult: false)
+        }
     }
 
     private var segment: some View {

@@ -13,6 +13,8 @@ import SwiftUI
 struct PlanWizardView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    /// Plan ekranından açıldığında sonucu tekrar açmaz, sadece kapanır.
+    var presentsResult = true
 
     @State private var step: PlanWizardStep = .goal
     @State private var prefs = PlanPreferences()
@@ -773,7 +775,7 @@ struct PlanWizardView: View {
             try? await SupabaseService.shared.savePlanPreferences(prefs)
             await model.buildWeeklyPlan(prefs)
             saving = false
-            showResult = true
+            if presentsResult { showResult = true } else { dismiss() }
         }
     }
 
