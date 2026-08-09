@@ -20,9 +20,11 @@ struct PlanFood: Identifiable, Equatable, Decodable {
     let portionG: Int
     let portionName: String
     let tags: [String]
+    /// Öğündeki rolü — kompozisyonun temeli (0020_food_roles.sql).
+    let role: String
 
     enum CodingKeys: String, CodingKey {
-        case id, name, category, tags
+        case id, name, category, tags, role
         case kcal100 = "kcal_100g"
         case protein100 = "protein_100g"
         case carb100 = "carb_100g"
@@ -105,37 +107,53 @@ struct WeekMealPlan: Equatable {
 
 enum MealPlanGenerator {
 
-    /// Öğün şablonu: gün enerjisinin payı ve hangi kategorilerden seçileceği.
+    /// Öğün şablonu — payı ve **kompozisyonu**.
+    ///
+    /// `composition` sırayla hangi rolden kaç kalem alınacağını söylüyor.
+    /// Eskiden kategoriden rastgele üç kalem seçiliyordu ve aynı öğüne üç
+    /// ana yemek düşebiliyordu ("İskender + Kavurma + Somon ızgara").
+    /// Bir öğün: bir ana yemek + bir garnitür + bir sebze/salata.
     struct SlotTemplate {
         let label: String
         let share: Double
-        let categories: [String]
-        /// Öğünde en fazla kaç kalem olsun?
-        let maxItems: Int
+        /// (rol, adet) — sıra önemli, ilk rol öğünün belkemiği.
+        let composition: [(role: String, count: Int)]
+        /// Kalori bütçesi kalırsa eklenecek isteğe bağlı roller.
+        let optional: [String]
     }
 
-    static let breakfast = ["kahvalti", "sut", "ekmek", "yumurta", "meyve", "tahil"]
-    static let mainMeal = ["corba", "et", "balik", "sebze", "baklagil", "pilav",
-                           "makarna", "salata", "meze", "hamur"]
-    static let snack = ["meyve", "kuruyemis", "sut", "atistirmalik"]
-
     static func templates(mealsPerDay: Int) -> [SlotTemplate] {
+        // Kahvaltı: protein + ekmek + yan (zeytin/domates)
+        let breakfast = SlotTemplate(
+            label: "Kahvaltı", share: 0.25,
+            composition: [("kahvalti_protein", 1), ("ekmek", 1), ("kahvalti_yan", 1)],
+            optional: ["meyve"])
+        // Ana öğün: ana yemek + garnitür + sebze/salata. Çorba isteğe bağlı.
+        func main(_ label: String, _ share: Double) -> SlotTemplate {
+            SlotTemplate(label: label, share: share,
+                         composition: [("ana", 1), ("garnitur", 1), ("yan", 1)],
+                         optional: ["corba"])
+        }
+        // Ara öğün tek kalem: meyve ya da süt ya da kuruyemiş.
+        let snack = SlotTemplate(label: "Ara öğün", share: 0.10,
+                                 composition: [("meyve|sut|kuruyemis", 1)], optional: [])
+
         switch mealsPerDay {
         case 3:
-            return [.init(label: "Kahvaltı", share: 0.30, categories: breakfast, maxItems: 3),
-                    .init(label: "Öğle", share: 0.35, categories: mainMeal, maxItems: 3),
-                    .init(label: "Akşam", share: 0.35, categories: mainMeal, maxItems: 3)]
+            return [SlotTemplate(label: "Kahvaltı", share: 0.30,
+                                 composition: breakfast.composition, optional: ["meyve"]),
+                    main("Öğle", 0.35), main("Akşam", 0.35)]
         case 5:
-            return [.init(label: "Kahvaltı", share: 0.22, categories: breakfast, maxItems: 3),
-                    .init(label: "Ara öğün", share: 0.08, categories: snack, maxItems: 1),
-                    .init(label: "Öğle", share: 0.30, categories: mainMeal, maxItems: 3),
-                    .init(label: "Ara öğün", share: 0.10, categories: snack, maxItems: 2),
-                    .init(label: "Akşam", share: 0.30, categories: mainMeal, maxItems: 3)]
+            return [SlotTemplate(label: "Kahvaltı", share: 0.22,
+                                 composition: breakfast.composition, optional: []),
+                    SlotTemplate(label: "Ara öğün", share: 0.08,
+                                 composition: snack.composition, optional: []),
+                    main("Öğle", 0.30),
+                    SlotTemplate(label: "Ara öğün", share: 0.10,
+                                 composition: snack.composition, optional: []),
+                    main("Akşam", 0.30)]
         default:
-            return [.init(label: "Kahvaltı", share: 0.25, categories: breakfast, maxItems: 3),
-                    .init(label: "Öğle", share: 0.30, categories: mainMeal, maxItems: 3),
-                    .init(label: "Ara öğün", share: 0.10, categories: snack, maxItems: 2),
-                    .init(label: "Akşam", share: 0.35, categories: mainMeal, maxItems: 3)]
+            return [breakfast, main("Öğle", 0.30), snack, main("Akşam", 0.35)]
         }
     }
 
@@ -188,8 +206,13 @@ enum MealPlanGenerator {
                 let key = SupabaseService.searchKey(food.name)
                 if freeText.contains(where: { key.contains($0) }) { return false }
             }
-            // İçecekler öğün kalemi değil; su ve çay plana yazılmaz.
-            if food.category == "icecek" { return false }
+            // Plana OTOMATİK girmeyecekler: içecekler, tatlılar, kızartmalar,
+            // işlenmiş etler. Kullanıcı elle ekleyebilir ama biz önermiyoruz —
+            // "diyet planı" diye sucuk ve kavurma sunmak ciddiyetsizlik.
+            if food.role == "keyfi" || food.role == "icecek" { return false }
+            if food.tags.contains("islenmis_et") || food.tags.contains("kizartma") {
+                return false
+            }
             return true
         }
     }
@@ -226,10 +249,9 @@ enum MealPlanGenerator {
 
             for (index, template) in slots.enumerated() {
                 let slotTarget = Int((Double(kcalTarget) * template.share).rounded())
-                let eligible = candidates.filter { template.categories.contains($0.category) }
-                let items = fill(target: slotTarget, from: eligible, maxItems: template.maxItems,
-                                 favor: favor, limited: limited,
-                                 avoid: recentIDs.union(usedToday), rng: &rng)
+                let items = compose(template: template, target: slotTarget,
+                                    from: candidates, favor: favor, limited: limited,
+                                    avoid: recentIDs.union(usedToday), rng: &rng)
                 items.forEach { usedToday.insert($0.id) }
                 meals.append(PlannedMeal(
                     slot: index, label: template.label,
@@ -242,47 +264,79 @@ enum MealPlanGenerator {
         return plan
     }
 
-    /// Bir öğünü hedef kaloriye yaklaştırarak doldurur.
+    /// Öğünü **kompozisyona göre** kurar, sonra hedefe ölçekler.
     ///
-    /// Önce yemek seçilir, sonra **porsiyon ölçeklenir**: yalnızca yemek
-    /// seçerek hedefi tutturmak imkânsız, 225 kalemle her sayıya denk gelinmez.
-    /// Ölçek 0,5–2 porsiyon arasına sıkıştırılıyor — "3,5 porsiyon pilav"
-    /// matematiksel olarak doğru ama gerçek hayatta anlamsız.
-    private static func fill(target: Int, from foods: [PlanFood], maxItems: Int,
-                             favor: Set<String>, limited: Set<String>,
-                             avoid: Set<String>, rng: inout SeededRandom) -> [PlannedItem] {
-        guard !foods.isEmpty, target > 0 else { return [] }
-        let fresh = foods.filter { !avoid.contains($0.id) }
-        let usable = fresh.isEmpty ? foods : fresh
-
-        // Protokolün öne çıkardıkları önce, sınırladıkları sona.
-        let ranked = usable.sorted { a, b in
-            score(a, favor: favor, limited: limited) > score(b, favor: favor, limited: limited)
-        }
-        // Üst dilimden rastgele seç: hep aynı ilk yemek gelmesin.
-        let topSlice = Array(ranked.prefix(max(6, ranked.count / 3)))
+    /// İki aşama ayrı: önce hangi roller doldurulacak (bir ana + bir garnitür
+    /// + bir yan), sonra porsiyonlar hedefe oturtulur. 225 kalemle her kalori
+    /// hedefine yalnızca yemek seçerek denk gelmek imkânsız.
+    private static func compose(template: SlotTemplate, target: Int,
+                                from foods: [PlanFood], favor: Set<String>,
+                                limited: Set<String>, avoid: Set<String>,
+                                rng: inout SeededRandom) -> [PlannedItem] {
         var chosen: [PlanFood] = []
-        var pool = topSlice
-        let count = min(maxItems, max(1, pool.count))
-        for _ in 0..<count {
-            guard !pool.isEmpty else { break }
-            let index = rng.next(upperBound: pool.count)
-            chosen.append(pool.remove(at: index))
+
+        func pick(role: String) -> PlanFood? {
+            // "meyve|sut|kuruyemis" gibi alternatifli roller.
+            let roles = Set(role.split(separator: "|").map(String.init))
+            let all = foods.filter { roles.contains($0.role) }
+            guard !all.isEmpty else { return nil }
+            let fresh = all.filter { !avoid.contains($0.id) && !chosen.contains($0) }
+            let usable = fresh.isEmpty ? all : fresh
+            let ranked = usable.sorted {
+                score($0, favor: favor, limited: limited) > score($1, favor: favor, limited: limited)
+            }
+            let slice = Array(ranked.prefix(max(5, ranked.count / 2)))
+            return slice[rng.next(upperBound: slice.count)]
+        }
+
+        for entry in template.composition {
+            for _ in 0..<entry.count {
+                if let food = pick(role: entry.role) { chosen.append(food) }
+            }
         }
         guard !chosen.isEmpty else { return [] }
 
-        // Bir porsiyonluk temel toplam, sonra hedefe ölçekle.
+        // Bütçe kalırsa isteğe bağlı kalem (çorba, meyve) eklenir.
         let baseKcal = chosen.reduce(0) { $0 + $1.kcal(forGrams: $1.portionG) }
-        let scale = baseKcal > 0 ? Double(target) / Double(baseKcal) : 1
-        return chosen.map { food in
-            let clamped = min(max(scale, 0.5), 2.0)
-            // 25 g'ın katlarına yuvarla — "137 gram pilav" ölçülemez.
-            let raw = Double(food.portionG) * clamped
-            let grams = max(25, Int((raw / 25).rounded()) * 25)
+        if baseKcal < Int(Double(target) * 0.75) {
+            for role in template.optional {
+                if let extra = pick(role: role) { chosen.append(extra); break }
+            }
+        }
+
+        // Hedefe ölçekle. Sıkı sınır: yarım porsiyonun altı ve 1,5 porsiyonun
+        // üstü gerçek bir tabak olmaktan çıkar.
+        let total = chosen.reduce(0) { $0 + $1.kcal(forGrams: $1.portionG) }
+        let scale = total > 0 ? min(max(Double(target) / Double(total), 0.6), 1.5) : 1
+        var items = chosen.map { food -> PlannedItem in
+            let step = food.portionG >= 100 ? 25 : 10
+            let raw = Double(food.portionG) * scale
+            let grams = max(step, Int((raw / Double(step)).rounded()) * step)
             return PlannedItem(id: food.id, name: food.name, grams: grams,
                                kcal: food.kcal(forGrams: grams),
                                portionName: food.portionName, portionG: food.portionG)
         }
+
+        // Kalan sapmayı en esnek kalemle (garnitür ya da en büyük) kapat.
+        let achieved = items.reduce(0) { $0 + $1.kcal }
+        let gap = target - achieved
+        if abs(gap) > target / 12, let index = items.indices.max(by: {
+            items[$0].kcal < items[$1].kcal
+        }) {
+            let food = chosen[index]
+            let per100 = max(1, food.kcal100)
+            let deltaG = gap * 100 / per100
+            let step = food.portionG >= 100 ? 25 : 10
+            let adjusted = max(Double(food.portionG) * 0.5,
+                               min(Double(food.portionG) * 2.0,
+                                   Double(items[index].grams + deltaG)))
+            let grams = max(step, Int((adjusted / Double(step)).rounded()) * step)
+            items[index] = PlannedItem(id: food.id, name: food.name, grams: grams,
+                                       kcal: food.kcal(forGrams: grams),
+                                       portionName: food.portionName,
+                                       portionG: food.portionG)
+        }
+        return items
     }
 
     private static func score(_ food: PlanFood, favor: Set<String>,

@@ -838,27 +838,45 @@ final class PlanGeneratorTests: XCTestCase {
 
     private func food(_ id: String, _ name: String, _ category: String,
                       kcal: Int, protein: Double = 5, portion: Int = 150,
-                      tags: [String] = []) -> PlanFood {
+                      tags: [String] = [], role: String = "ana") -> PlanFood {
         PlanFood(id: id, name: name, category: category, kcal100: kcal,
                  protein100: protein, carb100: 20, fat100: 5,
-                 portionG: portion, portionName: "porsiyon", tags: tags)
+                 portionG: portion, portionName: "porsiyon", tags: tags, role: role)
     }
 
     private var catalog: [PlanFood] {
-        [food("1", "Izgara köfte", "et", kcal: 215, tags: ["et", "kirmizi_et"]),
-         food("2", "Tavuk sote", "et", kcal: 145, tags: ["et"]),
-         food("3", "Bulgur pilavı", "pilav", kcal: 138, tags: ["vegan", "vejetaryen"]),
-         food("4", "Beyaz peynir", "sut", kcal: 265, portion: 30, tags: ["sut", "vejetaryen"]),
+        [food("1", "Izgara köfte", "et", kcal: 215, tags: ["et", "kirmizi_et"], role: "ana"),
+         food("2", "Tavuk sote", "et", kcal: 145, tags: ["et"], role: "ana"),
+         food("11", "Nohut yemeği", "baklagil", kcal: 125, portion: 250,
+              tags: ["vegan", "vejetaryen", "baklagil"], role: "ana"),
+         food("3", "Bulgur pilavı", "pilav", kcal: 138, tags: ["vegan", "vejetaryen"],
+              role: "garnitur"),
+         food("12", "Pirinç pilavı", "pilav", kcal: 145, tags: ["vegan", "vejetaryen"],
+              role: "garnitur"),
+         food("4", "Beyaz peynir", "sut", kcal: 265, portion: 30, tags: ["sut", "vejetaryen"],
+              role: "kahvalti_protein"),
+         food("13", "Lor peyniri", "sut", kcal: 120, portion: 50, tags: ["sut", "vejetaryen"],
+              role: "kahvalti_protein"),
          food("5", "Tam buğday ekmeği", "ekmek", kcal: 245, portion: 50,
-              tags: ["gluten", "vegan", "vejetaryen"]),
-         food("6", "Elma", "meyve", kcal: 52, portion: 180, tags: ["vegan", "vejetaryen"]),
+              tags: ["gluten", "vegan", "vejetaryen"], role: "ekmek"),
+         food("14", "Zeytin", "kahvalti", kcal: 145, portion: 20,
+              tags: ["vegan", "vejetaryen", "zeytin"], role: "kahvalti_yan"),
+         food("6", "Elma", "meyve", kcal: 52, portion: 180, tags: ["vegan", "vejetaryen"],
+              role: "meyve"),
          food("7", "Mercimek çorbası", "corba", kcal: 65, portion: 250,
-              tags: ["vegan", "vejetaryen"]),
+              tags: ["vegan", "vejetaryen"], role: "corba"),
          food("8", "Çoban salata", "salata", kcal: 35, portion: 200,
-              tags: ["vegan", "vejetaryen"]),
+              tags: ["vegan", "vejetaryen"], role: "yan"),
+         food("15", "Ispanak yemeği", "sebze", kcal: 68, portion: 200,
+              tags: ["vegan", "vejetaryen"], role: "yan"),
          food("9", "Ceviz", "kuruyemis", kcal: 654, portion: 30,
-              tags: ["findik", "vegan", "vejetaryen"]),
-         food("10", "Bira", "icecek", kcal: 43, portion: 330, tags: ["alkol", "vegan"])]
+              tags: ["findik", "vegan", "vejetaryen"], role: "kuruyemis"),
+         food("10", "Bira", "icecek", kcal: 43, portion: 330, tags: ["alkol", "vegan"],
+              role: "icecek"),
+         food("16", "Sucuk", "kahvalti", kcal: 420, portion: 40,
+              tags: ["et", "kirmizi_et", "islenmis_et"], role: "keyfi"),
+         food("17", "Baklava", "tatli", kcal: 430, portion: 60,
+              tags: ["yuksek_seker", "gluten", "vejetaryen"], role: "keyfi")]
     }
 
     private var prefs: PlanPreferences {
@@ -894,9 +912,52 @@ final class PlanGeneratorTests: XCTestCase {
         XCTAssertTrue(pool.contains { $0.name == "Elma" })
     }
 
-    func testAlcoholAndDrinksNeverEnterThePlan() {
+    func testTreatsAndProcessedMeatNeverEnterThePlan() {
+        // "Diyet planı" diye sucuk ve baklava sunmak ciddiyetsizlik.
         let pool = MealPlanGenerator.pool(from: catalog, prefs: prefs, protocolItem: nil)
         XCTAssertFalse(pool.contains { $0.name == "Bira" })
+        XCTAssertFalse(pool.contains { $0.name == "Sucuk" })
+        XCTAssertFalse(pool.contains { $0.name == "Baklava" })
+    }
+
+    func testMainMealHasExactlyOneMainDish() {
+        // Asıl hata buydu: "İskender + Kavurma + Somon ızgara" aynı öğünde.
+        let mains = Set(catalog.filter { $0.role == "ana" }.map(\.id))
+        let plan = MealPlanGenerator.generate(
+            foods: catalog, prefs: prefs, protocolItem: nil, kcalTarget: 1800,
+            weightKg: 68, weekStart: Date(timeIntervalSince1970: 1_754_611_200))
+        for day in plan.days {
+            for meal in day.meals where meal.label == "Öğle" || meal.label == "Akşam" {
+                let count = meal.items.filter { mains.contains($0.id) }.count
+                XCTAssertEqual(count, 1, "\(meal.label): \(meal.items.map(\.name))")
+            }
+        }
+    }
+
+    func testBreakfastIsAProperBreakfast() {
+        // Protein + ekmek + yan. "Sucuk, ekmek, yoğurt" diye kahvaltı olmaz.
+        let plan = MealPlanGenerator.generate(
+            foods: catalog, prefs: prefs, protocolItem: nil, kcalTarget: 1800,
+            weightKg: 68, weekStart: Date(timeIntervalSince1970: 1_754_611_200))
+        let breakfastRoles = Dictionary(uniqueKeysWithValues: catalog.map { ($0.id, $0.role) })
+        for day in plan.days {
+            guard let meal = day.meals.first(where: { $0.label == "Kahvaltı" }) else { continue }
+            let roles = meal.items.compactMap { breakfastRoles[$0.id] }
+            XCTAssertTrue(roles.contains("kahvalti_protein"))
+            XCTAssertTrue(roles.contains("ekmek"))
+            XCTAssertFalse(roles.contains("ana"))
+        }
+    }
+
+    func testDailyTotalStaysCloseToTarget() {
+        let target = 1800
+        let plan = MealPlanGenerator.generate(
+            foods: catalog, prefs: prefs, protocolItem: nil, kcalTarget: target,
+            weightKg: 68, weekStart: Date(timeIntervalSince1970: 1_754_611_200))
+        for day in plan.days {
+            let off = abs(Double(day.kcal - target)) / Double(target) * 100
+            XCTAssertLessThan(off, 15, "gün \(day.day): \(day.kcal) kcal")
+        }
     }
 
     func testPlanCoversSevenDaysWithAllMeals() {
