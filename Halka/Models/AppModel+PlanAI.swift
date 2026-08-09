@@ -109,11 +109,15 @@ extension AppModel {
     /// Hiçbir diyet planında yeri olmayanlar — Simge'nin sözüyle: "diyetlerde
     /// asla sucuk salam olmaz". Her zaman yasak.
     static let processedMeatBans = ["sucuk", "salam", "sosis", "pastırma"]
-    /// Kilo verme hedefinde ek yasaklar.
-    static let weightLossBans = ["iskender", "döner", "kavurma", "kokoreç", "kızartma"]
+    /// Yağlı hazır yemekler — "kebap gibi yağlı şeyleri eklemesi doğru
+    /// değil": hedef ne olursa olsun diyet planına girmezler. "kebab",
+    /// ünsüz yumuşamasını da yakalar (Adana kebabı, tas kebabı).
+    static let fattyDishBans = ["kebap", "kebab", "iskender", "döner", "kavurma",
+                                "kokoreç", "kızartma", "lahmacun", "pide",
+                                "börek", "gözleme"]
 
     static func bannedFoods(goal: PlanPreferences.Goal) -> [String] {
-        goal == .lose ? processedMeatBans + weightLossBans : processedMeatBans
+        processedMeatBans + fattyDishBans
     }
 
     /// Alerji seçimlerinin isim-bazlı doğrulama anahtarları (PlanValidator).

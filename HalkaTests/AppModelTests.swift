@@ -1276,9 +1276,26 @@ final class ValidatorHardeningTests: XCTestCase {
     func testBannedFoodsGoToModelAsExclusionsToo() {
         XCTAssertTrue(AppModel.bannedFoods(goal: .lose).contains("pastırma"))
         XCTAssertTrue(AppModel.bannedFoods(goal: .lose).contains("kavurma"))
-        // Kas kazanımında işlenmiş et yine yasak, iskender/kavurma değil.
+        // "kebap gibi yağlı şeyler" hedeften bağımsız yasak — kas
+        // kazanımında da kebap/kavurma/işlenmiş et planlanmaz.
         XCTAssertTrue(AppModel.bannedFoods(goal: .gain).contains("sucuk"))
-        XCTAssertFalse(AppModel.bannedFoods(goal: .gain).contains("kavurma"))
+        XCTAssertTrue(AppModel.bannedFoods(goal: .gain).contains("kebap"))
+        XCTAssertTrue(AppModel.bannedFoods(goal: .gain).contains("kavurma"))
+    }
+
+    /// Ünsüz yumuşaması tuzağı: "Adana kebabı" yazımı "kebap" anahtarını
+    /// ıskalamamalı — "kebab" anahtarı yakalar.
+    @MainActor
+    func testValidatorCatchesKebabWithConsonantMutation() {
+        let lunch = Meal(mealType: .ogle, time: "13:00",
+            items: [item("Adana kebabı", category: .anaYemek, protein: .kirmiziEt,
+                         grams: 180, kcal: 500)],
+            mealTotals: MacroTotals(kcal: 500, proteinG: 35, carbG: 5, fatG: 38))
+        let errors = PlanValidator(
+            targetKcal: 1420, allergenKeywords: [],
+            bannedKeywords: AppModel.bannedFoods(goal: .gain)
+        ).validate(plan([lunch]))
+        XCTAssertTrue(errors.contains { if case .bannedFood = $0 { return true }; return false })
     }
 }
 

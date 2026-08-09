@@ -71,9 +71,9 @@ placing any item:
 Reference classifications you must respect (non-exhaustive, apply the same logic to
 anything similar):
 
-- İskender, tas kebabı, karnıyarık, kuru fasulye, mercimek yemeği, ızgara köfte,
-  ızgara tavuk/balık, güveç, sote, kavurma → ALL are \`ana_yemek\`. Kavurma is a MAIN,
-  never a side or garnish.
+- Karnıyarık, kuru fasulye, mercimek yemeği, ızgara köfte, ızgara tavuk/balık,
+  güveç, sote → ALL are \`ana_yemek\`. If a heavy dish like kavurma ever appears
+  despite R8, it is a MAIN, never a side or garnish.
 - Bulgur/esmer pirinç pilavı, tam buğday makarna → \`yan_yemek\`.
 - Salata, cacık, yoğurt, ayran, çorba, zeytin, yeşillik → \`tamamlayici\`.
 - Sucuk, salam, sosis, pastırma → processed meat. See rule R8.
@@ -125,8 +125,12 @@ Same for \`sevilmeyenler\`.
 - Dukan (only if explicitly requested + physician-approved flag): follow phase rules
   provided in input.
 
-**R8 — Processed meat.** If \`hedef\` is \`kilo_ver\`: sucuk, salam, sosis, pastırma appear
-ZERO times. Otherwise at most once per week, max 25–30 g, never as a standalone item.
+**R8 — Processed meat and greasy prepared dishes.** Sucuk, salam, sosis, pastırma
+appear ZERO times, regardless of \`hedef\`. Likewise ZERO occurrences of greasy
+prepared/restaurant dishes: kebap of any kind (Adana, Urfa, Beyti, İskender, tas
+kebabı), döner, kavurma, kokoreç, lahmacun, pide, börek, gözleme, anything fried
+(kızartma). No dietitian plans these; users may log them manually but you never
+prescribe them.
 
 **R9 — Realistic portions.** Countable foods use whole/half units (2 yumurta, not 1.4;
 ½ porsiyon only for restaurant-style dishes). Grams in steps of 5. Respect cultural
