@@ -145,6 +145,7 @@ enum PlanValidationError: Error, CustomStringConvertible {
     case breakfastViolation(item: String)
     case kcalOutOfTolerance(deviation: Double)
     case allergenPresent(item: String)
+    case bannedFood(item: String)
     case selfCheckFailed
 
     var description: String {
@@ -154,6 +155,7 @@ enum PlanValidationError: Error, CustomStringConvertible {
         case .breakfastViolation(let i): return "R4 ihlali: kahvaltıda uygunsuz öğe — \(i)"
         case .kcalOutOfTolerance(let d): return "R5 ihlali: günlük sapma %\(String(format: "%.1f", d))"
         case .allergenPresent(let i): return "R6 ihlali: alerjen içeren öğe — \(i)"
+        case .bannedFood(let i): return "R8 ihlali: yasaklı yiyecek — \(i)"
         case .selfCheckFailed: return "AI rule_check'i kendisi false bırakmış"
         }
     }
@@ -162,6 +164,10 @@ enum PlanValidationError: Error, CustomStringConvertible {
 struct PlanValidator {
     let targetKcal: Int
     let allergenKeywords: [String]   // ör. ["fıstık", "yer fıstığı"]
+    /// Ada göre yasaklılar: işlenmiş etler her zaman, kilo vermede ek liste.
+    /// Modelin kategori ETİKETİNE güvenilmez — pastırma "tamamlayıcı" diye
+    /// etiketlenirse kategori denetimlerinin hepsini deliyordu.
+    var bannedKeywords: [String] = []
     let tolerance: Double = 0.05
 
     func validate(_ plan: DailyMealPlan) -> [PlanValidationError] {
@@ -169,17 +175,29 @@ struct PlanValidator {
 
         if !plan.ruleCheck.allPassed { errors.append(.selfCheckFailed) }
 
+        let animalSet: Set<ProteinType> = [.kirmiziEt, .beyazEt, .denizUrunu]
         for meal in plan.meals {
-            // R1 — öğün başına en fazla 1 ana yemek
-            let mains = meal.items.filter { $0.category == .anaYemek }
-            if mains.count > 1 { errors.append(.multipleMains(meal: meal.mealType)) }
+            // R1 — öğün başına en fazla 1 ana yemek. Modelin etiketi tek
+            // başına yeterli değil: "yan yemek" diye etiketlenmiş 150 g'lık
+            // ikinci bir köfte denetimi deliyordu. 90 g ve üzeri hayvansal
+            // protein kalemi pratikte ana yemektir.
+            let labeledMains = meal.items.filter { $0.category == .anaYemek }
+            var mains = labeledMains
+            if meal.mealType == .ogle || meal.mealType == .aksam {
+                mains = meal.items.filter { item in
+                    item.category == .anaYemek
+                        || (animalSet.contains(item.proteinType) && item.grams >= 90)
+                }
+            }
+            if mains.count > 1 || labeledMains.count > 1 {
+                errors.append(.multipleMains(meal: meal.mealType))
+            }
 
-            // R2 — hayvansal protein karışımı yok (yumurta_sut tamamlayıcıları muaf)
+            // R2 — hayvansal protein karışımı yok. TÜM kalemler taranır:
+            // tavuk ana yemeğinin yanına "tamamlayıcı" etiketli pastırma
+            // eski kategori filtresinden geçiyordu.
             let animalTypes = Set(
-                meal.items
-                    .filter { $0.category == .anaYemek || $0.category == .anaProtein }
-                    .map(\.proteinType)
-                    .filter { [.kirmiziEt, .beyazEt, .denizUrunu].contains($0) }
+                meal.items.map(\.proteinType).filter { animalSet.contains($0) }
             )
             if animalTypes.count > 1 {
                 errors.append(.proteinMixing(meal: meal.mealType, types: Array(animalTypes)))
@@ -192,11 +210,14 @@ struct PlanValidator {
                 }
             }
 
-            // R6 — alerjen taraması (isim bazlı; DB id eşleşmesi daha sağlamdır)
+            // R6 + R8 — alerjen ve yasaklı yiyecek taraması (isim bazlı)
             for item in meal.items {
                 let lower = item.name.lowercased(with: Locale(identifier: "tr_TR"))
                 if allergenKeywords.contains(where: { lower.contains($0.lowercased(with: Locale(identifier: "tr_TR"))) }) {
                     errors.append(.allergenPresent(item: item.name))
+                }
+                if bannedKeywords.contains(where: { lower.contains($0) }) {
+                    errors.append(.bannedFood(item: item.name))
                 }
             }
         }

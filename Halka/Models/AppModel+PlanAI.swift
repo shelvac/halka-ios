@@ -59,6 +59,16 @@ extension AppModel {
         healthFlags.flatMap { healthDrivenExclusions[$0] ?? [] }.sorted()
     }
 
+    /// Hiçbir diyet planında yeri olmayanlar — Simge'nin sözüyle: "diyetlerde
+    /// asla sucuk salam olmaz". Her zaman yasak.
+    static let processedMeatBans = ["sucuk", "salam", "sosis", "pastırma"]
+    /// Kilo verme hedefinde ek yasaklar.
+    static let weightLossBans = ["iskender", "döner", "kavurma", "kokoreç", "kızartma"]
+
+    static func bannedFoods(goal: PlanPreferences.Goal) -> [String] {
+        goal == .lose ? processedMeatBans + weightLossBans : processedMeatBans
+    }
+
     /// Alerji seçimlerinin isim-bazlı doğrulama anahtarları (PlanValidator).
     static let allergenKeywords: [String: [String]] = [
         "Gluten": ["ekmek", "bulgur", "makarna", "börek", "buğday", "şehriye",
@@ -127,14 +137,21 @@ extension AppModel {
             MealPlanGenerator.dislikeTags[$0] == nil
                 ? $0.lowercased(with: Locale(identifier: "tr_TR")) : nil
         }
-        let validator = PlanValidator(targetKcal: kcalTarget, allergenKeywords: keywords)
+        // Yasaklılar iki yerde birden: modele "önerme" diye gidiyor,
+        // doğrulayıcıda "önerirsen reddederim" diye bekliyor.
+        let banned = Self.bannedFoods(goal: prefs.goal)
+        let validator = PlanValidator(targetKcal: kcalTarget,
+                                      allergenKeywords: keywords,
+                                      bannedKeywords: banned)
 
-        let exclusions = (prefs.dislikes.sorted()
-                          + Self.aiExclusions(healthFlags: prefs.healthFlags))
+        let exclusions = Array(Set(prefs.dislikes
+                          + Self.aiExclusions(healthFlags: prefs.healthFlags)
+                          + banned)).sorted()
         var days: [PlannedDay] = []
         var summaries: [DaySummaryPayload] = []
         var aiDayCount = 0
         var aiReachable = true
+        var aiStrikes = 0
 
         for dayIndex in 0..<7 {
             var planned: PlannedDay? = nil
@@ -172,10 +189,17 @@ extension AppModel {
                         // Hataları modele geri ver — kör tekrar yerine düzeltme.
                         lastErrors = errors.map(\.description)
                     } catch {
-                        // Kota/ağ hatasında kalan günler için AI'ı hiç deneme;
-                        // 7 kez zaman aşımı beklemek planı dakikalara sürer.
                         AuthLog.warn("planAI", error)
-                        aiReachable = false
+                        if case SupabaseService.MealAnalysisError.quota = error {
+                            // Kota bitti: kalan günleri denemek anlamsız.
+                            aiReachable = false
+                        } else {
+                            // Tek geçici hata haftanın tamamını kural
+                            // tabanlıya düşürüyordu; iki ayrı günde üst üste
+                            // düşerse vazgeç, yoksa sonraki günü dene.
+                            aiStrikes += 1
+                            if aiStrikes >= 2 { aiReachable = false }
+                        }
                         break
                     }
                 }

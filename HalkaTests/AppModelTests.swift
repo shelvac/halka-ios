@@ -1236,3 +1236,81 @@ final class PlanAITests: XCTestCase {
         XCTAssertEqual(AppModel.aiProtocolName(prefs), "Akdeniz")
     }
 }
+
+// MARK: - Doğrulayıcı sertleştirme (etiket körlüğü + yasaklılar)
+
+final class ValidatorHardeningTests: XCTestCase {
+
+    private func item(_ name: String, category: FoodCategory,
+                      protein: ProteinType = .yok, grams: Int = 150,
+                      kcal: Int = 200) -> FoodItem {
+        FoodItem(name: name, category: category, proteinType: protein,
+                 amount: 1, unit: .porsiyon, grams: grams, kcal: kcal,
+                 proteinG: 10, carbG: 10, fatG: 5)
+    }
+
+    private func plan(_ meals: [Meal]) -> DailyMealPlan {
+        DailyMealPlan(day: .pazartesi, meals: meals,
+                      dayTotals: MacroTotals(kcal: 1420, proteinG: 113,
+                                             carbG: 130, fatG: 50),
+                      targetDeviationPct: 0,
+                      ruleCheck: RuleCheck(oneMainPerMeal: true, noProteinMixing: true,
+                                           breakfastIntegrity: true, kcalWithinTolerance: true,
+                                           allergensAbsent: true, protocolCompliant: true))
+    }
+
+    func testPastramiAsComplementIsStillRejected() {
+        // Simge'nin şikâyeti: yüksek proteinli menüde pastırma çıkıyor.
+        // Model onu "tamamlayıcı" etiketlerse eski doğrulayıcı GÖRMÜYORDU:
+        // R1 kategori sayıyordu, R2 yalnızca ana yemek kalemlerine bakıyordu.
+        let lunch = Meal(mealType: .ogle, time: "13:00",
+            items: [item("Izgara Tavuk Göğsü", category: .anaYemek, protein: .beyazEt),
+                    item("Pastırma", category: .tamamlayici, protein: .kirmiziEt,
+                         grams: 25, kcal: 60)],
+            mealTotals: MacroTotals(kcal: 460, proteinG: 55, carbG: 2, fatG: 18))
+        let errors = PlanValidator(
+            targetKcal: 1420, allergenKeywords: [],
+            bannedKeywords: AppModel.bannedFoods(goal: .lose)
+        ).validate(plan([lunch]))
+        XCTAssertTrue(errors.contains { if case .bannedFood = $0 { return true }; return false })
+        XCTAssertTrue(errors.contains { if case .proteinMixing = $0 { return true }; return false })
+    }
+
+    func testMislabeledSecondMainIsCaught() {
+        // 150 g'lık ikinci bir et kalemi "yan yemek" etiketiyle R1'i deliyordu.
+        // 90 g üzeri hayvansal protein pratikte ana yemektir.
+        let dinner = Meal(mealType: .aksam, time: "19:00",
+            items: [item("Izgara Köfte", category: .anaYemek, protein: .kirmiziEt),
+                    item("Tas Kebabı", category: .yanYemek, protein: .kirmiziEt,
+                         grams: 150, kcal: 250)],
+            mealTotals: MacroTotals(kcal: 570, proteinG: 45, carbG: 10, fatG: 35))
+        let errors = PlanValidator(targetKcal: 1420, allergenKeywords: [])
+            .validate(plan([dinner]))
+        XCTAssertTrue(errors.contains { if case .multipleMains = $0 { return true }; return false })
+    }
+
+    func testYogurtComplementsRemainAllowed() {
+        // Sertleştirme meşru düzeni bozmamalı: tavuk + ayran + cacık serbest
+        // (yumurta_sut muaf), 200 g sebze garnitürü ana yemek sayılmaz.
+        let lunch = Meal(mealType: .ogle, time: "13:00",
+            items: [item("Izgara Tavuk Göğsü", category: .anaYemek, protein: .beyazEt),
+                    item("Cacık", category: .tamamlayici, protein: .yumurtaSut,
+                         grams: 200, kcal: 90),
+                    item("Zeytinyağlı Sebze", category: .tamamlayici, grams: 200, kcal: 105)],
+            mealTotals: MacroTotals(kcal: 445, proteinG: 50, carbG: 15, fatG: 15))
+        let errors = PlanValidator(
+            targetKcal: 1420, allergenKeywords: [],
+            bannedKeywords: AppModel.bannedFoods(goal: .lose)
+        ).validate(plan([lunch]))
+        XCTAssertTrue(errors.isEmpty, "\(errors.map(\.description))")
+    }
+
+    @MainActor
+    func testBannedFoodsGoToModelAsExclusionsToo() {
+        XCTAssertTrue(AppModel.bannedFoods(goal: .lose).contains("pastırma"))
+        XCTAssertTrue(AppModel.bannedFoods(goal: .lose).contains("kavurma"))
+        // Kas kazanımında işlenmiş et yine yasak, iskender/kavurma değil.
+        XCTAssertTrue(AppModel.bannedFoods(goal: .gain).contains("sucuk"))
+        XCTAssertFalse(AppModel.bannedFoods(goal: .gain).contains("kavurma"))
+    }
+}

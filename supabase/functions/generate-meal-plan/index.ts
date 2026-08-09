@@ -262,14 +262,26 @@ Deno.serve(async (req) => {
             temperature: 0.2,
             responseMimeType: "application/json",
             responseSchema: RESPONSE_SCHEMA,
-            maxOutputTokens: 8192,
+            // 8192 yetmiyordu: düşünen model bağlam büyüyünce (3. gün ve
+            // sonrası, önceki günlerin özetiyle) ~7000 token'ı düşünmeye
+            // harcayıp cevabı YARIDA kesiyordu. Kesik JSON parse hatasına,
+            // o da uygulamada haftanın kalanının kural tabanlıya düşmesine
+            // dönüşüyordu. Tavan geniş, düşünme bütçesi sınırlı.
+            maxOutputTokens: 24576,
+            thinkingConfig: { thinkingBudget: 2048 },
           },
         }),
       },
     );
     const out = await res.json();
     if (!res.ok) throw new Error(out?.error?.message ?? `Gemini ${res.status}`);
-    const text = (out?.candidates?.[0]?.content?.parts ?? [])
+    const cand = out?.candidates?.[0];
+    // Kesik cevabı parse hatası olarak değil, adıyla raporla — teşhis
+    // "Unterminated string"den çok daha hızlı oluyor.
+    if (cand?.finishReason && cand.finishReason !== "STOP") {
+      throw new Error(`Model cevabı tamamlanmadı: ${cand.finishReason}`);
+    }
+    const text = (cand?.content?.parts ?? [])
       .map((p: { text?: string }) => p.text ?? "").join("");
     if (!text) throw new Error("Model boş cevap döndü");
     const plan = JSON.parse(text);
