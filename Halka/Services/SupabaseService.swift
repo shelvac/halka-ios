@@ -846,12 +846,18 @@ final class SupabaseService {
     /// Plan üreticisi için tüm yemek kataloğu (225 satır — tek seferde).
     func fetchPlanFoods() async -> [PlanFood] {
         guard let client else { return [] }
-        guard let rows: [PlanFood] = try? await client.from("foods")
-            .select("id,name,category,kcal_100g,protein_100g,carb_100g,fat_100g,portion_g,portion_name,tags")
-            .limit(1000)
-            .execute()
-            .value else { return [] }
-        return rows
+        do {
+            let rows: [PlanFood] = try await client.from("foods")
+                .select("id,name,category,kcal_100g,protein_100g,carb_100g,fat_100g,portion_g,portion_name,tags,role")
+                .limit(1000)
+                .execute()
+                .value
+            return rows
+        } catch {
+            // Boş katalog = boş plan. Sessizce yutma; şema kayması anında görünsün.
+            AuthLog.warn("fetchPlanFoods", error)
+            return []
+        }
     }
 
     /// Egzersiz havuzu — yalnızca kuvvet hareketleri gerekiyor ama filtre

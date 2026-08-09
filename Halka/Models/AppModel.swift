@@ -142,6 +142,9 @@ final class AppModel {
     var planProgress = 0
     /// Planın kaynağı: "ai" · "mixed" · "rules". Kullanıcıdan saklanmıyor.
     var planSource: String? = nil
+    /// Son üretimde ne istendi — sonuç ekranı yalnızca bunları gösterir.
+    /// "Sadece beslenme" derken boş antrenman sekmesi açılmamalı.
+    var planParts: Set<PlanPart> = [.meals, .workouts]
 
     // MARK: Coach
     var messages: [CoachMessage] = Demo.initialMessages()
@@ -366,6 +369,7 @@ final class AppModel {
         planBusy = false
         planProgress = 0
         planSource = nil
+        planParts = [.meals, .workouts]
 
         // Sağlık ve koç
         bodyMeasurements = []

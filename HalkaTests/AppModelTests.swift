@@ -1357,6 +1357,56 @@ final class CoachPlanFlowTests: XCTestCase {
         XCTAssertEqual(model.planVariationMeals, 2)   // birbirine karışmaz
     }
 
+    /// "1 dakika sürmeden planın hazır dedi ve içi boş" — üretim boş
+    /// döndüyse "hazır" denmez, özür + tekrar dene seçeneği gelir.
+    @MainActor
+    func testEmptyPlanIsReportedAsFailureNotReady() {
+        let model = AppModel()
+        model.mealPlan = nil
+        let message = model.planReadyMessage(part: .meals)
+        XCTAssertEqual(message.role, .ask)
+        XCTAssertTrue(message.text.contains("kuramadım"))
+        XCTAssertEqual(message.options, [AppModel.chipRegenMeals])
+    }
+
+    @MainActor
+    func testReadyMessageScopesToRequestedPart() {
+        let model = AppModel()
+        model.mealPlan = WeekMealPlan(days: [PlannedDay(day: 0, meals: [])],
+                                      kcalTarget: 1500, proteinTarget: 90,
+                                      carbTarget: 150, fatTarget: 50, poolSize: 100)
+        let message = model.planReadyMessage(part: .meals)
+        XCTAssertEqual(message.role, .planReady)
+        XCTAssertEqual(message.title, "Besin planın hazır")
+        // Sadece besin istendi: antrenman değiştirme çipi görünmez.
+        XCTAssertFalse(message.options.contains(AppModel.chipRegenWorkout))
+        XCTAssertTrue(message.options.contains(AppModel.chipRegenMeals))
+    }
+
+    /// "sadece beslenme dememe rağmen antrenman sekmesi de açtı" —
+    /// sonuç ekranı yalnızca istenen bölümleri göstermeli; daha önce
+    /// kurulmuş bölüm varsa o da korunur.
+    @MainActor
+    func testRecordPlanPartsScopesResultScreen() {
+        let model = AppModel()
+        model.recordPlanParts([.meals])
+        XCTAssertEqual(model.planParts, [.meals])
+
+        // Önce antrenman varken sadece besin yenilenirse antrenman kalır.
+        model.workoutPlan = WeekWorkoutPlan(sessions: [], weeklyCardioMinutes: 0,
+                                            weeklySets: [:], note: "")
+        model.recordPlanParts([.meals])
+        XCTAssertEqual(model.planParts, [.meals, .workouts])
+
+        // Tersi: besin planı varken sadece antrenman yenilenirse besin kalır.
+        model.workoutPlan = nil
+        model.mealPlan = WeekMealPlan(days: [PlannedDay(day: 0, meals: [])],
+                                      kcalTarget: 1500, proteinTarget: 90,
+                                      carbTarget: 150, fatTarget: 50, poolSize: 100)
+        model.recordPlanParts([.workouts])
+        XCTAssertEqual(model.planParts, [.meals, .workouts])
+    }
+
     @MainActor
     func testHealthParsingMapsTurkishPhrases() {
         XCTAssertEqual(AppModel.parseHealthFlags("tansiyonum ve şeker hastalığım var"),

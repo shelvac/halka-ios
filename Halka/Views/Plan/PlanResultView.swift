@@ -13,14 +13,24 @@ struct PlanResultView: View {
         var title: String { self == .meals ? "Beslenme" : "Antrenman" }
     }
 
+    /// Yalnızca istenen bölümler: "sadece beslenme" kuruluysa boş bir
+    /// Antrenman sekmesi hiç görünmemeli (tersi de öyle).
+    private var panes: [Pane] {
+        var list = [Pane]()
+        if model.planParts.contains(.meals) { list.append(.meals) }
+        if model.planParts.contains(.workouts) { list.append(.workouts) }
+        return list.isEmpty ? [.meals] : list
+    }
+
     var body: some View {
         ZStack {
             Color.bgApp.ignoresSafeArea()
             VStack(spacing: 0) {
                 header
                 // Günler geldikçe ekran doluyor; tam ekran bekleme yalnızca
-                // henüz HİÇ gün yokken.
-                if model.planBusy && (model.mealPlan?.days.isEmpty ?? true) {
+                // besin planı istenmişken henüz HİÇ gün yokken.
+                if model.planBusy && model.planParts.contains(.meals)
+                    && (model.mealPlan?.days.isEmpty ?? true) {
                     Spacer()
                     SpinnerArc(size: 26)
                     Text("Planın hazırlanıyor · \(model.planProgress)/7 gün")
@@ -33,7 +43,7 @@ struct PlanResultView: View {
                         .padding(.top, 2)
                     Spacer()
                 } else {
-                    segment
+                    if panes.count > 1 { segment }
                     dayStrip
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 12) {
@@ -49,6 +59,8 @@ struct PlanResultView: View {
                 }
             }
         }
+        .onAppear { if !panes.contains(tab) { tab = panes[0] } }
+        .onChange(of: model.planParts) { if !panes.contains(tab) { tab = panes[0] } }
     }
 
     private var header: some View {
@@ -88,7 +100,7 @@ struct PlanResultView: View {
 
     private var segment: some View {
         HStack(spacing: 4) {
-            ForEach(Pane.allCases, id: \.self) { pane in
+            ForEach(panes, id: \.self) { pane in
                 let active = tab == pane
                 Button { tab = pane } label: {
                     Text(pane.title)
@@ -113,7 +125,10 @@ struct PlanResultView: View {
         HStack(spacing: 6) {
             ForEach(0..<7, id: \.self) { day in
                 let active = selectedDay == day
-                let ready = model.mealPlan?.days.contains { $0.day == day } ?? false
+                // Antrenman anında üretilir; besin günleri geldikçe açılır.
+                let ready = tab == .workouts
+                    ? model.workoutPlan != nil
+                    : model.mealPlan?.days.contains { $0.day == day } ?? false
                 Button { selectedDay = day } label: {
                     Text(Demo.dayNamesShort[day])
                         .font(.h(11.5, .bold))

@@ -192,6 +192,15 @@ extension AppModel {
              + "onceki_gunler_ozeti içindeki ana yemek adlarını tekrarlama."
     }
 
+    /// Sonuç ekranı yalnızca istenen bölümleri gösterir; ama daha önce
+    /// kurulmuş bir bölüm varsa (ör. tam plandan sonra sadece besin
+    /// yenilendi) o görünür kalmalı.
+    func recordPlanParts(_ parts: Set<PlanPart>) {
+        planParts = parts
+        if workoutPlan != nil { planParts.insert(.workouts) }
+        if !(mealPlan?.days.isEmpty ?? true) { planParts.insert(.meals) }
+    }
+
     /// Sihirbaz tamamlanınca haftanın menüsünü ve antrenmanını kurar.
     ///
     /// `mealPlan` günler geldikçe dolar — sonuç ekranı üretim bitmeden
@@ -201,6 +210,7 @@ extension AppModel {
                          variation: Int = 0) async {
         planBusy = true
         planProgress = 0
+        recordPlanParts(parts)
         if parts.contains(.meals) { planSource = nil }
         defer { planBusy = false }
 
@@ -324,6 +334,9 @@ extension AppModel {
                                 // Hataları modele geri ver — kör tekrar değil.
                                 lastErrors = errors.map(\.description)
                             } catch {
+                                // Boş plan hatası bir kez sessiz kalmıştı;
+                                // AI günü neden düştü konsolda görünsün.
+                                AuthLog.warn("planDay/\(dayIndex)", error)
                                 let isQuota: Bool
                                 if case SupabaseService.MealAnalysisError.quota = error {
                                     isQuota = true
@@ -332,6 +345,13 @@ extension AppModel {
                                 }
                                 return (dayIndex, nil, isQuota)
                             }
+                        }
+                        // İki denemede de doğrulayıcıdan geçemedi.
+                        if !lastErrors.isEmpty {
+                            AuthLog.warn("planDay/\(dayIndex)/validator",
+                                NSError(domain: "Plan", code: 0, userInfo:
+                                    [NSLocalizedDescriptionKey:
+                                        lastErrors.joined(separator: " · ")]))
                         }
                         return (dayIndex, nil, false)
                     }

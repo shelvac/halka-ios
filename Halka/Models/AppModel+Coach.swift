@@ -279,8 +279,27 @@ extension AppModel {
     }
 
     func planReadyMessage(part: CoachPlanFlow.Part) -> CoachMessage {
+        let mealsOK = !(mealPlan?.days.isEmpty ?? true)
+        let workoutOK = workoutPlan != nil
+
+        // "Hazır" deyip boş ekran açmak olmaz: istenen bölüm üretilemediyse
+        // bunu dürüstçe söyle ve yeniden deneme yolunu göster.
+        let mealsFailed = part != .workouts && !mealsOK
+        let workoutFailed = part != .meals && !workoutOK
+        if mealsFailed || workoutFailed {
+            let what = mealsFailed && workoutFailed ? "planını"
+                     : mealsFailed ? "besin planını" : "antrenman programını"
+            var retry: [String] = []
+            if mealsFailed { retry.append(Self.chipRegenMeals) }
+            if workoutFailed { retry.append(Self.chipRegenWorkout) }
+            return CoachMessage(role: .ask,
+                text: "Üzgünüm, \(what) bu sefer kuramadım — sunucuya ulaşmakta sorun yaşadım. "
+                    + "İnternet bağlantını kontrol edip aşağıdan tekrar deneyebilirsin.",
+                options: retry)
+        }
+
         var lines: [String] = []
-        if part != .workouts, let plan = mealPlan, !plan.days.isEmpty {
+        if part != .workouts, let plan = mealPlan {
             lines.append("Beslenme: günde ortalama \(plan.averageKcal) kcal (hedef \(plan.kcalTarget)).")
         }
         if part != .meals, let workout = workoutPlan {
@@ -289,10 +308,15 @@ extension AppModel {
         if planSource == "rules" {
             lines.append("Not: yapay zekâya ulaşılamadığı için plan kural tabanlı kuruldu.")
         }
+        var options = [String]()
+        if part != .workouts { options.append(Self.chipRegenMeals) }
+        if part != .meals { options.append(Self.chipRegenWorkout) }
+        options.append(Self.chipThanks)
         return CoachMessage(role: .planReady,
             text: lines.joined(separator: "\n"),
-            title: "Haftalık planın hazır",
-            options: [Self.chipRegenMeals, Self.chipRegenWorkout, Self.chipThanks])
+            title: part == .meals ? "Besin planın hazır"
+                 : part == .workouts ? "Antrenman programın hazır" : "Haftalık planın hazır",
+            options: options)
     }
 
     // MARK: Motivasyon — yalnızca gerçek veri
