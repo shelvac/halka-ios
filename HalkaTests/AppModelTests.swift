@@ -1259,6 +1259,7 @@ final class ValidatorHardeningTests: XCTestCase {
                                            allergensAbsent: true, protocolCompliant: true))
     }
 
+    @MainActor
     func testPastramiAsComplementIsStillRejected() {
         // Simge'nin şikâyeti: yüksek proteinli menüde pastırma çıkıyor.
         // Model onu "tamamlayıcı" etiketlerse eski doğrulayıcı GÖRMÜYORDU:
@@ -1289,6 +1290,7 @@ final class ValidatorHardeningTests: XCTestCase {
         XCTAssertTrue(errors.contains { if case .multipleMains = $0 { return true }; return false })
     }
 
+    @MainActor
     func testYogurtComplementsRemainAllowed() {
         // Sertleştirme meşru düzeni bozmamalı: tavuk + ayran + cacık serbest
         // (yumurta_sut muaf), 200 g sebze garnitürü ana yemek sayılmaz.
