@@ -1357,6 +1357,7 @@ final class CoachPlanFlowTests: XCTestCase {
         XCTAssertEqual(model.planVariationMeals, 2)   // birbirine karışmaz
     }
 
+    @MainActor
     func testHealthParsingMapsTurkishPhrases() {
         XCTAssertEqual(AppModel.parseHealthFlags("tansiyonum ve şeker hastalığım var"),
                        ["tansiyon", "diyabet_ilac"])
@@ -1364,6 +1365,7 @@ final class CoachPlanFlowTests: XCTestCase {
         XCTAssertTrue(AppModel.parseHealthFlags("yok").isEmpty)
     }
 
+    @MainActor
     func testFoodAversionParsingSplitsAllergyAndDislike() {
         let parsed = AppModel.parseFoodAversions("fıstık, mantar, laktoz")
         XCTAssertEqual(parsed.allergies, ["Fındık/ceviz", "Laktoz"])
