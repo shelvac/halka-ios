@@ -40,6 +40,7 @@ extension AppModel {
         // `persistRings` zaten `ringsLoaded` olmadan yazmıyor, ama sıralamayı
         // da doğru tutmak beklemeyi kısaltıyor.
         Task { [weak self] in
+            self?.dietProtocols = await SupabaseService.shared.fetchProtocols()
             await self?.recordVisit()
             await self?.loadRingHistory()
             await self?.loadRecentRings()

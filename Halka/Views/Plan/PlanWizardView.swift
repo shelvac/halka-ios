@@ -771,11 +771,14 @@ struct PlanWizardView: View {
 
     private func save() {
         saving = true
+        // Sonuç ekranı ÜRETİM BİTMEDEN açılır ve günler geldikçe dolar;
+        // eskiden kullanıcı dakikalarca donmuş bir düğmeye bakıyordu.
+        model.planBusy = true
         Task {
             try? await SupabaseService.shared.savePlanPreferences(prefs)
-            await model.buildWeeklyPlan(prefs)
             saving = false
             if presentsResult { showResult = true } else { dismiss() }
+            await model.buildWeeklyPlan(prefs)
         }
     }
 

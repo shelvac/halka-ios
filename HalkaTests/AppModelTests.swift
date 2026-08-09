@@ -161,41 +161,6 @@ final class AppModelTests: XCTestCase {
 
     // MARK: AI Koç akışları
 
-    @MainActor
-    func testCoachWorkoutFlowProducesSevenDayPlan() {
-        let model = AppModel()
-        let ask = model.coachReply(to: "Haftalık antrenman planı")
-        XCTAssertEqual(ask.role, .ask)
-        let plan = model.coachReply(to: "4 gün")
-        XCTAssertEqual(plan.role, .week)
-        XCTAssertEqual(plan.weekDays.count, 7)
-        XCTAssertEqual(plan.weekDays.filter { !$0.rest }.count, 4)
-    }
-
-    @MainActor
-    func testCoachMealFlowUsesChosenTimes() {
-        let model = AppModel()
-        _ = model.coachReply(to: "Haftalık besin planı")   // hedef sorusu
-        _ = model.coachReply(to: "Kilo vermek")            // saat sorusu
-        let menu = model.coachReply(to: "09:00 · 13:30 · 17:00 · 20:30")
-        XCTAssertEqual(menu.role, .menu)
-        XCTAssertEqual(menu.mealTimes, ["09:00", "13:30", "17:00", "20:30"])
-        XCTAssertEqual(menu.menuDays.count, 7)
-        XCTAssertEqual(menu.menuDays[0].meals.map(\.time)[0], "09:00")
-    }
-
-    @MainActor
-    func testParseTimesVariants() {
-        let model = AppModel()
-        XCTAssertEqual(model.parseTimes("8 13 16 20"),
-                       ["08:00", "13:00", "16:00", "20:00"])
-        XCTAssertEqual(model.parseTimes("07:30 · 12:30 · 16:00 · 19:30"),
-                       ["07:30", "12:30", "16:00", "19:30"])
-        // Eksik/karışık girişte güvenli varsayılana döner.
-        XCTAssertEqual(model.parseTimes("bilmem"),
-                       ["07:30", "12:30", "16:00", "19:30"])
-    }
-
     // MARK: Egzersiz
 
     @MainActor
@@ -1314,5 +1279,103 @@ final class ValidatorHardeningTests: XCTestCase {
         // Kas kazanımında işlenmiş et yine yasak, iskender/kavurma değil.
         XCTAssertTrue(AppModel.bannedFoods(goal: .gain).contains("sucuk"))
         XCTAssertFalse(AppModel.bannedFoods(goal: .gain).contains("kavurma"))
+    }
+}
+
+// MARK: - Sohbet içi plan akışı (US-035)
+
+final class CoachPlanFlowTests: XCTestCase {
+
+    @MainActor
+    func testFullFlowCollectsAllPreferences() {
+        let model = AppModel()
+        var reply = model.coachReply(to: AppModel.chipFullPlan)
+        XCTAssertEqual(reply.role, .ask)                       // hedef sorusu
+        reply = model.coachReply(to: "Kilo vermek")
+        XCTAssertTrue(reply.text.contains("sağlık"))
+        reply = model.coachReply(to: "Var, yazacağım")
+        _ = reply
+        reply = model.coachReply(to: "tansiyon ve gut var")
+        XCTAssertTrue(reply.options.contains("DASH (tansiyon)"))
+        // Gut → yüksek proteinli sohbette önerilmez.
+        XCTAssertFalse(reply.options.contains("Yüksek proteinli"))
+        reply = model.coachReply(to: "Akdeniz")
+        reply = model.coachReply(to: "fıstık, mantar")
+        reply = model.coachReply(to: "4 öğün")
+        XCTAssertTrue(reply.text.contains("antrenman") || reply.text.contains("kaç gün"))
+        reply = model.coachReply(to: "3 gün")
+        reply = model.coachReply(to: "Evde")
+
+        // Akış bitti, tercihler işlendi, "hazırlıyorum" mesajı döndü.
+        XCTAssertNil(model.coachFlow)
+        let prefs = model.planPreferences
+        XCTAssertEqual(prefs?.goal, .lose)
+        XCTAssertEqual(prefs?.healthFlags, ["tansiyon", "gut"])
+        XCTAssertEqual(prefs?.protocolKey, "akdeniz")
+        XCTAssertEqual(prefs?.allergies, ["Fındık/ceviz"])
+        XCTAssertEqual(prefs?.dislikes, ["Mantar"])
+        XCTAssertEqual(prefs?.mealsPerDay, 4)
+        XCTAssertEqual(prefs?.workoutDays, 3)
+        XCTAssertEqual(prefs?.equipment, .home)
+        XCTAssertTrue(reply.text.contains("hazırlıyorum"))
+    }
+
+    @MainActor
+    func testWorkoutOnlyFlowSkipsFoodQuestions() {
+        let model = AppModel()
+        var reply = model.coachReply(to: AppModel.chipWorkoutPlan)
+        XCTAssertTrue(reply.text.contains("kaç gün"))          // doğrudan spor
+        reply = model.coachReply(to: "4 gün")
+        reply = model.coachReply(to: "Salonda")
+        XCTAssertNil(model.coachFlow)
+        XCTAssertEqual(model.planPreferences?.workoutDays, 4)
+        XCTAssertEqual(model.planPreferences?.equipment, .gym)
+    }
+
+    @MainActor
+    func testSavedPreferencesOfferShortcut() {
+        let model = AppModel()
+        var prefs = PlanPreferences()
+        prefs.goal = .maintain
+        model.planPreferences = prefs
+        let reply = model.coachReply(to: AppModel.chipFullPlan)
+        XCTAssertTrue(reply.options.contains("Kayıtlı tercihlerimle kur"))
+        let done = model.coachReply(to: "Kayıtlı tercihlerimle kur")
+        XCTAssertNil(model.coachFlow)
+        XCTAssertTrue(done.text.contains("hazırlıyorum"))
+    }
+
+    @MainActor
+    func testRegenerateBumpsVariation() {
+        let model = AppModel()
+        model.planPreferences = PlanPreferences()
+        _ = model.coachReply(to: AppModel.chipRegenMeals)
+        _ = model.coachReply(to: AppModel.chipRegenMeals)
+        XCTAssertEqual(model.planVariationMeals, 2)
+        _ = model.coachReply(to: AppModel.chipRegenWorkout)
+        XCTAssertEqual(model.planVariationWorkout, 1)
+        XCTAssertEqual(model.planVariationMeals, 2)   // birbirine karışmaz
+    }
+
+    func testHealthParsingMapsTurkishPhrases() {
+        XCTAssertEqual(AppModel.parseHealthFlags("tansiyonum ve şeker hastalığım var"),
+                       ["tansiyon", "diyabet_ilac"])
+        XCTAssertEqual(AppModel.parseHealthFlags("hamileyim"), ["gebelik"])
+        XCTAssertTrue(AppModel.parseHealthFlags("yok").isEmpty)
+    }
+
+    func testFoodAversionParsingSplitsAllergyAndDislike() {
+        let parsed = AppModel.parseFoodAversions("fıstık, mantar, laktoz")
+        XCTAssertEqual(parsed.allergies, ["Fındık/ceviz", "Laktoz"])
+        XCTAssertEqual(parsed.dislikes, ["Mantar"])
+    }
+
+    @MainActor
+    func testVariationShiftsRotation() {
+        var prefs = PlanPreferences()
+        prefs.protocolKey = "dengeli"
+        let base = AppModel.rotationDirective(dayIndex: 0, prefs: prefs, variation: 0)
+        let varied = AppModel.rotationDirective(dayIndex: 0, prefs: prefs, variation: 1)
+        XCTAssertNotEqual(base, varied)   // "başka plan" gerçekten başka
     }
 }

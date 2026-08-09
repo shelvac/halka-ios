@@ -79,7 +79,7 @@ struct ExtraMeal: Identifiable, Equatable {
 
 // MARK: - Coach
 
-enum CoachRole { case user, coach, ask, plan, week, menu }
+enum CoachRole { case user, coach, ask, plan, week, menu, planReady }
 
 struct WeekPlanDay: Identifiable {
     let id = UUID()
@@ -121,8 +121,6 @@ struct CoachMessage: Identifiable {
     var menuDays: [MenuPlanDay] = []
     var mealTimes: [String]? = nil
 }
-
-enum CoachPending { case none, workoutDays, mealGoal, mealTimes }
 
 // MARK: - Workout
 

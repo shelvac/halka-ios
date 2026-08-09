@@ -147,8 +147,15 @@ final class AppModel {
     var messages: [CoachMessage] = Demo.initialMessages()
     var coachTyping = false
     var coachDraft = ""
-    var pending: CoachPending = .none
-    var pendingMealGoal = "kilo"
+    /// Sohbet içi plan kurma akışının durumu (US-035). nil = akış yok.
+    var coachFlow: CoachPlanFlow? = nil
+    /// "Beğenmedim, başka oluştur" sayaçları — aynı haftada farklı plan.
+    var planVariationMeals = 0
+    var planVariationWorkout = 0
+    /// Sohbetteki "Planı aç" düğmesi bunu tetikler.
+    var showPlanFromChat = false
+    /// Protokol kataloğu önbelleği — sohbet akışı senkron çalıştığı için.
+    var dietProtocols: [DietProtocol] = []
 
     // MARK: Workout
     var workoutView: WorkoutView = .home
@@ -367,7 +374,10 @@ final class AppModel {
         messages = Demo.initialMessages()
         coachDraft = ""
         coachTyping = false
-        pending = .none
+        coachFlow = nil
+        planVariationMeals = 0
+        planVariationWorkout = 0
+        showPlanFromChat = false
     }
 
     // MARK: Shared helpers

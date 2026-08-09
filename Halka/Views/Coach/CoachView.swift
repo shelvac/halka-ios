@@ -3,11 +3,9 @@ import SwiftUI
 /// AI Koç chat: greeting + plan cards, quick chips, weekly workout/meal flows.
 struct CoachView: View {
     @Environment(AppModel.self) private var model
-    /// Plan sihirbazı (US-030).
-    @State private var showWizard = false
-    @State private var showPlan = false
 
-    private let quickChips = ["Haftalık antrenman planı", "Haftalık besin planı", "Motivasyon lazım"]
+    private let quickChips = [AppModel.chipFullPlan, AppModel.chipMealPlan,
+                              AppModel.chipWorkoutPlan, AppModel.chipMotivation]
 
     var body: some View {
         @Bindable var model = model
@@ -41,8 +39,7 @@ struct CoachView: View {
                 .onChange(of: model.messages.count) {
                     withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
-                .sheet(isPresented: $showWizard) { PlanWizardView() }
-                .fullScreenCover(isPresented: $showPlan) { PlanResultView() }
+                .fullScreenCover(isPresented: $model.showPlanFromChat) { PlanResultView() }
                 .onChange(of: model.coachTyping) {
                     withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
@@ -156,7 +153,35 @@ struct CoachMessageView: View {
             weekCard
         case .menu:
             menuCard
+        case .planReady:
+            planReadyCard
         }
+    }
+
+    /// Sohbet içinden kurulan planın sonucu: özet + "Planı aç" + yenileme
+    /// seçenekleri. Plan artık üst çubuktan değil buradan açılıyor.
+    private var planReadyCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            cardHeader
+            if !message.text.isEmpty {
+                Text(message.text)
+                    .font(.h(12, .semibold))
+                    .foregroundStyle(Color.sub)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Button { model.showPlanFromChat = true } label: {
+                Text("Planı aç").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .coralButton()
+            FlowChips(items: message.options, style: .coralSoft) { option in
+                model.sendCoachMessage(option)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card(18)
     }
 
     private func coachBubble(_ text: String) -> some View {

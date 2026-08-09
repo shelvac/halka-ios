@@ -259,12 +259,10 @@ enum Demo {
     // MARK: Coach
 
     static func initialMessages() -> [CoachMessage] {
-        [CoachMessage(role: .coach, text: "Günaydın Simge! Dün 6.5 saat uyudun ve su hedefinin %63'ündesin. Bu sabahki tartımına göre protein oranın düşük (%12.8) — bugüne protein ağırlıklı bir plan hazırladım."),
-         CoachMessage(role: .plan, title: "Bugünün planı", planRows: [
-            PlanRow(title: "Kahvaltı · ~320 kcal", detail: "2 yumurta + lor peyniri + yeşillik"),
-            PlanRow(title: "Öğle öncesi · 30 dk", detail: "Tempolu yürüyüş — egzersiz halkanı kapatır"),
-            PlanRow(title: "Gün boyu · +750 ml", detail: "Su oranın %47, hedefin altında")
-         ])]
+        // Uydurma sayı YOK: eski karşılama "6.5 saat uyudun, protein %12.8"
+        // gibi hiçbir kaynaktan gelmeyen değerler söylüyordu.
+        [CoachMessage(role: .coach,
+            text: "Merhaba! Ben halka koçun. Hedefine ve tercihlerine göre haftalık besin ve antrenman planı kurarım; beğenmezsen yenisini üretirim. Aşağıdan başlayabilirsin.")]
     }
 
     /// Weekly workout plans keyed by training days: day index → (title, duration).

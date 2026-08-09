@@ -18,15 +18,19 @@ struct PlanResultView: View {
             Color.bgApp.ignoresSafeArea()
             VStack(spacing: 0) {
                 header
-                if model.planBusy {
+                // Günler geldikçe ekran doluyor; tam ekran bekleme yalnızca
+                // henüz HİÇ gün yokken.
+                if model.planBusy && (model.mealPlan?.days.isEmpty ?? true) {
                     Spacer()
                     SpinnerArc(size: 26)
-                    // 7 model çağrısı 30-60 sn sürebiliyor; sessiz bir
-                    // spinner "dondu" hissi verirdi.
-                    Text("Gün \(min(model.planProgress + 1, 7))/7 hazırlanıyor…")
+                    Text("Planın hazırlanıyor · \(model.planProgress)/7 gün")
                         .font(.h(12, .bold))
                         .foregroundStyle(Color.sub)
                         .padding(.top, 10)
+                    Text("İlk günler ~yarım dakikada gelir")
+                        .font(.h(10.5, .bold))
+                        .foregroundStyle(Color.faint)
+                        .padding(.top, 2)
                     Spacer()
                 } else {
                     segment
@@ -109,10 +113,11 @@ struct PlanResultView: View {
         HStack(spacing: 6) {
             ForEach(0..<7, id: \.self) { day in
                 let active = selectedDay == day
+                let ready = model.mealPlan?.days.contains { $0.day == day } ?? false
                 Button { selectedDay = day } label: {
                     Text(Demo.dayNamesShort[day])
                         .font(.h(11.5, .bold))
-                        .foregroundStyle(active ? .white : Color.sub)
+                        .foregroundStyle(active ? .white : (ready ? Color.sub : Color.chevron))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                         .background(active ? Color.coral : Color.white)
@@ -129,8 +134,10 @@ struct PlanResultView: View {
 
     @ViewBuilder
     private var mealContent: some View {
-        if let plan = model.mealPlan, plan.days.indices.contains(selectedDay) {
-            let day = plan.days[selectedDay]
+        // Dizi indeksi DEĞİL gün numarasıyla ara: paralel üretimde günler
+        // sırayla gelmiyor, indeksle bakmak yanlış günü gösterirdi.
+        if let plan = model.mealPlan,
+           let day = plan.days.first(where: { $0.day == selectedDay }) {
             macroCard(plan, dayKcal: day.kcal)
             ForEach(day.meals) { meal in
                 mealCard(meal)
@@ -147,8 +154,18 @@ struct PlanResultView: View {
             if plan.poolSize < 40 {
                 noteBox("Tercihlerin havuzu \(plan.poolSize) yemeğe indirdi. Çeşitliliği artırmak için bazı kısıtları gevşetmen gerekebilir.")
             }
+        } else if model.planBusy {
+            VStack(spacing: 8) {
+                SpinnerArc(size: 22)
+                Text("Bu gün hazırlanıyor…")
+                    .font(.h(12, .bold))
+                    .foregroundStyle(Color.sub)
+            }
+            .padding(.vertical, 40)
+            .frame(maxWidth: .infinity)
+            .card(18)
         } else {
-            noteBox("Plan üretilemedi. Tercihlerini gözden geçir.")
+            noteBox("Bu gün üretilemedi. Koça \"\(AppModel.chipRegenMeals)\" yazarsan yeniden denerim.")
         }
     }
 
