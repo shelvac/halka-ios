@@ -104,7 +104,8 @@ struct TodayView: View {
             WorkoutDaySheet(dayTitle: "Bugün",
                             workouts: model.todayWorkouts,
                             exerciseMinutes: model.exerciseMinutes,
-                            exerciseGoal: Int(model.goal(for: .exercise)))
+                            exerciseGoal: Int(model.goal(for: .exercise)),
+                            historyHasWorkouts: !model.hkWorkouts.isEmpty)
         }
     }
 

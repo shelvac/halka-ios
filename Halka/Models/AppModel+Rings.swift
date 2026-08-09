@@ -275,6 +275,32 @@ extension AppModel {
         mealStateLoaded = true
     }
 
+    /// Gün değişimini yakalar: uygulama gece yarısını (askıda ya da açık)
+    /// geçirdiyse dünün canlı değerleri yeni güne taşınmaz.
+    ///
+    /// "Apple Health datasını çekemiyor, dünkü etkinliği yapıyor": 00:06'da
+    /// halka dünkü 81 dakikayı gösteriyor, üstelik bugünün kaydına yazıyordu.
+    func rolloverDayIfNeeded() {
+        let key = todayKey
+        guard activeDayKey != key else { return }
+        let hadPreviousDay = !activeDayKey.isEmpty
+        activeDayKey = key
+        // İlk kurulumda (giriş anı) temizlenecek bir "dün" yok.
+        guard hadPreviousDay else { return }
+        let row = ringHistory[key]     // yeni günün kaydı başka cihazdan gelmiş olabilir
+        water = row?.water_ml ?? 0
+        exerciseBase = row?.exercise_min ?? 0
+        extraExerciseMin = 0
+        sleepHours = row?.sleep_hours ?? 0
+        hkSteps = row?.steps ?? 0
+        hkActiveEnergy = row?.active_energy_kcal ?? 0
+        // Sekmeler de yeni güne dönsün.
+        mealDay = todayWeekdayIndex
+        if visibleMonthIsCurrent {
+            selectedCalendarDay = Self.appCalendar.component(.day, from: today)
+        }
+    }
+
     /// İçinde bulunulan haftanın pazartesisi.
     var weekStart: Date {
         let calendar = Self.appCalendar

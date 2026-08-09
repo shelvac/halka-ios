@@ -19,7 +19,8 @@ struct CalendarPane: View {
                 workouts: model.workouts(forDay: day),
                 exerciseMinutes: Int((model.fractions(forDay: day)[0]
                                       * model.goal(for: .exercise)).rounded()),
-                exerciseGoal: Int(model.goal(for: .exercise)))
+                exerciseGoal: Int(model.goal(for: .exercise)),
+                historyHasWorkouts: !model.hkWorkouts.isEmpty)
         }
     }
 

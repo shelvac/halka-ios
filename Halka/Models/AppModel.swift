@@ -59,6 +59,9 @@ final class AppModel {
     /// gezinmesinden bağımsız (US-027).
     var recentRings: [String: SupabaseService.RingsRow] = [:]
     var ringSaveToken = 0
+    /// Canlı değerlerin ait olduğu gün ("yyyy-MM-dd"). Gece yarısı geçince
+    /// dünkü su/egzersiz "bugün"müş gibi kalmasın diye takip edilir.
+    var activeDayKey = ""
     /// Sunucudaki kayıt bu oturumda **başarıyla** okundu mu?
     ///
     /// Okumadan yazmak veri kaybettiriyordu: açılışta Health tazelemesi
@@ -205,13 +208,20 @@ final class AppModel {
     /// için (uygulama içi "+250 ml" ya da Health) büyük olan alınır: Health'e
     /// yazmadığımız sürece uygulamadaki eklemeler orada görünmüyor.
     func refreshFromHealthKit() async {
+        // Gün değiştiyse önce dünün canlı değerleri temizlenir — saat
+        // 00:06'da halkada dünkü 81 dakikanın görünmesinin sebebi buydu.
+        rolloverDayIfNeeded()
         guard HealthKitService.shared.isAvailable else { return }
         let snapshot = await HealthKitService.shared.fetchToday()
         guard snapshot.hasAnyData else { return }
         hkConnected = true
         hkSteps = snapshot.steps
         hkActiveEnergy = snapshot.activeEnergy
-        if snapshot.exerciseMinutes > 0 { exerciseBase = snapshot.exerciseMinutes }
+        // Koşulsuz atama: Health bağlıyken `appleExerciseTime` tek doğru
+        // kaynak. "Sıfırsa dokunma" korumasi gece yarısından sonra dünkü
+        // değeri yaşatıyor, yanlış yazılmış bir kaydı da düzeltemiyordu.
+        // (Uygulama içi antrenmanlar ayrı: `extraExerciseMin`.)
+        exerciseBase = snapshot.exerciseMinutes
         if snapshot.sleepHours > 0 { sleepHours = snapshot.sleepHours }
         if snapshot.waterML > 0 { water = max(water, snapshot.waterML) }
 
@@ -338,6 +348,7 @@ final class AppModel {
         water = 0
         exerciseBase = 0
         extraExerciseMin = 0
+        activeDayKey = todayKey
         sleepHours = 0
         hkSteps = 0
         hkActiveEnergy = 0

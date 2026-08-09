@@ -126,6 +126,9 @@ struct WorkoutDaySheet: View {
     /// Egzersiz halkasının o günkü değeri ve hedefi (dakika).
     let exerciseMinutes: Int
     let exerciseGoal: Int
+    /// 90 günlük listede hiç antrenman var mı? Varsa izin sorunu yoktur —
+    /// "bugün antrenman kaydı yok ama yürüyüş dakikası var" normal bir gün.
+    var historyHasWorkouts = false
 
     private var totalMinutes: Int { workouts.reduce(0) { $0 + $1.minutes } }
     private var totalKcal: Int { workouts.reduce(0) { $0 + $1.kcal } }
@@ -274,10 +277,11 @@ struct WorkoutDaySheet: View {
         .card(18)
     }
 
-    /// Egzersiz dakikası varken antrenman listesinin boş olması, "hiç
-    /// antrenman yapılmadı" değil "izin verilmedi" demektir; kullanıcıyı
-    /// yanlış sonuca bırakmamak için ayrı metin gösteriliyor.
-    private var missingPermission: Bool { exerciseMinutes > 0 }
+    /// Egzersiz dakikası varken antrenman listesinin TAMAMEN boş olması
+    /// (yalnızca o gün değil, 90 günün hiçbirinde) izin verilmediğini
+    /// düşündürür. Geçmişte antrenman görünüyorsa izin var demektir —
+    /// o günkü boşluk sadece "antrenman kaydı olmayan bir gün"dür.
+    private var missingPermission: Bool { exerciseMinutes > 0 && !historyHasWorkouts }
 
     private var emptyCard: some View {
         VStack(spacing: 6) {

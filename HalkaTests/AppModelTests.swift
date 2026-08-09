@@ -718,6 +718,45 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.eaten.isEmpty)
     }
 
+    /// "00:06'da dünkü 81 dk egzersiz görünüyor" — gece yarısı geçince
+    /// dünün canlı değerleri yeni güne taşınmamalı.
+    @MainActor
+    func testMidnightRolloverClearsYesterdaysValues() {
+        let model = AppModel()
+        model.activeDayKey = "2020-01-01"      // "dün"
+        model.water = 900
+        model.exerciseBase = 81
+        model.extraExerciseMin = 10
+        model.hkSteps = 5000
+        model.hkActiveEnergy = 420
+        model.mealDay = (model.todayWeekdayIndex + 3) % 7
+        model.rolloverDayIfNeeded()
+        XCTAssertEqual(model.activeDayKey, model.todayKey)
+        XCTAssertEqual(model.exerciseMinutes, 0)
+        XCTAssertEqual(model.water, 0)
+        XCTAssertEqual(model.hkSteps, 0)
+        XCTAssertEqual(model.mealDay, model.todayWeekdayIndex)
+    }
+
+    @MainActor
+    func testSameDayRolloverKeepsValues() {
+        let model = AppModel()
+        model.activeDayKey = model.todayKey
+        model.water = 500
+        model.exerciseBase = 30
+        model.rolloverDayIfNeeded()
+        XCTAssertEqual(model.water, 500)
+        XCTAssertEqual(model.exerciseMinutes, 30)
+
+        // İlk kurulum (boş anahtar) da temizlik yapmaz — girişte sunucudan
+        // yüklenen bugünkü değerler silinmemeli.
+        let fresh = AppModel()
+        fresh.water = 750
+        fresh.rolloverDayIfNeeded()
+        XCTAssertEqual(fresh.water, 750)
+        XCTAssertEqual(fresh.activeDayKey, fresh.todayKey)
+    }
+
     @MainActor
     func testWeekStartIsMonday() {
         // Öğün kaydı haftalık; hafta başı yanlışsa geçen haftanın işaretleri
