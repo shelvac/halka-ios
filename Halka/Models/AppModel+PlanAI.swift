@@ -1,5 +1,28 @@
 import Foundation
 
+/// AI'a giden gün özeti — @MainActor dışında: Encodable'ın sentezlenen
+/// encode(to:) metodu izole olamaz.
+private struct DaySummaryPayload: Encodable {
+    let gun: String
+    let ana_yemekler: [String]
+    let kirmizi_et: Int
+    let balik: Int
+}
+
+private struct PlanDayPayload: Encodable {
+    let hedef: String
+    let kalori: Int
+    let makrolar: [String: Int]
+    let protokol: String
+    let alerjiler: [String]
+    let sevilmeyenler: [String]
+    let ogun_sayisi: Int
+    let ogun_saatleri: [String]
+    let gun: String
+    let onceki_gunler_ozeti: [DaySummaryPayload]
+    let duzeltilecek_hatalar: [String]?
+}
+
 // MARK: - Haftalık plan orkestrasyonu (US-032 · US-034)
 //
 // İki katman:
@@ -69,27 +92,6 @@ extension AppModel {
         case "lipodem": return "Dusuk_Karb"
         default: return "Dengeli_TUBER"
         }
-    }
-
-    private struct DaySummaryPayload: Encodable {
-        let gun: String
-        let ana_yemekler: [String]
-        let kirmizi_et: Int
-        let balik: Int
-    }
-
-    private struct PlanDayPayload: Encodable {
-        let hedef: String
-        let kalori: Int
-        let makrolar: [String: Int]
-        let protokol: String
-        let alerjiler: [String]
-        let sevilmeyenler: [String]
-        let ogun_sayisi: Int
-        let ogun_saatleri: [String]
-        let gun: String
-        let onceki_gunler_ozeti: [DaySummaryPayload]
-        let duzeltilecek_hatalar: [String]?
     }
 
     /// Sihirbaz tamamlanınca haftanın menüsünü ve antrenmanını kurar.
@@ -254,7 +256,7 @@ extension AppModel {
         return "\(amount) \(unitLabel(item.unit))"
     }
 
-    private static func summary(of plan: DailyMealPlan) -> DaySummaryPayload {
+    private nonisolated static func summary(of plan: DailyMealPlan) -> DaySummaryPayload {
         let mains = plan.meals.flatMap { $0.items }
             .filter { $0.category == .anaYemek }
         return DaySummaryPayload(
