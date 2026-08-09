@@ -1532,6 +1532,28 @@ final class PlanTabIntegrationTests: XCTestCase {
         XCTAssertTrue(recipe.ingredients.contains { $0.contains("Omlet") })
     }
 
+    /// Koç sohbeti kalıcılığı: roller gidiş-dönüşte korunur, demo kart
+    /// rolleri (plan/week/menu) elenir, geçmiş 200 mesajla sınırlanır.
+    func testCoachMessagesSurviveStorageMapping() {
+        var messages: [CoachMessage] = [
+            CoachMessage(role: .coach, text: "Merhaba"),
+            CoachMessage(role: .user, text: "Planımı kur"),
+            CoachMessage(role: .ask, text: "Hedefin ne?", options: ["Kilo vermek"]),
+            CoachMessage(role: .plan, text: "eski demo kartı"),
+            CoachMessage(role: .planReady, text: "Özet", title: "Besin planın hazır",
+                         options: ["Süper, teşekkürler"])
+        ]
+        let stored = SupabaseService.storedMessages(from: messages)
+        XCTAssertEqual(stored.count, 4)                    // demo kartı elendi
+        let restored = SupabaseService.coachMessages(from: stored)
+        XCTAssertEqual(restored.map(\.role), [.coach, .user, .ask, .planReady])
+        XCTAssertEqual(restored[2].options, ["Kilo vermek"])
+        XCTAssertEqual(restored[3].title, "Besin planın hazır")
+
+        messages += (0..<300).map { CoachMessage(role: .user, text: "mesaj \($0)") }
+        XCTAssertEqual(SupabaseService.storedMessages(from: messages).count, 200)
+    }
+
     /// plan_weeks jsonb gidiş-dönüşü: kaydedilen plan aynen geri okunmalı.
     @MainActor
     func testPlanSurvivesCodableRoundTrip() throws {

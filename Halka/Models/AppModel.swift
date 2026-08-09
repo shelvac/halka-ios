@@ -150,6 +150,7 @@ final class AppModel {
     var messages: [CoachMessage] = Demo.initialMessages()
     var coachTyping = false
     var coachDraft = ""
+    var coachSaveToken = 0
     /// Sohbet içi plan kurma akışının durumu (US-035). nil = akış yok.
     var coachFlow: CoachPlanFlow? = nil
     /// "Beğenmedim, başka oluştur" sayaçları — aynı haftada farklı plan.
@@ -378,6 +379,9 @@ final class AppModel {
         messages = Demo.initialMessages()
         coachDraft = ""
         coachTyping = false
+        // Bekleyen gecikmeli sohbet kaydı varsa geçersiz kılınır — hesap
+        // değişiminde eski görevin yazması engellenir.
+        coachSaveToken += 1
         coachFlow = nil
         planVariationMeals = 0
         planVariationWorkout = 0

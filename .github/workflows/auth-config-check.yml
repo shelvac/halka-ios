@@ -1,0 +1,36 @@
+# Auth SMTP yapılandırmasını maskeleyerek raporlar (sır sızdırmaz).
+# Amaç: Resend'e tam geçiş doğrulanınca Gmail uygulama şifresi iptal edilebilsin.
+name: Auth Config Check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SMTP yapılandırmasını oku
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          CODE=$(curl -s -o out.json -w "%{http_code}" \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://api.supabase.com/v1/projects/urrjkubdngoszkttpeph/config/auth")
+          echo "## Auth SMTP yapılandırması" > r.md
+          echo "" >> r.md
+          echo "- HTTP \`$CODE\`" >> r.md
+          if [ "$CODE" = "200" ]; then
+            # Yalnızca zararsız alanlar; şifre/anahtar asla yazılmaz.
+            jq -r '"- Host: `\(.smtp_host // "yok")`\n- Port: `\(.smtp_port // "yok")`\n- Kullanıcı: `\((.smtp_user // "yok") | .[0:4] + "…")`\n- Gönderen: `\(.smtp_sender_name // "yok")` <\(.smtp_admin_email // "yok")>\n- Özel SMTP etkin: \(if .smtp_host then "evet" else "hayır" end)"' out.json >> r.md
+          else
+            echo "- ❌ Yapılandırma okunamadı" >> r.md
+          fi
+          cat r.md
+          gh issue comment 19 --repo "$REPO" --body-file r.md

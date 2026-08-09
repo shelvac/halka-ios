@@ -53,6 +53,28 @@ extension AppModel {
             let reply = self.coachReply(to: trimmed)
             self.messages.append(reply)
             self.coachTyping = false
+            self.scheduleCoachSave()
+        }
+    }
+
+    /// Sohbeti gecikmeli kaydeder — her mesajda istek atmamak için
+    /// (`scheduleMealSave` ile aynı desen).
+    func scheduleCoachSave() {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+        else { return }
+        coachSaveToken += 1
+        let token = coachSaveToken
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self, self.coachSaveToken == token else { return }
+            await SupabaseService.shared.saveCoachMessages(self.messages)
+        }
+    }
+
+    /// Girişte kayıtlı sohbeti geri yükler; kayıt yoksa karşılama kalır.
+    func loadCoachMessages() async {
+        if let stored = await SupabaseService.shared.fetchCoachMessages() {
+            messages = stored
         }
     }
 
@@ -275,6 +297,7 @@ extension AppModel {
             guard let self else { return }
             await self.buildWeeklyPlan(prefs, parts: parts, variation: variation)
             self.messages.append(self.planReadyMessage(part: part))
+            self.scheduleCoachSave()
         }
     }
 

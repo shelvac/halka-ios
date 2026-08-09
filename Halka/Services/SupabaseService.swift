@@ -848,6 +848,85 @@ final class SupabaseService {
             .execute()
     }
 
+    // MARK: Koç sohbeti (coach_state) — kişiye özel, RLS'li.
+    //
+    // Sohbet uygulama kapanınca sıfırlanıyordu. Yalnızca metin tabanlı
+    // roller saklanır (user/coach/ask/planReady); eski demo kart rolleri
+    // (plan/week/menu) codable yükler taşıdığı için elenir.
+
+    struct StoredCoachMessage: Codable, Equatable {
+        let role: String
+        let text: String
+        let title: String
+        let options: [String]
+    }
+
+    static func storedMessages(from messages: [CoachMessage]) -> [StoredCoachMessage] {
+        messages.compactMap { message in
+            let role: String?
+            switch message.role {
+            case .user: role = "user"
+            case .coach: role = "coach"
+            case .ask: role = "ask"
+            case .planReady: role = "planReady"
+            case .plan, .week, .menu: role = nil
+            }
+            guard let role else { return nil }
+            return StoredCoachMessage(role: role, text: message.text,
+                                      title: message.title, options: message.options)
+        }
+        .suffix(200)
+        .map { $0 }
+    }
+
+    static func coachMessages(from stored: [StoredCoachMessage]) -> [CoachMessage] {
+        stored.map { row in
+            let role: CoachRole
+            switch row.role {
+            case "user": role = .user
+            case "ask": role = .ask
+            case "planReady": role = .planReady
+            default: role = .coach
+            }
+            return CoachMessage(role: role, text: row.text,
+                                title: row.title, options: row.options)
+        }
+    }
+
+    func fetchCoachMessages() async -> [CoachMessage]? {
+        guard let client, let user = await currentUser() else { return nil }
+        struct Row: Decodable { let messages: [StoredCoachMessage] }
+        do {
+            let rows: [Row] = try await client.from("coach_state")
+                .select("messages")
+                .eq("user_id", value: user.id.uuidString)
+                .limit(1)
+                .execute()
+                .value
+            guard let row = rows.first, !row.messages.isEmpty else { return nil }
+            return Self.coachMessages(from: row.messages)
+        } catch {
+            AuthLog.warn("fetchCoachMessages", error)
+            return nil
+        }
+    }
+
+    func saveCoachMessages(_ messages: [CoachMessage]) async {
+        guard let client, let user = await currentUser() else { return }
+        let payload: [String: AnyJSON] = [
+            "user_id": .string(user.id.uuidString.lowercased()),
+            "messages": Self.jsonbValue(Self.storedMessages(from: messages)),
+            "updated_at": .string(ISO8601DateFormatter().string(from: Date()))
+        ]
+        do {
+            try await client.from("coach_state")
+                .upsert(payload, onConflict: "user_id")
+                .execute()
+        } catch {
+            AuthLog.warn("saveCoachMessages", error)
+        }
+    }
+
     // MARK: Üretilen haftalık plan (plan_weeks) — kişiye özel, RLS'li.
     //
     // Plan yalnızca bellekte yaşıyordu: uygulama kapanınca kayboluyor,
