@@ -1448,3 +1448,90 @@ final class CoachPlanFlowTests: XCTestCase {
         XCTAssertNotEqual(base, varied)   // "başka plan" gerçekten başka
     }
 }
+
+// MARK: - Plan → sekme entegrasyonu (US-036)
+
+final class PlanTabIntegrationTests: XCTestCase {
+
+    @MainActor
+    private func modelWithPlan() -> AppModel {
+        let model = AppModel()
+        let breakfast = PlannedMeal(slot: 0, label: "Kahvaltı", time: "08:30", items: [
+            PlannedItem(id: "a", name: "Omlet", grams: 110, kcal: 170,
+                        portionName: "porsiyon", portionG: 110, portionLabel: "2 yumurta"),
+            PlannedItem(id: "b", name: "Tam buğday ekmeği", grams: 50, kcal: 123,
+                        portionName: "dilim", portionG: 25)
+        ])
+        let lunch = PlannedMeal(slot: 1, label: "Öğle", time: "13:00", items: [
+            PlannedItem(id: "c", name: "Izgara tavuk", grams: 150, kcal: 248,
+                        portionName: "porsiyon", portionG: 150)
+        ])
+        model.mealPlan = WeekMealPlan(
+            days: (0..<7).map { PlannedDay(day: $0, meals: [breakfast, lunch]) },
+            kcalTarget: 1500, proteinTarget: 90, carbTarget: 150,
+            fatTarget: 50, poolSize: 120)
+        return model
+    }
+
+    /// "AI koçun oluşturduğu plan yemek sekmesine yansımıyor" — sekmenin
+    /// okuduğu menü artık plandan gelmeli, demo menüden değil.
+    @MainActor
+    func testMealTabReadsGeneratedPlan() {
+        let model = modelWithPlan()
+        let menu = model.menu(forDay: 2)
+        XCTAssertEqual(menu.count, 2)
+        XCTAssertEqual(menu[0], "Omlet · Tam buğday ekmeği")
+        XCTAssertEqual(model.mealKcal(day: 2, slot: 0), 293)
+        XCTAssertEqual(model.mealTime(day: 2, slot: 1), "13:00")
+        XCTAssertEqual(model.mealLabel(day: 2, slot: 1), "Öğle")
+    }
+
+    /// Yenen plan öğünü halkaya PLANDAKİ kalorisiyle yazılır.
+    @MainActor
+    func testConsumedUsesPlanCalories() {
+        let model = modelWithPlan()
+        let day = model.mealDay
+        model.toggleEaten(day: day, slot: 0)
+        XCTAssertEqual(model.consumed(forDay: day), 293)
+    }
+
+    /// Plansız kullanıcıda demo menü aynen çalışmaya devam eder.
+    @MainActor
+    func testDemoMenuStillWorksWithoutPlan() {
+        let model = AppModel()
+        XCTAssertEqual(model.menu(forDay: 0), Demo.menus[0])
+        XCTAssertEqual(model.mealLabel(day: 0, slot: 0), Demo.mealLabels[0])
+    }
+
+    /// Detay/market ekranının tarifi plan kalemlerinden kurulur.
+    @MainActor
+    func testRecipeBuiltFromPlanItems() {
+        let model = modelWithPlan()
+        model.mealDay = 3
+        let title = model.menu(forDay: 3)[0]
+        let recipe = model.recipe(for: title, slot: 0)
+        XCTAssertEqual(recipe.kcal, 293)
+        XCTAssertTrue(recipe.ingredients.contains { $0.contains("Omlet") })
+    }
+
+    /// plan_weeks jsonb gidiş-dönüşü: kaydedilen plan aynen geri okunmalı.
+    @MainActor
+    func testPlanSurvivesCodableRoundTrip() throws {
+        let model = modelWithPlan()
+        let plan = model.mealPlan!
+        let decoded = try JSONDecoder().decode(
+            WeekMealPlan.self, from: JSONEncoder().encode(plan))
+        XCTAssertEqual(decoded, plan)
+
+        let workout = WeekWorkoutPlan(
+            sessions: [PlannedSession(day: 1, title: "Tüm vücut", focus: "Kuvvet",
+                exercises: [PlannedExercise(id: "x", name: "Squat", region: "Bacak",
+                                            equipment: "Vücut ağırlığı", sets: 3,
+                                            reps: "8-12", restSeconds: 90)],
+                cardioMinutes: 20)],
+            weeklyCardioMinutes: 150, weeklySets: ["Bacak": 3], note: "not")
+        let decodedWorkout = try JSONDecoder().decode(
+            WeekWorkoutPlan.self, from: JSONEncoder().encode(workout))
+        XCTAssertEqual(decodedWorkout, workout)
+    }
+}

@@ -28,6 +28,7 @@ struct WorkoutHomeView: View {
     @Environment(AppModel.self) private var model
     /// Geçmiş günler kapalı başlar — sekme bugünle açılsın.
     @State private var showPast = false
+    @State private var showingPlan = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -37,6 +38,13 @@ struct WorkoutHomeView: View {
                 .kerning(-0.5)
                 .padding(.top, 12)
                 .padding(.bottom, 16)
+
+            // AI koçun kurduğu haftalık program buraya da yansır — plan
+            // yalnızca sonuç ekranında yaşamamalı.
+            if let plan = model.workoutPlan {
+                todayPlanCard(plan)
+                    .padding(.bottom, 14)
+            }
 
             HStack(spacing: 10) {
                 Button { model.workoutView = .create } label: {
@@ -157,6 +165,45 @@ struct WorkoutHomeView: View {
                 appleHealthSection
             }
         }
+        .fullScreenCover(isPresented: $showingPlan) {
+            PlanResultView(initialTab: .workouts)
+        }
+    }
+
+    /// Haftalık programdan bugünün seansı — yoksa dinlenme günü.
+    private func todayPlanCard(_ plan: WeekWorkoutPlan) -> some View {
+        let today = model.todayWeekdayIndex
+        let session = plan.sessions.first { $0.day == today }
+        return Button { showingPlan = true } label: {
+            HStack(spacing: 12) {
+                Image(systemName: session == nil ? "moon.zzz.fill" : "figure.strengthtraining.traditional")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(session == nil ? Color.chevron : Color.coral)
+                    .frame(width: 26)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(session == nil ? "Bugün dinlenme günü" : session!.title)
+                        .font(.h(13.5))
+                        .foregroundStyle(Color.ink)
+                    Text(session == nil
+                         ? "Haftalık programın: \(plan.sessions.count) gün antrenman"
+                         : "\(session!.focus) · \(session!.exercises.count) hareket · ~\(session!.minutes) dk")
+                        .font(.h(10.5, .semibold))
+                        .foregroundStyle(Color.sub)
+                }
+                Spacer()
+                Text("Planı aç")
+                    .font(.h(11, .bold))
+                    .foregroundStyle(Color.coral)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .heavy))
+                    .foregroundStyle(Color.chevron)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .card(18)
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

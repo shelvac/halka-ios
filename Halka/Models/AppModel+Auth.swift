@@ -45,6 +45,10 @@ extension AppModel {
             await self?.loadRingHistory()
             await self?.loadRecentRings()
             await self?.loadMealState()
+            // Kayıtlı haftalık plan: yemek/egzersiz sekmeleri uygulama
+            // yeniden açıldığında da plandan beslenir.
+            await self?.loadPlanWeek()
+            self?.planPreferences = await SupabaseService.shared.fetchPlanPreferences()
             await self?.loadBodyMeasurements()
             await self?.refreshFromHealthKit()
         }

@@ -238,6 +238,7 @@ extension AppModel {
         }
         guard parts.contains(.meals) else {
             planPreferences = prefs
+            persistPlanWeek()
             return
         }
 
@@ -392,6 +393,33 @@ extension AppModel {
 
         planSource = aiDayCount == 7 ? "ai" : aiDayCount > 0 ? "mixed" : "rules"
         planPreferences = prefs
+        persistPlanWeek()
+    }
+
+    /// Planı sunucuya yazar — uygulama yeniden açıldığında sekmeler yine
+    /// dolu olsun. RLS: yalnızca sahibinin hesabında görünür.
+    func persistPlanWeek() {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+        else { return }
+        let meals = mealPlan
+        let workouts = workoutPlan
+        let key = planPreferences?.protocolKey
+        let week = weekStart
+        Task {
+            await SupabaseService.shared.savePlanWeek(
+                weekStart: week, protocolKey: key, meals: meals, workouts: workouts)
+        }
+    }
+
+    /// Girişte bu haftanın kayıtlı planını geri yükler.
+    func loadPlanWeek() async {
+        let saved = await SupabaseService.shared.fetchPlanWeek(weekStart: weekStart)
+        if let meals = saved.meals, !meals.days.isEmpty { mealPlan = meals }
+        if let workouts = saved.workouts { workoutPlan = workouts }
+        var parts = Set<PlanPart>()
+        if !(mealPlan?.days.isEmpty ?? true) { parts.insert(.meals) }
+        if workoutPlan != nil { parts.insert(.workouts) }
+        if !parts.isEmpty { planParts = parts }
     }
 
     // MARK: AI günü → uygulama modeli

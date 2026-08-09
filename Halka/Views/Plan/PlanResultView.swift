@@ -5,9 +5,14 @@ struct PlanResultView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
-    @State private var tab: Pane = .meals
+    @State private var tab: Pane
     @State private var selectedDay = 0
     @State private var editingPlan = false
+
+    /// Egzersiz sekmesinden açılınca doğrudan Antrenman bölümü görünsün.
+    init(initialTab: Pane = .meals) {
+        _tab = State(initialValue: initialTab)
+    }
 
     enum Pane: String, CaseIterable { case meals, workouts
         var title: String { self == .meals ? "Beslenme" : "Antrenman" }
@@ -59,7 +64,11 @@ struct PlanResultView: View {
                 }
             }
         }
-        .onAppear { if !panes.contains(tab) { tab = panes[0] } }
+        .onAppear {
+            if !panes.contains(tab) { tab = panes[0] }
+            // Hafta pazartesiden başlıyor ama kullanıcı bugünü merak ediyor.
+            selectedDay = model.todayWeekdayIndex
+        }
         .onChange(of: model.planParts) { if !panes.contains(tab) { tab = panes[0] } }
     }
 

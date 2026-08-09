@@ -387,6 +387,20 @@ final class AppModel {
     // MARK: Shared helpers
 
     func recipe(for food: String, slot: Int) -> Recipe {
+        // Üretilen planın öğünü: gerçek kalemler porsiyonlarıyla tarif ve
+        // market listesi olur — demo tarifine düşmek yanlış kalori gösterirdi.
+        if let meals = planMeals(forDay: mealDay), slot < meals.count {
+            let meal = meals[slot]
+            if food == meal.items.map(\.name).joined(separator: " · ") {
+                return Recipe(
+                    kcal: meal.kcal,
+                    ingredients: meal.items.map {
+                        "\($0.name) — \($0.portionText) · \($0.grams) g"
+                    },
+                    steps: ["Kalemleri porsiyonlarına göre hazırla",
+                            "Tercihine göre pişir ve servis et"])
+            }
+        }
         if let r = Demo.recipes[food] { return r }
         let parts = food
             .components(separatedBy: CharacterSet(charactersIn: "+·:,"))

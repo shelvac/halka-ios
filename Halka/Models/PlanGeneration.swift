@@ -42,7 +42,10 @@ struct PlanFood: Identifiable, Equatable, Decodable {
 }
 
 /// Plana yerleşmiş tek bir öğün kalemi.
-struct PlannedItem: Identifiable, Equatable {
+///
+/// Codable: plan `plan_weeks` tablosunda jsonb olarak saklanıyor —
+/// uygulama yeniden açıldığında da sekmeler plandan beslenebilsin.
+struct PlannedItem: Identifiable, Equatable, Codable {
     let id: String
     let name: String
     let grams: Int
@@ -81,7 +84,7 @@ struct PlannedItem: Identifiable, Equatable {
 }
 
 /// Bir günün bir öğünü.
-struct PlannedMeal: Identifiable, Equatable {
+struct PlannedMeal: Identifiable, Equatable, Codable {
     let slot: Int
     let label: String
     let time: String
@@ -90,14 +93,14 @@ struct PlannedMeal: Identifiable, Equatable {
     var kcal: Int { items.reduce(0) { $0 + $1.kcal } }
 }
 
-struct PlannedDay: Identifiable, Equatable {
+struct PlannedDay: Identifiable, Equatable, Codable {
     let day: Int                 // 0 = Pazartesi
     var meals: [PlannedMeal]
     var id: Int { day }
     var kcal: Int { meals.reduce(0) { $0 + $1.kcal } }
 }
 
-struct WeekMealPlan: Equatable {
+struct WeekMealPlan: Equatable, Codable {
     var days: [PlannedDay]
     var kcalTarget: Int
     var proteinTarget: Int

@@ -84,7 +84,6 @@ struct MealMenuView: View {
                 let i = item.slot
                 let food = item.food
                 let eaten = model.isEaten(day: day, slot: i)
-                let recipe = model.recipe(for: food, slot: i)
                 Button {
                     model.openMealDetail(food: food, slot: i, from: .menu)
                 } label: {
@@ -94,10 +93,10 @@ struct MealMenuView: View {
                         }
                         .buttonStyle(.plain)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(model.mealTimes[i])
+                            Text(model.mealTime(day: day, slot: i))
                                 .font(.h(12))
                                 .foregroundStyle(Color.coral)
-                            Text(Demo.mealLabels[i])
+                            Text(model.mealLabel(day: day, slot: i))
                                 .font(.h(9.5))
                                 .foregroundStyle(Color.faint)
                         }
@@ -109,7 +108,7 @@ struct MealMenuView: View {
                             .lineSpacing(2)
                             .multilineTextAlignment(.leading)
                         Spacer(minLength: 4)
-                        Text("\(recipe.kcal) kcal")
+                        Text("\(model.mealKcal(day: day, slot: i)) kcal")
                             .font(.h(11))
                             .foregroundStyle(Color.sub)
                         // Ekstra satırlarındaki silme düğmesinin aynısı.
@@ -216,7 +215,7 @@ struct MealMenuView: View {
             HStack {
                 Text("Günün toplamı").font(.h(12)).foregroundStyle(Color.ink)
                 Spacer()
-                Text("~\(model.planTotal(forDay: day)) kcal · Hedef 1420")
+                Text("~\(model.planTotal(forDay: day)) kcal · Hedef \(model.kcalGoal)")
                     .font(.h(12))
                     .foregroundStyle(Color.green)
             }
@@ -232,7 +231,7 @@ struct MealMenuView: View {
 
     private var logCard: some View {
         let consumed = model.consumed(forDay: model.mealDay)
-        let pct = min(Double(consumed) / 1420, 1)
+        let pct = min(Double(consumed) / Double(max(1, model.kcalGoal)), 1)
         return Button { model.mealView = .log } label: {
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -257,7 +256,7 @@ struct MealMenuView: View {
                         .font(.h(19))
                         .foregroundStyle(Color.greenSoft)
                         .kerning(-0.4)
-                    Text("/ 1420 kcal")
+                    Text("/ \(model.kcalGoal) kcal")
                         .font(.h(9.5, .bold))
                         .foregroundStyle(.white.opacity(0.6))
                 }
@@ -356,8 +355,9 @@ struct CalorieLogView: View {
     var body: some View {
         let day = model.mealDay
         let consumed = model.consumed(forDay: day)
-        let over = consumed > 1420
-        let pct = min(Double(consumed) / 1420, 1)
+        let goal = model.kcalGoal
+        let over = consumed > goal
+        let pct = min(Double(consumed) / Double(max(1, goal)), 1)
         let planRows = model.visibleMenu(forDay: day)
             .filter { model.isEaten(day: day, slot: $0.slot) }
         let extras = model.extras(forDay: day)
@@ -382,11 +382,11 @@ struct CalorieLogView: View {
                         .font(.h(36))
                         .foregroundStyle(Color.ink)
                         .kerning(-1)
-                    Text("/ 1420 kcal")
+                    Text("/ \(goal) kcal")
                         .font(.h(13, .bold))
                         .foregroundStyle(Color.sub)
                     Spacer()
-                    Text(over ? "+\(consumed - 1420) kcal aşım" : "\(1420 - consumed) kcal kaldı")
+                    Text(over ? "+\(consumed - goal) kcal aşım" : "\(goal - consumed) kcal kaldı")
                         .font(.h(10.5))
                         .foregroundStyle(over ? Color.coralDark : Color.greenDark)
                         .padding(.horizontal, 10)
@@ -403,7 +403,7 @@ struct CalorieLogView: View {
                 }
                 .frame(height: 8)
                 .padding(.top, 12)
-                Text("Beslenme halkası bu günlükten hesaplanır · Hedef: BMR 1420 kcal")
+                Text("Beslenme halkası bu günlükten hesaplanır · Hedef: \(goal) kcal")
                     .font(.h(10.5, .bold))
                     .foregroundStyle(Color.faint)
                     .padding(.top, 8)
@@ -423,10 +423,10 @@ struct CalorieLogView: View {
                 } else {
                     ForEach(Array(planRows.enumerated()), id: \.element.slot) { idx, pair in
                         logRow(
-                            time: model.mealTimes[pair.slot],
+                            time: model.mealTime(day: day, slot: pair.slot),
                             food: pair.food,
-                            kcal: "\(model.recipe(for: pair.food, slot: pair.slot).kcal) kcal",
-                            source: "Plandan · \(Demo.mealLabels[pair.slot])",
+                            kcal: "\(model.mealKcal(day: day, slot: pair.slot)) kcal",
+                            source: "Plandan · \(model.mealLabel(day: day, slot: pair.slot))",
                             sourceColors: (Color.blueBg, Color.blueDark),
                             deletable: nil,
                             topBorder: idx > 0)

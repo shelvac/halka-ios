@@ -31,7 +31,7 @@ struct PlanExercise: Identifiable, Equatable, Decodable {
     }
 }
 
-struct PlannedExercise: Identifiable, Equatable {
+struct PlannedExercise: Identifiable, Equatable, Codable {
     let id: String
     let name: String
     let region: String
@@ -41,7 +41,7 @@ struct PlannedExercise: Identifiable, Equatable {
     let restSeconds: Int
 }
 
-struct PlannedSession: Identifiable, Equatable {
+struct PlannedSession: Identifiable, Equatable, Codable {
     /// 0 = Pazartesi
     let day: Int
     let title: String
@@ -58,7 +58,7 @@ struct PlannedSession: Identifiable, Equatable {
     }
 }
 
-struct WeekWorkoutPlan: Equatable {
+struct WeekWorkoutPlan: Equatable, Codable {
     var sessions: [PlannedSession]
     var weeklyCardioMinutes: Int
     /// Kas grubu → haftalık set sayısı. ACSM hacim kontrolü için.

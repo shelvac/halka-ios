@@ -4,12 +4,62 @@ import SwiftUI
 
 extension AppModel {
 
+    /// AI koçun kurduğu plandaki gün — yoksa nil, demo menüye düşülür.
+    ///
+    /// "AI koçun oluşturduğu plan yemek sekmesine yansımıyor": sekme sabit
+    /// demo menüyü gösteriyordu, üretilen plan yalnızca sonuç ekranında
+    /// yaşıyordu. Plan varsa artık tek kaynak o.
+    func planMeals(forDay day: Int) -> [PlannedMeal]? {
+        guard let plan = mealPlan,
+              let planDay = plan.days.first(where: { $0.day == day }),
+              !planDay.meals.isEmpty else { return nil }
+        return planDay.meals
+    }
+
     /// Menu for a given day with any catalog overrides applied.
     func menu(forDay day: Int) -> [String] {
-        Demo.menus[day].enumerated().map { i, food in
+        if let meals = planMeals(forDay: day) {
+            return meals.enumerated().map { i, meal in
+                overrides["\(day)-\(i)"] ?? meal.items.map(\.name).joined(separator: " · ")
+            }
+        }
+        return Demo.menus[day].enumerated().map { i, food in
             overrides["\(day)-\(i)"] ?? food
         }
     }
+
+    /// Öğünün kalorisi — plan varsa plandan, katalogla değiştirildiyse veya
+    /// demo menüdeyse tariften.
+    func mealKcal(day: Int, slot: Int) -> Int {
+        if let override = overrides["\(day)-\(slot)"] {
+            return recipe(for: override, slot: min(slot, Demo.fallbackKcal.count - 1)).kcal
+        }
+        if let meals = planMeals(forDay: day), slot < meals.count {
+            return meals[slot].kcal
+        }
+        let foods = Demo.menus[day]
+        guard slot < foods.count else { return 0 }
+        return recipe(for: foods[slot], slot: slot).kcal
+    }
+
+    /// Plan 3-5 öğünlü olabilir; sabit 4'lük demo dizilerine slot'la girmek
+    /// taşardı. Saat ve etiket her zaman buradan okunur.
+    func mealTime(day: Int, slot: Int) -> String {
+        if let meals = planMeals(forDay: day), slot < meals.count {
+            return meals[slot].time
+        }
+        return slot < mealTimes.count ? mealTimes[slot] : "—"
+    }
+
+    func mealLabel(day: Int, slot: Int) -> String {
+        if let meals = planMeals(forDay: day), slot < meals.count {
+            return meals[slot].label
+        }
+        return slot < Demo.mealLabels.count ? Demo.mealLabels[slot] : "Öğün"
+    }
+
+    /// Günlük kalori hedefi — profil hedefi (plan da aynı hedefle kurulur).
+    var kcalGoal: Int { Int(goal(for: .nutrition)) }
 
     func isEaten(day: Int, slot: Int) -> Bool {
         eaten.contains("\(day)-\(slot)")
@@ -77,7 +127,7 @@ extension AppModel {
     func consumed(forDay day: Int) -> Int {
         let plan = visibleMenu(forDay: day).reduce(0) { sum, item in
             sum + (isEaten(day: day, slot: item.slot)
-                   ? recipe(for: item.food, slot: item.slot).kcal : 0)
+                   ? mealKcal(day: day, slot: item.slot) : 0)
         }
         return plan + extras(forDay: day).reduce(0) { $0 + $1.kcal }
     }
@@ -89,7 +139,7 @@ extension AppModel {
     /// Sum of the full planned menu for a day (regardless of eaten state).
     func planTotal(forDay day: Int) -> Int {
         let plan = visibleMenu(forDay: day).reduce(0) { sum, item in
-            sum + recipe(for: item.food, slot: item.slot).kcal
+            sum + mealKcal(day: day, slot: item.slot)
         }
         return plan + extras(forDay: day).reduce(0) { $0 + $1.kcal }
     }

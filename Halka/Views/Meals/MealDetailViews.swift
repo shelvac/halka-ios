@@ -9,8 +9,11 @@ struct MealDetailView: View {
     var body: some View {
         guard let sel = model.mealSelection else { return AnyView(EmptyView()) }
         let recipe = model.recipe(for: sel.food, slot: sel.mealIndex)
-        let label = sel.fromCatalog ? (sel.catalogName ?? "") : Demo.mealLabels[sel.mealIndex]
-        let meta = (sel.fromCatalog ? "" : "\(model.mealTimes[sel.mealIndex]) · ") + "~\(recipe.kcal) kcal"
+        let label = sel.fromCatalog ? (sel.catalogName ?? "")
+                  : model.mealLabel(day: model.mealDay, slot: sel.mealIndex)
+        let meta = (sel.fromCatalog ? ""
+                    : "\(model.mealTime(day: model.mealDay, slot: sel.mealIndex)) · ")
+                 + "~\(recipe.kcal) kcal"
 
         return AnyView(VStack(alignment: .leading, spacing: 0) {
             BackRow(label: sel.fromCatalog ? "Kataloğa dön" : "Menüye dön") {
@@ -376,7 +379,7 @@ struct MarketListPane: View {
             ForEach(menu, id: \.slot) { slot, food in
                 let recipe = model.recipe(for: food, slot: slot)
                 VStack(alignment: .leading, spacing: 9) {
-                    Text("\(Demo.mealLabels[slot]) · \(food)")
+                    Text("\(model.mealLabel(day: day, slot: slot)) · \(food)")
                         .font(.h(12))
                         .foregroundStyle(Color.brown)
                     VStack(alignment: .leading, spacing: 8) {

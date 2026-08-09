@@ -473,10 +473,13 @@ final class SupabaseService {
     }
 
     func deleteBodyMeasurement(id: UUID) async throws {
-        guard let client else { return }
+        guard let client, let user = await currentUser() else { return }
+        // RLS zaten koruyor; user_id filtresi savunmayı derinleştirir —
+        // politika bir gün gevşetilse bile başkasının kaydı silinemez.
         try await client.from("body_measurements")
             .delete()
             .eq("id", value: id.uuidString)
+            .eq("user_id", value: user.id.uuidString)
             .execute()
     }
 
@@ -750,9 +753,11 @@ final class SupabaseService {
             }),
             "corrected": .bool(corrected)
         ]
+        guard let user = await currentUser() else { return }
         _ = try? await client.from("meal_photo_log")
             .update(payload)
             .eq("id", value: logID)
+            .eq("user_id", value: user.id.uuidString)
             .execute()
     }
 
@@ -841,6 +846,78 @@ final class SupabaseService {
         try await client.from("plan_preferences")
             .upsert(payload, onConflict: "user_id")
             .execute()
+    }
+
+    // MARK: Üretilen haftalık plan (plan_weeks) — kişiye özel, RLS'li.
+    //
+    // Plan yalnızca bellekte yaşıyordu: uygulama kapanınca kayboluyor,
+    // sekmeler dolduramıyordu. Satır kullanıcı+hafta başına tek (unique),
+    // RLS sayesinde kimse başkasının planını okuyamaz.
+
+    private struct PlanWeekFetchRow: Decodable {
+        let meals: WeekMealPlan?
+        let workouts: WeekWorkoutPlan?
+
+        enum CodingKeys: String, CodingKey { case meals, workouts }
+
+        init(from decoder: Decoder) throws {
+            // Kolon varsayılanı '[]'::jsonb — obje bekleyen çözümlemeyi
+            // düşürmesin; bozuk/boş alan planı değil yalnızca o alanı yok sayar.
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            meals = try? container.decode(WeekMealPlan.self, forKey: .meals)
+            workouts = try? container.decode(WeekWorkoutPlan.self, forKey: .workouts)
+        }
+    }
+
+    /// Encodable değeri jsonb kolonuna yazılabilir AnyJSON'a çevirir.
+    private static func jsonbValue<T: Encodable>(_ value: T?) -> AnyJSON {
+        guard let value,
+              let data = try? JSONEncoder().encode(value),
+              let json = try? JSONDecoder().decode(AnyJSON.self, from: data)
+        else { return .null }
+        return json
+    }
+
+    func savePlanWeek(weekStart: Date, protocolKey: String?,
+                      meals: WeekMealPlan?, workouts: WeekWorkoutPlan?) async {
+        guard let client, let user = await currentUser() else { return }
+        let payload: [String: AnyJSON] = [
+            "user_id": .string(user.id.uuidString.lowercased()),
+            "week_start": .string(Self.dayFormatter.string(from: weekStart)),
+            "protocol_key": protocolKey.map { AnyJSON.string($0) } ?? .null,
+            "kcal_target": .integer(meals?.kcalTarget ?? 0),
+            "protein_g": meals.map { .integer($0.proteinTarget) } ?? .null,
+            "carb_g": meals.map { .integer($0.carbTarget) } ?? .null,
+            "fat_g": meals.map { .integer($0.fatTarget) } ?? .null,
+            "meals": Self.jsonbValue(meals),
+            "workouts": Self.jsonbValue(workouts)
+        ]
+        do {
+            try await client.from("plan_weeks")
+                .upsert(payload, onConflict: "user_id,week_start")
+                .execute()
+        } catch {
+            AuthLog.warn("savePlanWeek", error)
+        }
+    }
+
+    func fetchPlanWeek(weekStart: Date) async
+        -> (meals: WeekMealPlan?, workouts: WeekWorkoutPlan?) {
+        guard let client, let user = await currentUser() else { return (nil, nil) }
+        do {
+            let rows: [PlanWeekFetchRow] = try await client.from("plan_weeks")
+                .select("meals,workouts")
+                .eq("user_id", value: user.id.uuidString)
+                .eq("week_start", value: Self.dayFormatter.string(from: weekStart))
+                .limit(1)
+                .execute()
+                .value
+            guard let row = rows.first else { return (nil, nil) }
+            return (row.meals, row.workouts)
+        } catch {
+            AuthLog.warn("fetchPlanWeek", error)
+            return (nil, nil)
+        }
     }
 
     /// Plan üreticisi için tüm yemek kataloğu (225 satır — tek seferde).
