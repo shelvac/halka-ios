@@ -287,8 +287,8 @@ extension AppModel {
             lines.append("Not: yapay zekâya ulaşılamadığı için plan kural tabanlı kuruldu.")
         }
         return CoachMessage(role: .planReady,
-            title: "Haftalık planın hazır",
             text: lines.joined(separator: "\n"),
+            title: "Haftalık planın hazır",
             options: [Self.chipRegenMeals, Self.chipRegenWorkout, Self.chipThanks])
     }
 
