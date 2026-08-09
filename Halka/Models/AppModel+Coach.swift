@@ -62,6 +62,17 @@ extension AppModel {
         // Devam eden akış her şeyden önce gelir.
         if coachFlow != nil { return advanceFlow(answer: text) }
 
+        // "Beğenmedim, başka oluştur" — kurma kontrollerinden ÖNCE:
+        // "Besin planını değiştir" metni "besin + plan" içerdiği için
+        // aşağıdaki bulanık eşleşmeye takılıp yanlışlıkla kurma akışını
+        // başlatıyordu.
+        let wantsChange = lower.contains("değiştir") || lower.contains("beğenmedim")
+            || lower.contains("başka") || lower.contains("yenile")
+        if wantsChange && lower.contains("besin") { return regenerate(part: .meals) }
+        if wantsChange && (lower.contains("antrenman") || lower.contains("egzersiz")) {
+            return regenerate(part: .workouts)
+        }
+
         // Plan kurma girişleri
         if text == Self.chipFullPlan || lower.contains("planımı kur") {
             return startFlow(part: .both)
@@ -73,14 +84,6 @@ extension AppModel {
             || (lower.contains("antrenman") && lower.contains("plan"))
             || (lower.contains("egzersiz") && lower.contains("plan")) {
             return startFlow(part: .workouts)
-        }
-
-        // "Beğenmedim, başka oluştur"
-        if text == Self.chipRegenMeals || (lower.contains("besin") && lower.contains("değiştir")) {
-            return regenerate(part: .meals)
-        }
-        if text == Self.chipRegenWorkout || (lower.contains("antrenman") && lower.contains("değiştir")) {
-            return regenerate(part: .workouts)
         }
         if text == Self.chipThanks {
             return CoachMessage(role: .coach,
