@@ -1,0 +1,127 @@
+# Tek seferlik: egzersiz adlarını Türkçeye çevirir (name_tr).
+# free-exercise-db'den gelen 873 hareketin adı İngilizceydi; kütüphane ve
+# antrenman planı Türkçe ad gösterebilsin. Sonuç issue #19'a raporlanır.
+name: Translate Exercises
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Çevir ve uygula
+        env:
+          SUPABASE_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          cat > run.py << 'PYEOF'
+          import json, os, time, urllib.request
+
+          REF = "urrjkubdngoszkttpeph"
+          SB = os.environ["SUPABASE_TOKEN"]
+          GK = os.environ["GEMINI_API_KEY"]
+
+          def sql(query):
+              req = urllib.request.Request(
+                  f"https://api.supabase.com/v1/projects/{REF}/database/query",
+                  data=json.dumps({"query": query}).encode(),
+                  headers={"Authorization": f"Bearer {SB}",
+                           "Content-Type": "application/json"},
+                  method="POST")
+              with urllib.request.urlopen(req, timeout=120) as r:
+                  return json.loads(r.read().decode() or "[]")
+
+          def gemini(names):
+              listing = "\n".join(f"{i}|{n}" for i, n in enumerate(names))
+              prompt = (
+                  "Fitness hareket adlarini Turkceye cevir. Kurallar: "
+                  "Turkiye'deki spor salonlarinda yerlesik terim neyse onu kullan "
+                  "(Squat, Deadlift, Lunge, Plank, Crunch gibi yerlesmis adlar AYNEN kalir; "
+                  "Bench Press gibi adlar korunur). Ekipman parantezle belirtilebilir. "
+                  "Kisa ve dogal olsun; birebir sozluk cevirisi yapma. "
+                  "Her satir 'indeks|ad' bicimindedir; SADECE JSON dizisi don: "
+                  '[{"i": <indeks>, "tr": "<Turkce ad>"}]\n\n' + listing)
+              body = {
+                  "contents": [{"parts": [{"text": prompt}]}],
+                  "generationConfig": {
+                      "temperature": 0.1,
+                      "responseMimeType": "application/json",
+                      "maxOutputTokens": 8192,
+                      "thinkingConfig": {"thinkingBudget": 512}
+                  }
+              }
+              req = urllib.request.Request(
+                  "https://generativelanguage.googleapis.com/v1beta/models/"
+                  "gemini-3.5-flash:generateContent",
+                  data=json.dumps(body).encode(),
+                  headers={"x-goog-api-key": GK, "Content-Type": "application/json"},
+                  method="POST")
+              for attempt in range(4):
+                  try:
+                      with urllib.request.urlopen(req, timeout=180) as r:
+                          data = json.loads(r.read().decode())
+                      cand = data["candidates"][0]
+                      if cand.get("finishReason") not in (None, "STOP"):
+                          raise RuntimeError(f"finish={cand.get('finishReason')}")
+                      text = cand["content"]["parts"][-1]["text"]
+                      return json.loads(text)
+                  except Exception as e:
+                      if attempt == 3:
+                          raise
+                      time.sleep(10 * (attempt + 1))
+
+          rows = sql("select id, name from public.exercises where name_tr is null order by id")
+          print(f"cevrilecek: {len(rows)}")
+          done = 0
+          failed_batches = 0
+          BATCH = 80
+          for start in range(0, len(rows), BATCH):
+              chunk = rows[start:start + BATCH]
+              names = [r["name"] for r in chunk]
+              try:
+                  result = gemini(names)
+              except Exception as e:
+                  print(f"parti {start//BATCH}: HATA {e}")
+                  failed_batches += 1
+                  continue
+              pairs = []
+              for item in result:
+                  i = item.get("i")
+                  tr = (item.get("tr") or "").strip()
+                  if isinstance(i, int) and 0 <= i < len(chunk) and tr:
+                      esc = tr.replace("'", "''")
+                      pairs.append(f"('{chunk[i]['id']}', '{esc}')")
+              if pairs:
+                  sql("update public.exercises e set name_tr = v.tr "
+                      "from (values " + ",".join(pairs) + ") as v(id, tr) "
+                      "where e.id = v.id and e.name_tr is null")
+                  done += len(pairs)
+              print(f"parti {start//BATCH}: {len(pairs)}/{len(chunk)}")
+              time.sleep(3)
+
+          check = sql("select count(*) filter (where name_tr is not null) as tr, "
+                      "count(*) as toplam from public.exercises")
+          summary = {"cevrilen_bu_calisma": done,
+                     "basarisiz_parti": failed_batches,
+                     "durum": check}
+          with open("summary.json", "w") as f:
+              json.dump(summary, f, ensure_ascii=False, indent=1)
+          print(json.dumps(summary, ensure_ascii=False))
+          PYEOF
+          python3 run.py
+          {
+            echo "## Egzersiz adları Türkçeleştirme"
+            echo ""
+            echo '```json'
+            cat summary.json
+            echo ""
+            echo '```'
+          } > r.md
+          gh issue comment 19 --repo "$REPO" --body-file r.md
