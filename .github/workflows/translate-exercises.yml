@@ -115,13 +115,24 @@ jobs:
               json.dump(summary, f, ensure_ascii=False, indent=1)
           print(json.dumps(summary, ensure_ascii=False))
           PYEOF
-          python3 run.py
+          set +e
+          python3 run.py 2>&1 | tee out.log
+          RC=${PIPESTATUS[0]}
           {
             echo "## Egzersiz adları Türkçeleştirme"
             echo ""
-            echo '```json'
-            cat summary.json
-            echo ""
-            echo '```'
+            if [ "$RC" = "0" ]; then
+              echo '```json'
+              cat summary.json
+              echo ""
+              echo '```'
+            else
+              echo "- ❌ Hata (çıkış kodu $RC) — log kuyruğu:"
+              echo '```'
+              tail -c 2000 out.log
+              echo ""
+              echo '```'
+            fi
           } > r.md
           gh issue comment 19 --repo "$REPO" --body-file r.md
+          exit $RC
