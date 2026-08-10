@@ -33,7 +33,10 @@ jobs:
                   f"https://api.supabase.com/v1/projects/{REF}/database/query",
                   data=json.dumps({"query": query}).encode(),
                   headers={"Authorization": f"Bearer {SB}",
-                           "Content-Type": "application/json"},
+                           "Content-Type": "application/json",
+                           # api.supabase.com, Python'un varsayılan
+                           # User-Agent'ına 403 veriyor (curl'e vermiyor).
+                           "User-Agent": "halka-ci/1.0"},
                   method="POST")
               with urllib.request.urlopen(req, timeout=120) as r:
                   return json.loads(r.read().decode() or "[]")
@@ -61,7 +64,8 @@ jobs:
                   "https://generativelanguage.googleapis.com/v1beta/models/"
                   "gemini-3.5-flash:generateContent",
                   data=json.dumps(body).encode(),
-                  headers={"x-goog-api-key": GK, "Content-Type": "application/json"},
+                  headers={"x-goog-api-key": GK, "Content-Type": "application/json",
+                           "User-Agent": "halka-ci/1.0"},
                   method="POST")
               for attempt in range(4):
                   try:
