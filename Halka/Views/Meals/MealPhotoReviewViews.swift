@@ -197,6 +197,15 @@ struct FoodSearchSheet: View {
     @State private var searching = false
     @State private var chosen: FoodOption? = nil
     @State private var multiple: Double = 1
+    /// Katalogda olmayan yiyeceği kullanıcı kendisi tanımlar (US-029:
+    /// "hindi fümeyi bulamadım — girsin, database öğrensin").
+    @State private var creating = false
+    @State private var newName = ""
+    @State private var newPortionName = "porsiyon"
+    @State private var newPortionG = ""
+    @State private var newKcal = ""
+    @State private var createError: String? = nil
+    @State private var createBusy = false
 
     var body: some View {
         ZStack {
@@ -279,13 +288,157 @@ struct FoodSearchSheet: View {
                 .foregroundStyle(Color.sub)
             Text(query.isEmpty
                  ? "\"mer\" yazınca mercimek çorbası gelir."
-                 : "Farklı bir yazım dene — katalog büyüyor.")
+                 : "Farklı bir yazım dene — ya da kendin tanımla, katalog öğrensin.")
                 .font(.h(11, .semibold))
                 .foregroundStyle(Color.faint)
+            if !query.isEmpty {
+                Button {
+                    newName = query.trimmingCharacters(in: .whitespaces)
+                    creating = true
+                } label: {
+                    Text("\"\(query.trimmingCharacters(in: .whitespaces))\" diye yeni yiyecek ekle")
+                        .font(.h(12.5))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(Color.coral))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 10)
+            }
             Spacer()
         }
         .padding(.horizontal, 30)
         .multilineTextAlignment(.center)
+        .sheet(isPresented: $creating) { createSheet }
+    }
+
+    /// Yeni yiyecek tanımı — bir kez girilir, kullanıcının kataloğuna yazılır.
+    private var createSheet: some View {
+        ZStack {
+            Color.bgApp.ignoresSafeArea()
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Text("Yeni yiyecek")
+                        .font(.h(15))
+                        .foregroundStyle(Color.ink)
+                    Spacer()
+                }
+                .overlay(alignment: .trailing) {
+                    Button("Vazgeç") { creating = false }
+                        .font(.h(13))
+                        .foregroundStyle(Color.sub)
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 18)
+                .padding(.bottom, 14)
+
+                VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        createField("Ad", text: $newName, placeholder: "Hindi füme",
+                                    keyboard: .default)
+                        Rectangle().fill(Color.hairline).frame(height: 1)
+                        createField("Porsiyon adı", text: $newPortionName,
+                                    placeholder: "dilim / adet / porsiyon",
+                                    keyboard: .default)
+                        Rectangle().fill(Color.hairline).frame(height: 1)
+                        createField("1 porsiyon kaç gram?", text: $newPortionG,
+                                    placeholder: "30", keyboard: .numberPad)
+                        Rectangle().fill(Color.hairline).frame(height: 1)
+                        createField("1 porsiyon kaç kcal?", text: $newKcal,
+                                    placeholder: "31", keyboard: .numberPad)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+                    .card(18)
+
+                    Text("Bu yiyecek yalnızca senin kataloğunda görünür; aramada ve fotoğraf eşleşmesinde artık bulunur. Kalori bilgisini paketin etiketinden yazabilirsin.")
+                        .font(.h(11, .semibold))
+                        .foregroundStyle(Color.sub)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.bgField)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                    if let error = createError {
+                        Text(error)
+                            .font(.h(11.5, .semibold))
+                            .foregroundStyle(Color.coralDark)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    Button { saveNewFood() } label: {
+                        if createBusy {
+                            SpinnerArc(size: 18).frame(maxWidth: .infinity)
+                        } else {
+                            Text("Kaydet ve kullan").frame(maxWidth: .infinity)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .coralButton()
+                    .disabled(createBusy)
+                }
+                .padding(.horizontal, 18)
+                Spacer()
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func createField(_ label: String, text: Binding<String>,
+                             placeholder: String,
+                             keyboard: UIKeyboardType) -> some View {
+        HStack(spacing: 10) {
+            Text(label)
+                .font(.h(12.5, .bold))
+                .foregroundStyle(Color.inkBody)
+            Spacer()
+            TextField(placeholder, text: text)
+                .keyboardType(keyboard)
+                .multilineTextAlignment(.trailing)
+                .font(.h(13, .semibold))
+                .foregroundStyle(Color.ink)
+                .frame(width: 150)
+        }
+        .padding(.vertical, 12)
+    }
+
+    private func saveNewFood() {
+        createError = nil
+        let name = newName.trimmingCharacters(in: .whitespaces)
+        let portionName = newPortionName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { createError = "Ad boş olamaz."; return }
+        guard let grams = Int(newPortionG), grams > 0 else {
+            createError = "Porsiyon gramını yaz (ör. 30)."; return
+        }
+        guard let kcal = Int(newKcal), kcal >= 0 else {
+            createError = "Porsiyon kalorisini yaz (ör. 31)."; return
+        }
+        createBusy = true
+        Task {
+            defer { createBusy = false }
+            do {
+                guard let option = try await SupabaseService.shared.createFood(
+                    name: name, portionName: portionName.isEmpty ? "porsiyon" : portionName,
+                    portionG: grams, portionKcal: kcal)
+                else { createError = "Kaydedilemedi — tekrar dene."; return }
+                creating = false
+                // Kaydedilen yiyecek doğrudan seçilmiş sayılır.
+                if asksPortion {
+                    results = [option]
+                    chosen = option
+                    multiple = 1
+                } else {
+                    onPick(option)
+                    dismiss()
+                }
+            } catch {
+                createError = "Kaydedilemedi: \(error.localizedDescription)"
+            }
+        }
     }
 
     /// Seçilen yemeğin porsiyonu — arama listesinin altında beliren şerit.

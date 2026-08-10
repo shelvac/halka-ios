@@ -768,6 +768,13 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.exerciseMinutes, 0)    // toplam eksiye inmez
     }
 
+    /// Kullanıcı yiyeceği: porsiyon kalorisinden 100 g değeri türetilir.
+    func testUserFoodKcalDerivation() {
+        XCTAssertEqual(SupabaseService.kcalPer100(portionKcal: 31, portionG: 30), 103)
+        XCTAssertEqual(SupabaseService.kcalPer100(portionKcal: 250, portionG: 100), 250)
+        XCTAssertEqual(SupabaseService.kcalPer100(portionKcal: 0, portionG: 0), 0)
+    }
+
     /// Belge adı: epoch öneki soyulur, öneksiz ad aynen kalır.
     func testDocumentDisplayNameStripsEpochPrefix() {
         XCTAssertEqual(SupabaseService.documentDisplayName("1754800000-tahlil sonucu.pdf"),

@@ -805,6 +805,40 @@ final class SupabaseService {
     /// Arama anahtarı sadeleştirilmiş sütunda tutuluyor; Türkçe'de
     /// `lowercased()` "İ" harfini "i" + birleşik nokta yapıyor ve hiçbir
     /// kayda eşleşmiyor (aynı tuzağa tartı OCR'ında da düşmüştük).
+    /// 100 g başına kalori — porsiyon kalorisinden türetilir.
+    static func kcalPer100(portionKcal: Int, portionG: Int) -> Int {
+        Int((Double(portionKcal) * 100 / Double(max(1, portionG))).rounded())
+    }
+
+    /// Kullanıcının tanımladığı yiyecek (US-029 devamı): katalogda olmayan
+    /// bir şeyi kullanıcı kendisi ekler, YALNIZCA kendisi görür (RLS),
+    /// sonraki aramalarda ve fotoğraf eşleşmesinde bulunur.
+    func createFood(name: String, portionName: String, portionG: Int,
+                    portionKcal: Int) async throws -> FoodOption? {
+        guard let client, let user = await currentUser() else { return nil }
+        let kcal100 = Self.kcalPer100(portionKcal: portionKcal, portionG: portionG)
+        let payload: [String: AnyJSON] = [
+            "name": .string(name),
+            "search_key": .string(Self.searchKey(name)),
+            "category": .string("diger"),
+            "kcal_100g": .integer(kcal100),
+            "portion_g": .integer(portionG),
+            "portion_name": .string(portionName),
+            // role varsayılanı 'keyfi': kullanıcı yemeği plana otomatik
+            // giremez ama günlüğe eklenebilir. created_by RLS anahtarı.
+            "created_by": .string(user.id.uuidString.lowercased())
+        ]
+        struct Row: Decodable { let id: String }
+        let rows: [Row] = try await client.from("foods")
+            .insert(payload)
+            .select("id")
+            .execute()
+            .value
+        guard let row = rows.first else { return nil }
+        return FoodOption(id: row.id, name: name, kcal100: kcal100,
+                          portionG: portionG, portionName: portionName)
+    }
+
     /// Hızlı ekle çipleri: anahtarları verilen yemekleri tek istekte getirir.
     func fetchFoods(searchKeys: [String]) async -> [FoodOption] {
         guard let client, !searchKeys.isEmpty else { return [] }
