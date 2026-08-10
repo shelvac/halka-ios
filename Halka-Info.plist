@@ -2,6 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Kamera: "Fotoğraf çek" ile öğün fotoğrafı. Bu anahtar pbxproj'daki
+	     INFOPLIST_KEY_ yerine burada — açık Info.plist dosyası her derlemede
+	     kesin olarak pakete girer. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Öğün fotoğrafından kalori tahmini için kamerayla çekim yapabilmeniz gerekir.</string>
 	<!-- Supabase e-posta bağlantıları ve OAuth dönüşleri bu şemayla uygulamaya döner:
 	     halka://login-callback  · halka://reset-password -->
 	<key>CFBundleURLTypes</key>
