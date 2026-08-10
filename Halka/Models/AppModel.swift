@@ -338,15 +338,21 @@ final class AppModel {
     }
 
     func logout() {
-        Task { await SupabaseService.shared.signOut() }
+        // Bellek anında temizlenir; giriş ekranı ise signOut BİTİNCE açılır.
+        // Eskiden signOut arka planda kalıyordu — kullanıcı hemen tekrar
+        // giriş yapınca bekleyen çıkış yeni oturumu öldürebiliyor, profil
+        // "boş" yükleniyordu.
         resetUserState()
-        screen = .login
         role = .user
         tab = .home
         homeSegment = .today
         healthPane = .body
         authError = nil
         authInfo = nil
+        Task { [weak self] in
+            await SupabaseService.shared.signOut()
+            self?.screen = .login
+        }
     }
 
     /// Bir kullanıcıya ait olan HER ŞEYİ temizler.

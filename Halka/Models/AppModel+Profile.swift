@@ -10,7 +10,14 @@ extension AppModel {
     /// hedeflerle devam eder, kullanıcıya hata gösterilmez.
     func loadProfile() async {
         guard supabaseReady else { return }
-        guard let loaded = await SupabaseService.shared.fetchProfile() else { return }
+        var fetched = await SupabaseService.shared.fetchProfile()
+        if fetched == nil {
+            // Tek seferlik geçici ağ hatası profili "boş" göstermesin —
+            // kullanıcı verisinin uçtuğunu sanıyor. Bir kez daha dene.
+            try? await Task.sleep(for: .seconds(1))
+            fetched = await SupabaseService.shared.fetchProfile()
+        }
+        guard let loaded = fetched else { return }
         profile = loaded
         if !loaded.fullName.isEmpty {
             applyFullName(loaded.fullName)

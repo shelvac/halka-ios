@@ -159,13 +159,20 @@ final class SupabaseService {
     /// Oturumdaki kullanıcının profili. Satır yoksa veya ağ hatasında `nil`.
     func fetchProfile() async -> Profile? {
         guard let client, let user = await currentUser() else { return nil }
-        guard let rows: [ProfileRow] = try? await client.from("users")
-            .select("full_name,avatar_path,birth_date,sex,height_cm,weight_kg,target_weight_kg,activity_level,profile_completed_at,kvkk_accepted_at,health_consent_at")
-            .eq("id", value: user.id.uuidString)
-            .limit(1)
-            .execute()
-            .value,
-            let row = rows.first else { return nil }
+        let rows: [ProfileRow]
+        do {
+            rows = try await client.from("users")
+                .select("full_name,avatar_path,birth_date,sex,height_cm,weight_kg,target_weight_kg,activity_level,profile_completed_at,kvkk_accepted_at,health_consent_at")
+                .eq("id", value: user.id.uuidString)
+                .limit(1)
+                .execute()
+                .value
+        } catch {
+            // Sessiz nil, "profilim uçtu" olarak yaşanıyordu — sebep görünsün.
+            AuthLog.warn("fetchProfile", error)
+            return nil
+        }
+        guard let row = rows.first else { return nil }
 
         var profile = Profile()
         profile.fullName = row.full_name ?? ""
