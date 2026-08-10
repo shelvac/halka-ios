@@ -247,17 +247,20 @@ struct ProfileView: View {
             // veriyor — yol tarif edilir.
             if !model.hkConnected && model.healthConnectHint {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("İzinler daha önce yanıtlandığı için iOS pencereyi tekrar göstermiyor. Şu yoldan açabilirsin: Ayarlar › Gizlilik ve Güvenlik › Sağlık › halka › izinleri aç. Döndüğünde veriler otomatik gelir.")
+                    Text("İzinler daha önce yanıtlandığı için iOS pencereyi tekrar göstermiyor. Sağlık uygulamasında şu yolu izle: sağ üstten profil fotoğrafın › Gizlilik › Uygulamalar › halka › Tümünü Aç. Uygulamaya döndüğünde veriler otomatik gelir.")
                         .font(.h(11.5, .semibold))
                         .foregroundStyle(Color.inkBody)
                         .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
                     Button {
-                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                        // Health uygulamasını doğrudan aç — Ayarlar'a
+                        // yönlendirmek yanlıştı: Health izinleri Sağlık
+                        // uygulamasının içinden yönetiliyor.
+                        if let url = URL(string: "x-apple-health://") {
                             UIApplication.shared.open(url)
                         }
                     } label: {
-                        Text("Ayarları Aç")
+                        Text("Sağlık Uygulamasını Aç")
                             .font(.h(12, .bold))
                             .foregroundStyle(Color.coral)
                     }

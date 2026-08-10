@@ -468,7 +468,7 @@ struct ManualEntryView: View {
                                         .font(.h(13))
                                         .foregroundStyle(Color.ink)
                                 }
-                                Text("Egzersiz ve adım Health'ten otomatik okunuyor: bugün \(model.exerciseMinutes) dk egzersiz · \(model.hkSteps) adım. Manuel giriş bu yüzden kapalı — iki kaynak çakışmasın. Health'i kapatırsan (Ayarlar › Gizlilik › Sağlık › halka) bu ekrandan girebilirsin.")
+                                Text("Egzersiz ve adım Health'ten otomatik okunuyor: bugün \(model.exerciseMinutes) dk egzersiz · \(model.hkSteps) adım. Manuel giriş bu yüzden kapalı — iki kaynak çakışmasın. Health'i kapatırsan (Sağlık uygulaması › profil fotoğrafın › Gizlilik › Uygulamalar › halka) bu ekrandan girebilirsin.")
                                     .font(.h(11.5, .semibold))
                                     .foregroundStyle(Color.sub)
                                     .lineSpacing(3)
@@ -479,11 +479,18 @@ struct ManualEntryView: View {
                             .card(18)
                         } else {
                         VStack(alignment: .leading, spacing: 0) {
-                            field("Egzersiz", unit: "dk", text: $exerciseText,
-                                  placeholder: "\(model.exerciseMinutes)")
+                            // Girilen değer bugünkü toplama EKLENİR — mevcut
+                            // toplam burada görünür ki ne olacağı belli olsun.
+                            Text("Bugünkü toplam: \(model.exerciseMinutes) dk egzersiz · \(model.hkSteps) adım")
+                                .font(.h(11, .bold))
+                                .foregroundStyle(Color.sub)
+                                .padding(.vertical, 11)
                             divider
-                            field("Adım", unit: "adım", text: $stepsText,
-                                  placeholder: "\(model.hkSteps)")
+                            field("Egzersiz ekle", unit: "dk", text: $exerciseText,
+                                  placeholder: "0")
+                            divider
+                            field("Adım ekle", unit: "adım", text: $stepsText,
+                                  placeholder: "0")
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 6)
@@ -506,7 +513,7 @@ struct ManualEntryView: View {
                                 sleep: nil)
                             dismiss()
                         } label: {
-                            Text("Kaydet").frame(maxWidth: .infinity)
+                            Text("Ekle").frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.plain)
                         .coralButton()

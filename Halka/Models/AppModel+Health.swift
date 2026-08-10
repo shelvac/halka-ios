@@ -95,14 +95,16 @@ extension AppModel {
 
     // MARK: Elle veri girişi (US-025) — Health bağlı değilken
 
-    /// Elle girilen günlük değerler halkalara ve `rings_daily`ye işlenir.
+    /// Manuel girilen değerler günün toplamına EKLENİR, üzerine yazmaz:
+    /// sabah "40 dk yürüdüm", akşam "20 dk koştum" → 60 dk. (Negatif değer
+    /// yanlış girişi düzeltmek içindir; toplam sıfırın altına inmez.)
+    ///
     /// Health bağlıyken çağrılmaz: Health tek doğru kaynak sayılır ve
-    /// tazelemede elle girilenin üstüne yazar — bu yüzden giriş ekranı
-    /// yalnızca Health bağlı DEĞİLKEN sunulur (çakışma sessizce çözülmez,
-    /// hiç oluşmaz).
+    /// tazelemede girilenin üstüne yazar — bu yüzden giriş ekranı yalnızca
+    /// Health bağlı DEĞİLKEN sunulur (çakışma sessizce çözülmez, hiç oluşmaz).
     func saveManualEntry(exerciseMin: Int?, steps: Int?, sleep: Double?) {
-        if let exerciseMin { exerciseBase = max(0, exerciseMin) }
-        if let steps { hkSteps = max(0, steps) }
+        if let exerciseMin { exerciseBase = max(0, exerciseBase + exerciseMin) }
+        if let steps { hkSteps = max(0, hkSteps + steps) }
         if let sleep { sleepHours = max(0, sleep) }
         scheduleRingSave()
     }

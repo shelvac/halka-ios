@@ -744,22 +744,24 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.eaten.isEmpty)
     }
 
-    /// US-025: elle giriş — verilen değer işlenir, boş bırakılan korunur.
+    /// US-025: manuel giriş TOPLAMA EKLER, üzerine yazmaz — "40 dk yürüdüm"
+    /// sonra "20 dk koştum" = 60 dk. Boş alan dokunmaz, toplam eksiye inmez.
     @MainActor
-    func testManualEntryUpdatesOnlyProvidedValues() {
+    func testManualEntryAddsToExistingTotals() {
         let model = AppModel()
-        model.saveManualEntry(exerciseMin: 40, steps: 6000, sleep: 7.5)
+        model.saveManualEntry(exerciseMin: 40, steps: 6000, sleep: nil)
         XCTAssertEqual(model.exerciseMinutes, 40)
         XCTAssertEqual(model.hkSteps, 6000)
-        XCTAssertEqual(model.sleepHours, 7.5)
 
-        model.saveManualEntry(exerciseMin: nil, steps: 8000, sleep: nil)
-        XCTAssertEqual(model.exerciseMinutes, 40)   // boş alan silmez
+        model.saveManualEntry(exerciseMin: 20, steps: 2000, sleep: nil)
+        XCTAssertEqual(model.exerciseMinutes, 60)   // üstüne ekledi
         XCTAssertEqual(model.hkSteps, 8000)
-        XCTAssertEqual(model.sleepHours, 7.5)
 
-        model.saveManualEntry(exerciseMin: -5, steps: nil, sleep: nil)
-        XCTAssertEqual(model.exerciseMinutes, 0)    // negatif sıfıra kırpılır
+        model.saveManualEntry(exerciseMin: nil, steps: nil, sleep: nil)
+        XCTAssertEqual(model.exerciseMinutes, 60)   // boş alan dokunmaz
+
+        model.saveManualEntry(exerciseMin: -100, steps: nil, sleep: nil)
+        XCTAssertEqual(model.exerciseMinutes, 0)    // toplam eksiye inmez
     }
 
     /// Belge adı: epoch öneki soyulur, öneksiz ad aynen kalır.
