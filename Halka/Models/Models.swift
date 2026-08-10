@@ -124,15 +124,20 @@ struct CoachMessage: Identifiable {
 
 // MARK: - Workout
 
-struct Exercise: Identifiable, Equatable {
-    let id = UUID()
+struct Exercise: Identifiable, Equatable, Codable {
+    var id = UUID()
     var name: String
     var region: String
     var reps: String
+
+    // id yerelde üretilir, sunucuya yazılmaz (items jsonb sade kalsın).
+    enum CodingKeys: String, CodingKey { case name, region, reps }
 }
 
-struct WorkoutProgram: Identifiable {
-    let id = UUID()
+/// Kullanıcının kendi kurduğu program — `workout_programs` tablosunda
+/// kalıcı (0030). Eskiden demo verisiydi ve uygulama kapanınca kayboluyordu.
+struct WorkoutProgram: Identifiable, Equatable, Codable {
+    var id = UUID()
     var name: String
     var region: String
     var level: String

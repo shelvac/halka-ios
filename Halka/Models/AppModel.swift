@@ -177,7 +177,12 @@ final class AppModel {
     var libraryQuery = ""
     var libraryPickMode = false
     var programDraft = ProgramDraft()
-    var programs: [WorkoutProgram] = Demo.initialPrograms()
+    /// Kullanıcının kurduğu programlar — sunucudan yüklenir (0030).
+    /// Demo programlar kaldırıldı: herkes kendi programını görür, BOŞ başlar.
+    var programs: [WorkoutProgram] = []
+    /// Gerçek egzersiz kütüphanesi (873 hareket, Türkçe adlarla) —
+    /// girişte bir kez yüklenir; erişilemezse küçük demo listesine düşülür.
+    var libraryExercises: [Exercise] = []
     var selectedProgramID: UUID? = nil
     var runStart: Date? = nil
     var runDone: Set<Int> = []
@@ -381,6 +386,11 @@ final class AppModel {
         exerciseBase = 0
         extraExerciseMin = 0
         activeDayKey = todayKey
+        // Antrenman programları kullanıcıya özel (0030).
+        programs = []
+        workoutLog = []
+        selectedProgramID = nil
+        programDraft = ProgramDraft()
         sleepHours = 0
         hkSteps = 0
         hkActiveEnergy = 0

@@ -166,7 +166,12 @@ final class AppModelTests: XCTestCase {
     @MainActor
     func testFinishRunAddsMinutesAndLogEntry() {
         let model = AppModel()
-        model.selectedProgramID = model.programs[0].id
+        // Demo programlar kaldırıldı (0030): kullanıcı gibi taslaktan kur.
+        model.programDraft.items = (0..<5).map {
+            Exercise(name: "Hareket \($0)", region: "Karın", reps: "3 × 10")
+        }
+        model.saveProgram()
+        XCTAssertEqual(model.programs.count, 1)
         model.startRun()
         model.toggleRunDone(0)
         model.toggleRunDone(1)
@@ -766,6 +771,42 @@ final class AppModelTests: XCTestCase {
 
         model.saveManualEntry(exerciseMin: -100, steps: nil, sleep: nil)
         XCTAssertEqual(model.exerciseMinutes, 0)    // toplam eksiye inmez
+    }
+
+    /// Programlarım gerçek katalogla ve kullanıcı verisiyle çalışır (0030).
+    @MainActor
+    func testLibraryRegionsComeFromLoadedCatalog() {
+        let model = AppModel()
+        XCTAssertTrue(model.programs.isEmpty)          // demo program kalmadı
+        model.libraryExercises = [
+            Exercise(name: "Dumbbell Curl", region: "Biceps", reps: "3 × 12"),
+            Exercise(name: "Squat", region: "Bacak", reps: "3 × 10")
+        ]
+        XCTAssertEqual(model.libraryRegions, ["Tümü", "Bacak", "Biceps"])
+        model.libraryRegion = "Biceps"
+        XCTAssertEqual(model.filteredLibrary.map(\.name), ["Dumbbell Curl"])
+        model.libraryRegion = "Tümü"
+        model.libraryQuery = "sq"
+        XCTAssertEqual(model.filteredLibrary.map(\.name), ["Squat"])
+    }
+
+    @MainActor
+    func testProgramSurvivesCodableRoundTrip() throws {
+        let program = WorkoutProgram(name: "Kol günü", region: "Kol",
+                                     level: "Orta", items: [
+            Exercise(name: "Curl", region: "Biceps", reps: "3 × 12")
+        ])
+        let decoded = try JSONDecoder().decode(
+            WorkoutProgram.self, from: JSONEncoder().encode(program))
+        XCTAssertEqual(decoded.id, program.id)
+        XCTAssertEqual(decoded.items.map(\.name), ["Curl"])
+
+        let deleted = AppModel()
+        deleted.programs = [program]
+        deleted.selectedProgramID = program.id
+        deleted.deleteProgram(program)
+        XCTAssertTrue(deleted.programs.isEmpty)
+        XCTAssertNil(deleted.selectedProgramID)
     }
 
     /// Kullanıcı yiyeceği: porsiyon kalorisinden 100 g değeri türetilir.

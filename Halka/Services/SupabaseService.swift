@@ -998,6 +998,64 @@ final class SupabaseService {
             .execute()
     }
 
+    // MARK: Kullanıcı antrenman programları (workout_programs, 0030)
+
+    private struct ProgramRow: Codable {
+        let id: String
+        let name: String
+        let region: String
+        let level: String
+        let items: [Exercise]
+    }
+
+    func fetchWorkoutPrograms() async -> [WorkoutProgram] {
+        guard let client, let user = await currentUser() else { return [] }
+        do {
+            let rows: [ProgramRow] = try await client.from("workout_programs")
+                .select("id,name,region,level,items")
+                .eq("user_id", value: user.id.uuidString)
+                .order("created_at")
+                .execute()
+                .value
+            return rows.map {
+                WorkoutProgram(id: UUID(uuidString: $0.id) ?? UUID(),
+                               name: $0.name, region: $0.region,
+                               level: $0.level, items: $0.items)
+            }
+        } catch {
+            AuthLog.warn("fetchWorkoutPrograms", error)
+            return []
+        }
+    }
+
+    func saveWorkoutProgram(_ program: WorkoutProgram) async {
+        guard let client, let user = await currentUser() else { return }
+        let payload: [String: AnyJSON] = [
+            "id": .string(program.id.uuidString.lowercased()),
+            "user_id": .string(user.id.uuidString.lowercased()),
+            "name": .string(program.name),
+            "region": .string(program.region),
+            "level": .string(program.level),
+            "items": Self.jsonbValue(program.items)
+        ]
+        do {
+            try await client.from("workout_programs")
+                .upsert(payload, onConflict: "id")
+                .execute()
+        } catch {
+            AuthLog.warn("saveWorkoutProgram", error)
+        }
+    }
+
+    func deleteWorkoutProgram(id: UUID) async {
+        guard let client, let user = await currentUser() else { return }
+        _ = try? await client.from("workout_programs")
+            .delete()
+            .eq("id", value: id.uuidString.lowercased())
+            .eq("user_id", value: user.id.uuidString)
+            .execute()
+    }
+
     // MARK: Koç sohbeti (coach_state) — kişiye özel, RLS'li.
     //
     // Sohbet uygulama kapanınca sıfırlanıyordu. Yalnızca metin tabanlı

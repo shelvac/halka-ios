@@ -92,6 +92,26 @@ struct WorkoutHomeView: View {
                 .padding(.top, 20)
                 .padding(.bottom, 10)
 
+            // Demo programlar kaldırıldı: boş başlar, kullanıcı kurar.
+            if model.programs.isEmpty {
+                VStack(spacing: 6) {
+                    Image(systemName: "dumbbell")
+                        .font(.system(size: 20, weight: .light))
+                        .foregroundStyle(Color.chevron)
+                    Text("Henüz programın yok")
+                        .font(.h(12.5, .bold))
+                        .foregroundStyle(Color.sub)
+                    Text("\"Program Oluştur\" ile kendi programını kur — AI koçun haftalık planında hazır antrenmanlar da var.")
+                        .font(.h(11, .semibold))
+                        .foregroundStyle(Color.faint)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 22)
+                .frame(maxWidth: .infinity)
+                .card(18)
+            }
+
             ForEach(model.programs) { program in
                 Button {
                     model.selectedProgramID = program.id
@@ -123,6 +143,13 @@ struct WorkoutHomeView: View {
                     .shadow(color: Color.ink.opacity(0.06), radius: 5, y: 2)
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    Button(role: .destructive) {
+                        model.deleteProgram(program)
+                    } label: {
+                        Label("Programı sil", systemImage: "trash")
+                    }
+                }
                 .padding(.bottom, 10)
             }
 
@@ -329,7 +356,7 @@ struct ProgramCreateView: View {
                     .padding(.top, 16)
                     .padding(.bottom, 8)
                 FlowLayout(spacing: 6) {
-                    ForEach(Demo.regions.dropFirst(), id: \.self) { region in
+                    ForEach(model.libraryRegions.dropFirst(), id: \.self) { region in
                         chip(region, active: model.programDraft.region == region) {
                             model.programDraft.region = region
                         }
@@ -478,7 +505,7 @@ struct ExerciseLibraryView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    ForEach(Demo.regions, id: \.self) { region in
+                    ForEach(model.libraryRegions, id: \.self) { region in
                         let active = model.libraryRegion == region
                         Button { model.libraryRegion = region } label: {
                             Text(region)

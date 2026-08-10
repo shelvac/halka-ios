@@ -4,12 +4,40 @@ import Foundation
 
 extension AppModel {
 
-    var filteredLibrary: [Exercise] {
-        Demo.exerciseLibrary.filter { ex in
-            (libraryRegion == "Tümü" || ex.region == libraryRegion)
-                && (libraryQuery.isEmpty
-                    || ex.name.lowercased().contains(libraryQuery.lowercased()))
+    /// Kütüphanenin kaynağı: gerçek katalog yüklendiyse o, yoksa demo.
+    var librarySource: [Exercise] {
+        libraryExercises.isEmpty ? Demo.exerciseLibrary : libraryExercises
+    }
+
+    /// Bölge çipleri kaynaktan türetilir — gerçek katalogda Biceps/Triceps
+    /// gibi bölgeler var, sabit demo listesi onları gösteremiyordu.
+    var libraryRegions: [String] {
+        ["Tümü"] + Set(librarySource.map(\.region)).sorted {
+            $0.compare($1, locale: Locale(identifier: "tr_TR")) == .orderedAscending
         }
+    }
+
+    var filteredLibrary: [Exercise] {
+        let query = libraryQuery.lowercased(with: Locale(identifier: "tr_TR"))
+        return librarySource.filter { ex in
+            (libraryRegion == "Tümü" || ex.region == libraryRegion)
+                && (query.isEmpty
+                    || ex.name.lowercased(with: Locale(identifier: "tr_TR")).contains(query))
+        }
+    }
+
+    /// Girişte bir kez: gerçek egzersiz kataloğu + kullanıcının programları.
+    func loadWorkoutData() async {
+        if libraryExercises.isEmpty {
+            let fetched = await SupabaseService.shared.fetchPlanExercises()
+            libraryExercises = fetched.map {
+                Exercise(name: $0.displayName, region: $0.region,
+                         reps: $0.mechanic == "isolation" ? "3 × 12" : "3 × 10")
+            }
+            .sorted { $0.name.compare($1.name, locale: Locale(identifier: "tr_TR"))
+                        == .orderedAscending }
+        }
+        programs = await SupabaseService.shared.fetchWorkoutPrograms()
     }
 
     func isInDraft(_ exercise: Exercise) -> Bool {
@@ -37,6 +65,21 @@ extension AppModel {
         programDraft = ProgramDraft()
         selectedProgramID = program.id
         workoutView = .program
+        persistProgram(program)
+    }
+
+    func deleteProgram(_ program: WorkoutProgram) {
+        programs.removeAll { $0.id == program.id }
+        if selectedProgramID == program.id { selectedProgramID = nil }
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+        else { return }
+        Task { await SupabaseService.shared.deleteWorkoutProgram(id: program.id) }
+    }
+
+    private func persistProgram(_ program: WorkoutProgram) {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+        else { return }
+        Task { await SupabaseService.shared.saveWorkoutProgram(program) }
     }
 
     func workoutBack() {
