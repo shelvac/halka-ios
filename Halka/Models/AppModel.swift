@@ -196,12 +196,18 @@ final class AppModel {
     /// Antrenman izni bu oturumda yeniden istendi mi? (her tazelemede sorulmasın)
     var healthWorkoutAccessRequested = false
 
+    /// "Bağlan"a basıldı ama izin diyaloğu çıkmadı ve veri gelmedi —
+    /// iOS daha önce yanıtlanmış izni bir daha SORMAZ, sessizce döner.
+    /// Kullanıcı "çalışmıyor" sanmasın; Ayarlar yolu gösterilir.
+    var healthConnectHint = false
+
     /// İzin diyaloğunu tetikler (Profil'deki "Bağlan" düğmesi).
     func connectHealthKit() {
         guard HealthKitService.shared.isAvailable else { return }
         Task { [weak self] in
             try? await HealthKitService.shared.requestAuthorization()
             await self?.refreshFromHealthKit()
+            if self?.hkConnected == false { self?.healthConnectHint = true }
         }
     }
 
@@ -217,8 +223,16 @@ final class AppModel {
         rolloverDayIfNeeded()
         guard HealthKitService.shared.isAvailable else { return }
         let snapshot = await HealthKitService.shared.fetchToday()
-        guard snapshot.hasAnyData else { return }
+        guard snapshot.hasAnyData else {
+            // Veri gelmiyorsa "bağlı" diyemeyiz: kullanıcı izinleri kapatmış
+            // olabilir (iOS okuma izninin durumunu söylemez, ancak veriden
+            // çıkarılır). Eskiden sessizce dönüyordu ve uygulama yeniden
+            // açılana dek "bağlı" görünüyordu.
+            hkConnected = false
+            return
+        }
         hkConnected = true
+        healthConnectHint = false
         hkSteps = snapshot.steps
         hkActiveEnergy = snapshot.activeEnergy
         // Koşulsuz atama: Health bağlıyken `appleExerciseTime` tek doğru
@@ -362,6 +376,7 @@ final class AppModel {
         hkActiveEnergy = 0
         hkWorkouts = []
         hkConnected = false
+        healthConnectHint = false
         ringHistory = [:]
         recentRings = [:]
         visitedDays = []

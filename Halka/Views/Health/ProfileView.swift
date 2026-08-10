@@ -242,17 +242,44 @@ struct ProfileView: View {
                 }
             }
 
+            // "Bağlan"a basıldı ama iOS izin diyaloğunu bir daha göstermedi
+            // (daha önce yanıtlanmış). Sessiz kalmak "çalışmıyor" hissi
+            // veriyor — yol tarif edilir.
+            if !model.hkConnected && model.healthConnectHint {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("İzinler daha önce yanıtlandığı için iOS pencereyi tekrar göstermiyor. Şu yoldan açabilirsin: Ayarlar › Gizlilik ve Güvenlik › Sağlık › halka › izinleri aç. Döndüğünde veriler otomatik gelir.")
+                        .font(.h(11.5, .semibold))
+                        .foregroundStyle(Color.inkBody)
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        Text("Ayarları Aç")
+                            .font(.h(12, .bold))
+                            .foregroundStyle(Color.coral)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(13)
+                .background(Color.bgField)
+                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .padding(.top, 10)
+            }
+
             // Elle veri girişi (US-025). Eskiden burada "ekran görüntüsü
             // yükle, AI Koç okusun" diye SAHTE bir akış vardı: görüntüye
             // bakmadan +32 dk yazıyordu. Kaldırıldı — gerçek giriş ekranı.
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Elle veri girişi")
+                    Text("Manuel veri gir")
                         .font(.h(12.5))
                         .foregroundStyle(Color.ink)
                     Text(model.hkConnected
-                         ? "Health bağlıyken adım, egzersiz ve uyku Health'ten okunur"
-                         : "Egzersiz, adım ve uykuyu kendin gir")
+                         ? "Health bağlıyken adım ve egzersiz Health'ten okunur"
+                         : "Egzersiz ve adımı kendin gir")
                         .font(.h(10.5, .semibold))
                         .foregroundStyle(Color.sub)
                 }

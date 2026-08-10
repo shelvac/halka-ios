@@ -156,11 +156,11 @@ struct TodayView: View {
                         Image(systemName: "square.and.pencil")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(Color.coral)
-                        Text("Bugünün verilerini elle gir")
+                        Text("Manuel veri gir")
                             .font(.h(12, .bold))
                             .foregroundStyle(Color.inkBody)
                         Spacer()
-                        Text("Elle giriş")
+                        Text("Manuel")
                             .font(.h(9.5, .bold))
                             .foregroundStyle(Color.sub)
                             .padding(.horizontal, 7)
@@ -435,7 +435,6 @@ struct ManualEntryView: View {
 
     @State private var exerciseText = ""
     @State private var stepsText = ""
-    @State private var sleepText = ""
 
     var body: some View {
         ZStack {
@@ -469,7 +468,7 @@ struct ManualEntryView: View {
                                         .font(.h(13))
                                         .foregroundStyle(Color.ink)
                                 }
-                                Text("Egzersiz, adım ve uyku Health'ten otomatik okunuyor: bugün \(model.exerciseMinutes) dk egzersiz · \(model.hkSteps) adım. Elle giriş bu yüzden kapalı — iki kaynak çakışmasın. Health'i kapatırsan (Ayarlar › Gizlilik › Sağlık › halka) bu ekrandan girebilirsin.")
+                                Text("Egzersiz ve adım Health'ten otomatik okunuyor: bugün \(model.exerciseMinutes) dk egzersiz · \(model.hkSteps) adım. Manuel giriş bu yüzden kapalı — iki kaynak çakışmasın. Health'i kapatırsan (Ayarlar › Gizlilik › Sağlık › halka) bu ekrandan girebilirsin.")
                                     .font(.h(11.5, .semibold))
                                     .foregroundStyle(Color.sub)
                                     .lineSpacing(3)
@@ -485,15 +484,12 @@ struct ManualEntryView: View {
                             divider
                             field("Adım", unit: "adım", text: $stepsText,
                                   placeholder: "\(model.hkSteps)")
-                            divider
-                            field("Uyku", unit: "saat", text: $sleepText,
-                                  placeholder: String(format: "%.1f", model.sleepHours))
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 6)
                         .card(18)
 
-                        Text("Su ana ekrandan, yemekler kalori günlüğünden, kilo Sağlık sekmesinden girilir. Bu değerler \"elle girildi\" olarak kaydedilir; Apple Health'i bağlarsan kaynak Health olur.")
+                        Text("Su ana ekrandan, yemekler kalori günlüğünden, kilo Sağlık sekmesinden girilir. Bu değerler \"manuel girildi\" olarak kaydedilir; Apple Health'i bağlarsan kaynak Health olur.")
                             .font(.h(11, .semibold))
                             .foregroundStyle(Color.sub)
                             .fixedSize(horizontal: false, vertical: true)
@@ -507,8 +503,7 @@ struct ManualEntryView: View {
                             model.saveManualEntry(
                                 exerciseMin: Int(exerciseText.trimmingCharacters(in: .whitespaces)),
                                 steps: Int(stepsText.trimmingCharacters(in: .whitespaces)),
-                                sleep: Double(sleepText.replacingOccurrences(of: ",", with: ".")
-                                    .trimmingCharacters(in: .whitespaces)))
+                                sleep: nil)
                             dismiss()
                         } label: {
                             Text("Kaydet").frame(maxWidth: .infinity)
