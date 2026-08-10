@@ -211,6 +211,10 @@ struct PhotoLogView: View {
     @State private var pickerItem: PhotosPickerItem? = nil
     /// AI çalışmadığında elle yemek ekleme.
     @State private var manualAdd = false
+    @State private var showCamera = false
+    /// Son hızlı eklenen — kısa süreli "Geri al" için.
+    @State private var lastQuickAdd: ExtraMeal? = nil
+    @State private var undoToken = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -225,6 +229,12 @@ struct PhotoLogView: View {
                 .foregroundStyle(Color.sub)
                 .padding(.top, 2)
                 .padding(.bottom, 14)
+
+            // Kahve/çay için fotoğraf çekmek angarya: tek dokunuşla ekle.
+            if model.photoData == nil {
+                quickAddCard
+                    .padding(.bottom, 14)
+            }
 
             if let data = model.photoData, let image = UIImage(data: data) {
                 Image(uiImage: image)
@@ -285,12 +295,33 @@ struct PhotoLogView: View {
                     .padding(.top, 8)
                 }
             } else {
+                // "Aktif foto çekmiyor, sadece galeriye gidiyor" — kamera
+                // ayrı ve önde: yemek çoğunlukla o an masada.
+                if CameraPicker.isAvailable {
+                    Button { showCamera = true } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text("Fotoğraf çek")
+                                .font(.h(14))
+                        }
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .background(Color.coral)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .shadow(color: Color.coral.opacity(0.28), radius: 7, y: 4)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 10)
+                }
+
                 PhotosPicker(selection: $pickerItem, matching: .images) {
                     VStack(spacing: 10) {
-                        Image(systemName: "camera")
+                        Image(systemName: "photo.on.rectangle")
                             .font(.system(size: 30, weight: .medium))
                             .foregroundStyle(Color.faint)
-                        Text("Fotoğraf çek veya yükle")
+                        Text("Galeriden yükle")
                             .font(.h(13))
                             .foregroundStyle(Color.inkMid)
                         Text("JPG · PNG · HEIC")
@@ -298,7 +329,7 @@ struct PhotoLogView: View {
                             .foregroundStyle(Color.faint)
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(height: 220)
+                    .frame(height: 180)
                     .background(Color(hex: 0xFCFAF6))
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .overlay(
@@ -308,6 +339,11 @@ struct PhotoLogView: View {
                 }
             }
         }
+        .task { await model.loadQuickFoods() }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPicker { data in model.photoPicked(data) }
+                .ignoresSafeArea()
+        }
         .onChange(of: pickerItem) {
             guard let item = pickerItem else { return }
             Task {
@@ -316,6 +352,77 @@ struct PhotoLogView: View {
                 }
             }
         }
+    }
+
+    /// Fotoğrafsız tek dokunuş: kahve, çay, ayran… En sık eklenenler önde.
+    private var quickAddCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Hızlı ekle")
+                .font(.h(13))
+                .foregroundStyle(Color.ink)
+            if model.quickFoods.isEmpty {
+                Text("Yükleniyor…")
+                    .font(.h(11, .semibold))
+                    .foregroundStyle(Color.faint)
+            } else {
+                FlowLayout(spacing: 7) {
+                    ForEach(model.quickAddOptions) { option in
+                        Button {
+                            let entry = model.logFood(option, grams: option.portionG)
+                            lastQuickAdd = entry
+                            undoToken += 1
+                            let token = undoToken
+                            Task {
+                                try? await Task.sleep(for: .seconds(5))
+                                if undoToken == token { lastQuickAdd = nil }
+                            }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Text(option.name)
+                                    .font(.h(11.5))
+                                    .foregroundStyle(Color.inkMid)
+                                Text("\(option.portionKcal)")
+                                    .font(.h(10, .bold))
+                                    .foregroundStyle(Color.sub)
+                            }
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 8)
+                            .background(Capsule().fill(Color.bgField))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            if let added = lastQuickAdd {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color.greenDark)
+                    Text("Eklendi: \(added.title)")
+                        .font(.h(11, .bold))
+                        .foregroundStyle(Color.inkBody)
+                        .lineLimit(1)
+                    Spacer()
+                    Button {
+                        model.deleteExtra(added.id)
+                        lastQuickAdd = nil
+                    } label: {
+                        Text("Geri al")
+                            .font(.h(11, .bold))
+                            .foregroundStyle(Color.coral)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 11)
+                .padding(.vertical, 8)
+                .background(Color.greenBg)
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card(18)
     }
 
     /// Tahmin alınamadıysa sebebini söyle — sessizce boş ekran gösterme.

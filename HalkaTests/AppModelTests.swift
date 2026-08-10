@@ -499,6 +499,32 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.extras(forDay: day)[0].title.contains("Mercimek çorbası"))
     }
 
+    /// Hızlı ekle: her katalog eklemesi sayaç artırır, geri al kaydı siler.
+    @MainActor
+    func testQuickAddCountsAndUndo() {
+        let model = AppModel()
+        let coffee = FoodOption(id: "k", name: "Kahve", kcal100: 2,
+                                portionG: 200, portionName: "fincan")
+        let entry = model.logFood(coffee, grams: coffee.portionG)
+        _ = model.logFood(coffee, grams: coffee.portionG)
+        XCTAssertEqual(model.quickCounts["Kahve"], 2)
+        model.deleteExtra(entry.id)
+        XCTAssertEqual(model.extras(forDay: model.mealDay).count, 1)
+    }
+
+    /// Şerit sırası: sayacı yüksek olan öne geçer; sayaçsızlar varsayılan
+    /// listedeki sırasını korur.
+    @MainActor
+    func testQuickAddOrderPutsFrequentsFirst() {
+        let options = [
+            FoodOption(id: "1", name: "Kahve", kcal100: 2, portionG: 200, portionName: "fincan"),
+            FoodOption(id: "2", name: "Çay", kcal100: 1, portionG: 120, portionName: "bardak"),
+            FoodOption(id: "3", name: "Ayran", kcal100: 37, portionG: 250, portionName: "bardak")
+        ]
+        let sorted = AppModel.quickAddOrder(options: options, counts: ["Ayran": 5])
+        XCTAssertEqual(sorted.map(\.name), ["Ayran", "Kahve", "Çay"])
+    }
+
     // MARK: Fotoğraftan öğün tahmini (US-029)
 
     private func analyzed(_ name: String, grams: Int, kcal100: Int,

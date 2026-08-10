@@ -292,6 +292,8 @@ final class SupabaseService {
         var overrides: [String: String]
         /// Menüden kaldırılan plan öğünleri (0014). Eski satırlarda yok.
         var removed: [String]?
+        /// Hızlı ekle sayaçları: yemek adı → kaç kez eklendi (0025).
+        var quick_counts: [String: Int]?
 
         struct ExtraRow: Codable {
             var day: Int
@@ -307,7 +309,7 @@ final class SupabaseService {
     func fetchMealState() async throws -> MealStateRow? {
         guard let client, let user = await currentUser() else { return nil }
         let rows: [MealStateRow] = try await client.from("meal_state")
-            .select("week_start,eaten,extras,overrides,removed")
+            .select("week_start,eaten,extras,overrides,removed,quick_counts")
             .eq("user_id", value: user.id.uuidString)
             .limit(1)
             .execute()
@@ -318,7 +320,8 @@ final class SupabaseService {
     func saveMealState(weekStart: Date, eaten: [String],
                        extras: [MealStateRow.ExtraRow],
                        overrides: [String: String],
-                       removed: [String]) async throws {
+                       removed: [String],
+                       quickCounts: [String: Int]) async throws {
         guard let client, let user = await currentUser() else { return }
         let payload: [String: AnyJSON] = [
             "user_id": .string(user.id.uuidString.lowercased()),
@@ -329,7 +332,8 @@ final class SupabaseService {
                          "kcal": .integer($0.kcal), "time": .string($0.time)])
             }),
             "overrides": .object(overrides.mapValues { .string($0) }),
-            "removed": .array(removed.map { .string($0) })
+            "removed": .array(removed.map { .string($0) }),
+            "quick_counts": .object(quickCounts.mapValues { .integer($0) })
         ]
         try await client.from("meal_state")
             .upsert(payload, onConflict: "user_id")
@@ -721,6 +725,25 @@ final class SupabaseService {
     /// Arama anahtarı sadeleştirilmiş sütunda tutuluyor; Türkçe'de
     /// `lowercased()` "İ" harfini "i" + birleşik nokta yapıyor ve hiçbir
     /// kayda eşleşmiyor (aynı tuzağa tartı OCR'ında da düşmüştük).
+    /// Hızlı ekle çipleri: anahtarları verilen yemekleri tek istekte getirir.
+    func fetchFoods(searchKeys: [String]) async -> [FoodOption] {
+        guard let client, !searchKeys.isEmpty else { return [] }
+        do {
+            let rows: [FoodRow] = try await client.from("foods")
+                .select("id,name,kcal_100g,portion_g,portion_name")
+                .in("search_key", values: searchKeys)
+                .execute()
+                .value
+            return rows.map {
+                FoodOption(id: $0.id, name: $0.name, kcal100: $0.kcal_100g,
+                           portionG: $0.portion_g, portionName: $0.portion_name)
+            }
+        } catch {
+            AuthLog.warn("fetchFoods", error)
+            return []
+        }
+    }
+
     func searchFoods(_ query: String, limit: Int = 30) async -> [FoodOption] {
         guard let client else { return [] }
         let key = Self.searchKey(query)

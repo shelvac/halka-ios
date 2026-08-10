@@ -179,14 +179,57 @@ extension AppModel {
     ///
     /// Yemek veritabanı yalnızca fotoğraf onay ekranından erişilebiliyordu;
     /// fotoğraf çekmeden bir şey eklemek isteyen kullanıcının yolu yoktu.
-    func logFood(_ option: FoodOption, grams: Int) {
+    @discardableResult
+    func logFood(_ option: FoodOption, grams: Int) -> ExtraMeal {
         let kcal = Int((Double(option.kcal100) * Double(grams) / 100).rounded())
-        extras.append(ExtraMeal(day: mealDay,
-                                title: "\(option.name) · \(grams) g",
-                                kcal: kcal,
-                                time: Self.nowHHmm()))
+        let entry = ExtraMeal(day: mealDay,
+                              title: "\(option.name) · \(grams) g",
+                              kcal: kcal,
+                              time: Self.nowHHmm())
+        extras.append(entry)
+        // Sık kullanılanlar öğrenilsin: kahveyi hep ekleyen, şeridin
+        // başında kahveyi görsün.
+        quickCounts[option.name, default: 0] += 1
         scheduleMealSave()
         if mealDay == todayWeekdayIndex { scheduleRingSave() }
+        return entry
+    }
+
+    // MARK: Hızlı ekle — fotoğrafsız tek dokunuş (kahve, çay, ayran…)
+
+    /// Şeridin varsayılanları (katalog `search_key` değerleri). Kullanıcının
+    /// kendi sık ekledikleri sayaçla bunların önüne geçer.
+    static let quickFoodKeys = [
+        "kahve", "cay", "turk kahvesi (sade)", "ayran", "yogurt",
+        "elma", "muz", "badem", "bitter cikolata"
+    ]
+
+    /// Çiplerin yemek bilgisini bir kez getirir (varsayılanlar + kullanıcının
+    /// sayaçlı yemekleri).
+    func loadQuickFoods() async {
+        guard quickFoods.isEmpty else { return }
+        var keys = Set(Self.quickFoodKeys)
+        keys.formUnion(quickCounts.keys.map { SupabaseService.searchKey($0) })
+        quickFoods = await SupabaseService.shared.fetchFoods(searchKeys: Array(keys))
+    }
+
+    /// Şerit sırası: en sık eklenenler önce, kalanlar varsayılan sırada.
+    static func quickAddOrder(options: [FoodOption],
+                              counts: [String: Int]) -> [FoodOption] {
+        let defaultRank = Dictionary(uniqueKeysWithValues:
+            quickFoodKeys.enumerated().map { ($0.element, $0.offset) })
+        return options.sorted { a, b in
+            let ca = counts[a.name] ?? 0, cb = counts[b.name] ?? 0
+            if ca != cb { return ca > cb }
+            let ra = defaultRank[SupabaseService.searchKey(a.name)] ?? .max
+            let rb = defaultRank[SupabaseService.searchKey(b.name)] ?? .max
+            if ra != rb { return ra < rb }
+            return a.name < b.name
+        }
+    }
+
+    var quickAddOptions: [FoodOption] {
+        Self.quickAddOrder(options: quickFoods, counts: quickCounts)
     }
 
     // MARK: Photo flow

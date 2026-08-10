@@ -125,6 +125,10 @@ final class AppModel {
     /// Öğün kaydı sunucudan okundu mu? (`ringsLoaded` ile aynı gerekçe)
     var mealStateLoaded = false
     var mealSaveToken = 0
+    /// Hızlı ekle: yemek adı → kaç kez eklendi (sık kullanılanlar öne).
+    var quickCounts: [String: Int] = [:]
+    /// Hızlı ekle çiplerinin yemek bilgisi (girişte bir kez yüklenir).
+    var quickFoods: [FoodOption] = []
     var marketChecked: Set<String> = []
     var extras: [ExtraMeal] = []
     var photoData: Data? = nil
@@ -367,6 +371,8 @@ final class AppModel {
         overrides = [:]
         removedMeals = []
         marketChecked = []
+        quickCounts = [:]
+        quickFoods = []
         mealStateLoaded = false
         mealAnalysis = nil
         mealAnalysisError = nil

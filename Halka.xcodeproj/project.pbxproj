@@ -348,6 +348,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Halka-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = halka;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Öğün fotoğrafından kalori tahmini için kamerayla çekim yapabilmeniz gerekir.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Egzersiz, adım, uyku ve aktif enerji verilerinizi halkalarınıza işlemek için Apple Health'ten okuma izni gerekir.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Öğün fotoğrafından kalori tahmini ve Health ekran görüntüsü aktarımı için fotoğraflarınıza erişim gerekir.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -382,6 +383,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Halka-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = halka;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Öğün fotoğrafından kalori tahmini için kamerayla çekim yapabilmeniz gerekir.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Egzersiz, adım, uyku ve aktif enerji verilerinizi halkalarınıza işlemek için Apple Health'ten okuma izni gerekir.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Öğün fotoğrafından kalori tahmini ve Health ekran görüntüsü aktarımı için fotoğraflarınıza erişim gerekir.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

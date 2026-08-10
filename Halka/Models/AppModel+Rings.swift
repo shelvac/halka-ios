@@ -259,14 +259,17 @@ extension AppModel {
     func loadMealState() async {
         guard supabaseReady else { mealStateLoaded = true; return }
         do {
-            if let row = try await SupabaseService.shared.fetchMealState(),
-               row.week_start == Self.dayKeyFormatter.string(from: weekStart) {
-                eaten = Set(row.eaten)
-                removedMeals = Set(row.removed ?? [])
-                extras = row.extras.map {
-                    ExtraMeal(day: $0.day, title: $0.title, kcal: $0.kcal, time: $0.time)
+            if let row = try await SupabaseService.shared.fetchMealState() {
+                // Sayaçlar hafta bağımsız: alışkanlık haftayla sıfırlanmaz.
+                quickCounts = row.quick_counts ?? [:]
+                if row.week_start == Self.dayKeyFormatter.string(from: weekStart) {
+                    eaten = Set(row.eaten)
+                    removedMeals = Set(row.removed ?? [])
+                    extras = row.extras.map {
+                        ExtraMeal(day: $0.day, title: $0.title, kcal: $0.kcal, time: $0.time)
+                    }
+                    overrides = row.overrides
                 }
-                overrides = row.overrides
             }
         } catch {
             AuthLog.warn("fetchMealState", error)
@@ -318,7 +321,8 @@ extension AppModel {
                     .init(day: $0.day, title: $0.title, kcal: $0.kcal, time: $0.time)
                 },
                 overrides: overrides,
-                removed: Array(removedMeals))
+                removed: Array(removedMeals),
+                quickCounts: quickCounts)
         } catch {
             AuthLog.warn("saveMealState", error)
         }
