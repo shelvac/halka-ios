@@ -77,6 +77,8 @@ struct TodayView: View {
     @Environment(AppModel.self) private var model
     /// Egzersiz detayı — halkaya, hedef kartına ya da listeye dokununca açılır.
     @State private var showWorkouts = false
+    /// Health bağlı değilken halka kartından elle giriş (US-025).
+    @State private var showManualEntry = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -105,36 +107,83 @@ struct TodayView: View {
                             workouts: model.todayWorkouts,
                             exerciseMinutes: model.exerciseMinutes,
                             exerciseGoal: Int(model.goal(for: .exercise)),
-                            historyHasWorkouts: !model.hkWorkouts.isEmpty)
+                            historyHasWorkouts: !model.hkWorkouts.isEmpty,
+                            sourceIsHealth: model.hkConnected)
         }
     }
 
     private var ringsCard: some View {
-        HStack(spacing: 16) {
-            RingStack(fractions: model.todayFractions, size: 176)
-            VStack(alignment: .leading, spacing: 13) {
-                ForEach(RingKind.allCases, id: \.self) { kind in
-                    // Egzersiz satırı detaya götürüyor; diğerlerinin
-                    // açılacak bir alt kırılımı yok.
-                    if kind == .exercise {
-                        Button { showWorkouts = true } label: {
-                            HStack(spacing: 4) {
-                                legendRow(kind)
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 9, weight: .heavy))
-                                    .foregroundStyle(Color.chevron)
+        VStack(spacing: 0) {
+            HStack(spacing: 16) {
+                RingStack(fractions: model.todayFractions, size: 176)
+                VStack(alignment: .leading, spacing: 13) {
+                    ForEach(RingKind.allCases, id: \.self) { kind in
+                        // Egzersiz satırı detaya götürüyor; adım satırı Health
+                        // yokken elle girişe. Diğerlerinin alt kırılımı yok.
+                        if kind == .exercise {
+                            Button { showWorkouts = true } label: {
+                                HStack(spacing: 4) {
+                                    legendRow(kind)
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 9, weight: .heavy))
+                                        .foregroundStyle(Color.chevron)
+                                }
                             }
+                            .buttonStyle(.plain)
+                        } else if kind == .steps && !model.hkConnected {
+                            Button { showManualEntry = true } label: {
+                                HStack(spacing: 4) {
+                                    legendRow(kind)
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 9, weight: .heavy))
+                                        .foregroundStyle(Color.chevron)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            legendRow(kind)
                         }
-                        .buttonStyle(.plain)
-                    } else {
-                        legendRow(kind)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // Health bağlı değilken veriler elle girilir; bu yol saklı
+            // kalmasın (US-025). Bağlıyken kaynak Health'tir ve elle giriş
+            // sunulmaz — çakışma sessizce çözülmez, hiç oluşmaz.
+            if !model.hkConnected {
+                Button { showManualEntry = true } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color.coral)
+                        Text("Bugünün verilerini elle gir")
+                            .font(.h(12, .bold))
+                            .foregroundStyle(Color.inkBody)
+                        Spacer()
+                        Text("Elle giriş")
+                            .font(.h(9.5, .bold))
+                            .foregroundStyle(Color.sub)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Color.bgChip))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .heavy))
+                            .foregroundStyle(Color.chevron)
+                    }
+                    .padding(.top, 13)
+                    .overlay(alignment: .top) {
+                        Rectangle().fill(Color.hairline).frame(height: 1)
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 13)
+            }
         }
         .padding(18)
         .card(22)
+        .sheet(isPresented: $showManualEntry) {
+            ManualEntryView()
+        }
     }
 
     /// Adım ve aktif enerji — halka DEĞİL, istatistik.
@@ -370,5 +419,113 @@ struct TodayView: View {
         .padding(.vertical, 16)
         .background(Color.coralBg)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
+// MARK: - Elle veri girişi (US-025)
+
+/// Apple Health bağlı olmayan kullanıcı için günün değerleri.
+///
+/// Health bağlıyken bu ekran sunulmaz: Health tek doğru kaynaktır ve
+/// tazelemede elle girilenin üstüne yazardı — kullanıcıya iki kaynağın
+/// çatıştığı bir durum hiç yaşatılmıyor.
+struct ManualEntryView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var exerciseText = ""
+    @State private var stepsText = ""
+    @State private var sleepText = ""
+
+    var body: some View {
+        ZStack {
+            Color.bgApp.ignoresSafeArea()
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Text("Bugünün verileri")
+                        .font(.h(15))
+                        .foregroundStyle(Color.ink)
+                    Spacer()
+                }
+                .overlay(alignment: .trailing) {
+                    Button("Kapat") { dismiss() }
+                        .font(.h(13))
+                        .foregroundStyle(Color.coral)
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 18)
+                .padding(.bottom, 14)
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            field("Egzersiz", unit: "dk", text: $exerciseText,
+                                  placeholder: "\(model.exerciseMinutes)")
+                            divider
+                            field("Adım", unit: "adım", text: $stepsText,
+                                  placeholder: "\(model.hkSteps)")
+                            divider
+                            field("Uyku", unit: "saat", text: $sleepText,
+                                  placeholder: String(format: "%.1f", model.sleepHours))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        .card(18)
+
+                        Text("Su ana ekrandan, yemekler kalori günlüğünden, kilo Sağlık sekmesinden girilir. Bu değerler \"elle girildi\" olarak kaydedilir; Apple Health'i bağlarsan kaynak Health olur.")
+                            .font(.h(11, .semibold))
+                            .foregroundStyle(Color.sub)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.bgField)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                        Button {
+                            model.saveManualEntry(
+                                exerciseMin: Int(exerciseText.trimmingCharacters(in: .whitespaces)),
+                                steps: Int(stepsText.trimmingCharacters(in: .whitespaces)),
+                                sleep: Double(sleepText.replacingOccurrences(of: ",", with: ".")
+                                    .trimmingCharacters(in: .whitespaces)))
+                            dismiss()
+                        } label: {
+                            Text("Kaydet").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.plain)
+                        .coralButton()
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 28)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private var divider: some View {
+        Rectangle().fill(Color.hairline).frame(height: 1)
+    }
+
+    private func field(_ label: String, unit: String,
+                       text: Binding<String>, placeholder: String) -> some View {
+        HStack(spacing: 10) {
+            Text(label)
+                .font(.h(13, .bold))
+                .foregroundStyle(Color.inkBody)
+            Spacer()
+            TextField(placeholder, text: text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .font(.h(15))
+                .foregroundStyle(Color.ink)
+                .frame(width: 90)
+            Text(unit)
+                .font(.h(11, .bold))
+                .foregroundStyle(Color.sub)
+                .frame(width: 38, alignment: .leading)
+        }
+        .padding(.vertical, 13)
     }
 }

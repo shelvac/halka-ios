@@ -258,7 +258,12 @@ final class AppModel {
     var supplements: [Supplement] = Demo.initialSupplements
     var bloodPdfState: ProcessState = .idle
     var bloodPdfName = ""
+    var bloodPdfError: String? = nil
     var healthShotState: ProcessState = .idle
+    /// Belgelerim (US-025): kullanıcının yüklediği PDF'ler.
+    var documents: [SupabaseService.DocumentFile] = []
+    var documentsBusy = false
+    var documentsError: String? = nil
 
     // MARK: Social
     var friends: [Friend] = Demo.initialFriends()
@@ -393,6 +398,12 @@ final class AppModel {
         bodyMeasurements = []
         pendingScalePhoto = nil
         bodyError = nil
+        documents = []
+        documentsBusy = false
+        documentsError = nil
+        bloodPdfState = .idle
+        bloodPdfName = ""
+        bloodPdfError = nil
         messages = Demo.initialMessages()
         coachDraft = ""
         coachTyping = false

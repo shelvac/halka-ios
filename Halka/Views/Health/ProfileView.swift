@@ -8,6 +8,7 @@ struct ProfileView: View {
     @State private var confirmDelete = false
     @State private var editingProfile = false
     @State private var showPrivacy = false
+    @State private var showDocuments = false
 
     /// Ayar satırları. "Birimler" kaldırıldı: metrik/imperial desteği her
     /// kg/cm/ml/kcal gösterimini dolaşan yatay bir iş ve Türkiye'deki kullanıcı
@@ -31,12 +32,12 @@ struct ProfileView: View {
             switch self {
             case .notifications: return "Yakında"
             case .goals: return "Yakında"
-            case .documents: return "Yakında"
+            case .documents: return ""
             case .privacy: return ""
             }
         }
 
-        var isEnabled: Bool { self == .privacy }
+        var isEnabled: Bool { self == .privacy || self == .documents }
     }
 
     var body: some View {
@@ -93,6 +94,7 @@ struct ProfileView: View {
                 ForEach(Array(SettingRow.allCases.enumerated()), id: \.element.id) { i, row in
                     Button {
                         if row == .privacy { showPrivacy = true }
+                        if row == .documents { showDocuments = true }
                     } label: {
                         HStack(spacing: 10) {
                             Text(row.title)
@@ -143,6 +145,10 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showPrivacy) {
             PrivacyView()
+                .environment(model)
+        }
+        .sheet(isPresented: $showDocuments) {
+            DocumentsView()
                 .environment(model)
         }
         // Geri alınamaz bir işlem — onay penceresi zorunlu (US-021).

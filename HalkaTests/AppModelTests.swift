@@ -744,6 +744,33 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.eaten.isEmpty)
     }
 
+    /// US-025: elle giriş — verilen değer işlenir, boş bırakılan korunur.
+    @MainActor
+    func testManualEntryUpdatesOnlyProvidedValues() {
+        let model = AppModel()
+        model.saveManualEntry(exerciseMin: 40, steps: 6000, sleep: 7.5)
+        XCTAssertEqual(model.exerciseMinutes, 40)
+        XCTAssertEqual(model.hkSteps, 6000)
+        XCTAssertEqual(model.sleepHours, 7.5)
+
+        model.saveManualEntry(exerciseMin: nil, steps: 8000, sleep: nil)
+        XCTAssertEqual(model.exerciseMinutes, 40)   // boş alan silmez
+        XCTAssertEqual(model.hkSteps, 8000)
+        XCTAssertEqual(model.sleepHours, 7.5)
+
+        model.saveManualEntry(exerciseMin: -5, steps: nil, sleep: nil)
+        XCTAssertEqual(model.exerciseMinutes, 0)    // negatif sıfıra kırpılır
+    }
+
+    /// Belge adı: epoch öneki soyulur, öneksiz ad aynen kalır.
+    func testDocumentDisplayNameStripsEpochPrefix() {
+        XCTAssertEqual(SupabaseService.documentDisplayName("1754800000-tahlil sonucu.pdf"),
+                       "tahlil sonucu.pdf")
+        XCTAssertEqual(SupabaseService.documentDisplayName("rapor-2026.pdf"),
+                       "rapor-2026.pdf")   // önek sayı değil → dokunma
+        XCTAssertEqual(SupabaseService.documentDisplayName("tahlil.pdf"), "tahlil.pdf")
+    }
+
     /// "00:06'da dünkü 81 dk egzersiz görünüyor" — gece yarısı geçince
     /// dünün canlı değerleri yeni güne taşınmamalı.
     @MainActor

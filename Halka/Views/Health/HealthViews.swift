@@ -458,14 +458,14 @@ struct BloodPane: View {
                 }
                 .fileImporter(isPresented: $showImporter, allowedContentTypes: [.pdf]) { result in
                     if case .success(let url) = result {
-                        model.processBloodPdf(named: url.lastPathComponent)
+                        model.uploadDocument(from: url)
                     }
                 }
 
                 if model.bloodPdfState == .processing {
                     HStack(spacing: 11) {
                         SpinnerArc(size: 20)
-                        Text("\(model.bloodPdfName) ayrıştırılıyor — test değerleri okunuyor…")
+                        Text("\(model.bloodPdfName) yükleniyor…")
                             .font(.h(12.5))
                             .foregroundStyle(Color.ink)
                         Spacer()
@@ -477,7 +477,9 @@ struct BloodPane: View {
                 if model.bloodPdfState == .done {
                     HStack(spacing: 11) {
                         CheckBadge(size: 20)
-                        Text("\(model.bloodPdfName) işlendi — 16 test değeri eklendi")
+                        // Dürüst mesaj: dosya saklandı; değer ayrıştırma
+                        // yapılmıyor (yapılıyormuş gibi de söylenmiyor).
+                        Text("\(model.bloodPdfName) Belgelerim'e kaydedildi — Profil › Belgelerim'den ulaşabilirsin")
                             .font(.h(12.5))
                             .foregroundStyle(Color.greenDark)
                         Spacer()
@@ -485,6 +487,12 @@ struct BloodPane: View {
                     .padding(.top, 12)
                     .overlay(alignment: .top) { Rectangle().fill(Color.hairline).frame(height: 1) }
                     .padding(.top, 12)
+                }
+                if let error = model.bloodPdfError {
+                    Text(error)
+                        .font(.h(11.5, .semibold))
+                        .foregroundStyle(Color.coralDark)
+                        .padding(.top, 10)
                 }
 
                 HStack(spacing: 14) {

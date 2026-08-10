@@ -543,6 +543,71 @@ final class SupabaseService {
             .execute()
     }
 
+    // MARK: Belgelerim (US-025) — tahlil/tartı PDF'leri, kullanıcıya özel klasör.
+
+    struct DocumentFile: Identifiable, Equatable {
+        /// Bucket içindeki tam yol: "<uid>/<epoch>-<ad>.pdf".
+        let path: String
+        /// Gösterilen ad — epoch öneki soyulmuş hâli.
+        let displayName: String
+        let createdAt: Date?
+        var id: String { path }
+    }
+
+    /// PDF'i kullanıcının klasörüne yükler; bucket yolu döner.
+    func uploadDocument(_ data: Data, filename: String) async throws -> String {
+        guard let client, let user = await currentUser() else { return "" }
+        // Yol RLS ile eşleşsin diye küçük harfli uid; ad, yol kırıcı
+        // karakterlerden arındırılır.
+        let safe = filename
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: "\\", with: "-")
+        let stamp = Int(Date().timeIntervalSince1970)
+        let path = "\(user.id.uuidString.lowercased())/\(stamp)-\(safe)"
+        try await client.storage.from("documents").upload(
+            path, data: data,
+            options: FileOptions(cacheControl: "3600",
+                                 contentType: "application/pdf",
+                                 upsert: false))
+        return path
+    }
+
+    func listDocuments() async -> [DocumentFile] {
+        guard let client, let user = await currentUser() else { return [] }
+        let folder = user.id.uuidString.lowercased()
+        do {
+            let files = try await client.storage.from("documents").list(path: folder)
+            return files
+                .filter { $0.name.hasSuffix(".pdf") }
+                .map { file in
+                    DocumentFile(path: "\(folder)/\(file.name)",
+                                 displayName: Self.documentDisplayName(file.name),
+                                 createdAt: file.createdAt)
+                }
+                .sorted { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
+        } catch {
+            AuthLog.warn("listDocuments", error)
+            return []
+        }
+    }
+
+    /// "1754800000-tahlil.pdf" → "tahlil.pdf". Epoch öneki yoksa ad aynen.
+    static func documentDisplayName(_ name: String) -> String {
+        let parts = name.split(separator: "-", maxSplits: 1)
+        guard parts.count == 2, Int(parts[0]) != nil else { return name }
+        return String(parts[1])
+    }
+
+    func downloadDocument(path: String) async -> Data? {
+        guard let client else { return nil }
+        return try? await client.storage.from("documents").download(path: path)
+    }
+
+    func deleteDocument(path: String) async throws {
+        guard let client else { return }
+        _ = try await client.storage.from("documents").remove(paths: [path])
+    }
+
     /// Bir e-postanın kayıtlı olup olmadığı ve hangi yöntemle açıldığı (US-013).
     struct AccountStatus: Decodable {
         let exists: Bool

@@ -129,6 +129,8 @@ struct WorkoutDaySheet: View {
     /// 90 günlük listede hiç antrenman var mı? Varsa izin sorunu yoktur —
     /// "bugün antrenman kaydı yok ama yürüyüş dakikası var" normal bir gün.
     var historyHasWorkouts = false
+    /// Dakikaların kaynağı Apple Health mi (yoksa elle giriş mi)?
+    var sourceIsHealth = true
 
     private var totalMinutes: Int { workouts.reduce(0) { $0 + $1.minutes } }
     private var totalKcal: Int { workouts.reduce(0) { $0 + $1.kcal } }
@@ -212,7 +214,11 @@ struct WorkoutDaySheet: View {
             // Halka Apple'ın `appleExerciseTime`ından geliyor; antrenman
             // sürelerinin toplamıyla birebir tutmayabilir (tempolu yürüyüş
             // antrenman kaydı olmadan da egzersiz dakikası sayılır).
-            Text("Apple Health'in egzersiz dakikası")
+            // Health bağlı değilse kaynak elle giriştir — hangisinin
+            // kullanıldığı açıkça söylenir (US-025).
+            Text(historyHasWorkouts || sourceIsHealth
+                 ? "Kaynak: Apple Health'in egzersiz dakikası"
+                 : "Kaynak: elle girilen egzersiz dakikası")
                 .font(.h(10, .bold))
                 .foregroundStyle(Color.faint)
         }

@@ -43,18 +43,68 @@ extension AppModel {
         }
     }
 
-    // MARK: PDF upload simulations
+    // MARK: Belgelerim — gerçek PDF yükleme (US-025)
 
     // Not: Vücut ölçümü için sahte PDF akışı kaldırıldı — yerini tartı
     // fotoğrafının gerçek OCR ile okunması aldı (ScaleOCR, US-025).
 
-    func processBloodPdf(named name: String) {
-        bloodPdfName = name
+    func loadDocuments() async {
+        documentsBusy = true
+        documents = await SupabaseService.shared.listDocuments()
+        documentsBusy = false
+    }
+
+    /// fileImporter'dan gelen PDF'i Storage'a yükler.
+    ///
+    /// Eskiden burada 2 saniyelik sahte bir "ayrıştırılıyor" animasyonu
+    /// vardı; dosya hiçbir yere gitmiyordu. Artık dosya gerçekten
+    /// kullanıcının RLS korumalı klasörüne kaydediliyor. Değer AYRIŞTIRMA
+    /// yapılmıyor ve yapılıyormuş gibi de söylenmiyor.
+    func uploadDocument(from url: URL) {
+        bloodPdfError = nil
+        bloodPdfName = url.lastPathComponent
         bloodPdfState = .processing
         Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2.2))
-            self?.bloodPdfState = .done
+            guard let self else { return }
+            let secured = url.startAccessingSecurityScopedResource()
+            defer { if secured { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let data = try Data(contentsOf: url)
+                guard data.count <= 10_000_000 else {
+                    throw NSError(domain: "Docs", code: 1, userInfo:
+                        [NSLocalizedDescriptionKey: "Dosya 10 MB'dan büyük."])
+                }
+                _ = try await SupabaseService.shared.uploadDocument(
+                    data, filename: url.lastPathComponent)
+                self.bloodPdfState = .done
+                await self.loadDocuments()
+            } catch {
+                AuthLog.warn("uploadDocument", error)
+                self.bloodPdfState = .idle
+                self.bloodPdfError = "PDF yüklenemedi: \(error.localizedDescription)"
+            }
         }
+    }
+
+    func deleteDocument(_ file: SupabaseService.DocumentFile) {
+        documents.removeAll { $0.path == file.path }
+        Task {
+            try? await SupabaseService.shared.deleteDocument(path: file.path)
+        }
+    }
+
+    // MARK: Elle veri girişi (US-025) — Health bağlı değilken
+
+    /// Elle girilen günlük değerler halkalara ve `rings_daily`ye işlenir.
+    /// Health bağlıyken çağrılmaz: Health tek doğru kaynak sayılır ve
+    /// tazelemede elle girilenin üstüne yazar — bu yüzden giriş ekranı
+    /// yalnızca Health bağlı DEĞİLKEN sunulur (çakışma sessizce çözülmez,
+    /// hiç oluşmaz).
+    func saveManualEntry(exerciseMin: Int?, steps: Int?, sleep: Double?) {
+        if let exerciseMin { exerciseBase = max(0, exerciseMin) }
+        if let steps { hkSteps = max(0, steps) }
+        if let sleep { sleepHours = max(0, sleep) }
+        scheduleRingSave()
     }
 
     /// Apple Health screenshot fallback: AI Koç parses the image and credits the exercise ring.
