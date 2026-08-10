@@ -107,16 +107,9 @@ extension AppModel {
         scheduleRingSave()
     }
 
-    /// Apple Health screenshot fallback: AI Koç parses the image and credits the exercise ring.
-    func processHealthScreenshot() {
-        healthShotState = .processing
-        Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2.4))
-            guard let self else { return }
-            self.healthShotState = .done
-            self.extraExerciseMin += 32
-        }
-    }
+    // Not: "Ekran görüntüsü yükle, AI Koç okusun" akışı KALDIRILDI —
+    // görüntüye bakmadan +32 dk yazan bir demoydu; gerçek veri yolları
+    // (Apple Health ya da elle giriş) varken sahte aktarım kabul edilemez.
 
     // MARK: Blood panel summary
 

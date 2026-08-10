@@ -4,11 +4,11 @@ import PhotosUI
 /// Profile: identity card, Apple Health card with screenshot fallback, settings, logout.
 struct ProfileView: View {
     @Environment(AppModel.self) private var model
-    @State private var shotItem: PhotosPickerItem? = nil
     @State private var confirmDelete = false
     @State private var editingProfile = false
     @State private var showPrivacy = false
     @State private var showDocuments = false
+    @State private var showManualEntry = false
 
     /// Ayar satırları. "Birimler" kaldırıldı: metrik/imperial desteği her
     /// kg/cm/ml/kcal gösterimini dolaşan yatay bir iş ve Türkiye'deki kullanıcı
@@ -242,70 +242,43 @@ struct ProfileView: View {
                 }
             }
 
-            // Screenshot fallback → AI Koç parses activity data
+            // Elle veri girişi (US-025). Eskiden burada "ekran görüntüsü
+            // yükle, AI Koç okusun" diye SAHTE bir akış vardı: görüntüye
+            // bakmadan +32 dk yazıyordu. Kaldırıldı — gerçek giriş ekranı.
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Health verileri ekle")
+                    Text("Elle veri girişi")
                         .font(.h(12.5))
                         .foregroundStyle(Color.ink)
-                    Text(model.healthShotState == .done
-                         ? "Son aktarım: bugün · ekran görüntüsünden"
-                         : "Apple Health bağlanamadı — ekran görüntüsü yükle, AI Koç okusun")
+                    Text(model.hkConnected
+                         ? "Health bağlıyken adım, egzersiz ve uyku Health'ten okunur"
+                         : "Egzersiz, adım ve uykuyu kendin gir")
                         .font(.h(10.5, .semibold))
                         .foregroundStyle(Color.sub)
                 }
                 Spacer()
-                PhotosPicker(selection: $shotItem, matching: .images) {
-                    Text(model.healthShotState == .done ? "Yeni Yükle" : "Görüntü Yükle")
+                Button { showManualEntry = true } label: {
+                    Text(model.hkConnected ? "Ayrıntı" : "Veri Gir")
                         .font(.h(11.5))
                         .foregroundStyle(Color.coralDark)
                         .padding(.horizontal, 13)
                         .padding(.vertical, 8)
                         .background(Capsule().fill(Color.coralBg))
                 }
+                .buttonStyle(.plain)
             }
             .padding(.top, 12)
             .overlay(alignment: .top) {
                 Rectangle().fill(Color.hairline).frame(height: 1)
             }
             .padding(.top, 12)
-
-            if model.healthShotState == .processing {
-                HStack(spacing: 10) {
-                    SpinnerArc(size: 18)
-                    Text("AI Koç ekran görüntüsünü okuyor — adım, egzersiz ve enerji verileri ayrıştırılıyor…")
-                        .font(.h(12))
-                        .foregroundStyle(Color.ink)
-                        .lineSpacing(2)
-                    Spacer(minLength: 0)
-                }
-                .padding(13)
-                .background(Color.bgField)
-                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-                .padding(.top, 10)
-            }
-            if model.healthShotState == .done {
-                HStack(spacing: 10) {
-                    CheckBadge(size: 18)
-                    Text("AI Koç ekledi: 32 dk yürüyüş · 4.812 adım · 214 kcal aktif enerji — egzersiz halkasına işlendi")
-                        .font(.h(12))
-                        .foregroundStyle(Color.greenDark)
-                        .lineSpacing(2)
-                    Spacer(minLength: 0)
-                }
-                .padding(13)
-                .background(Color.greenBg)
-                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-                .padding(.top, 10)
-            }
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
         .card(20)
-        .onChange(of: shotItem) {
-            guard shotItem != nil else { return }
-            shotItem = nil
-            model.processHealthScreenshot()
+        .sheet(isPresented: $showManualEntry) {
+            ManualEntryView()
+                .environment(model)
         }
     }
 }

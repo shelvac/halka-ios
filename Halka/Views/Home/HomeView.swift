@@ -459,6 +459,26 @@ struct ManualEntryView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 12) {
+                        if model.hkConnected {
+                            // Health bağlıyken elle giriş kapalı — kaynağın kim
+                            // olduğu belirsizleşmesin, Health değeri ezilmesin.
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 8) {
+                                    Circle().fill(Color.green).frame(width: 9, height: 9)
+                                    Text("Apple Health bağlı")
+                                        .font(.h(13))
+                                        .foregroundStyle(Color.ink)
+                                }
+                                Text("Egzersiz, adım ve uyku Health'ten otomatik okunuyor: bugün \(model.exerciseMinutes) dk egzersiz · \(model.hkSteps) adım. Elle giriş bu yüzden kapalı — iki kaynak çakışmasın. Health'i kapatırsan (Ayarlar › Gizlilik › Sağlık › halka) bu ekrandan girebilirsin.")
+                                    .font(.h(11.5, .semibold))
+                                    .foregroundStyle(Color.sub)
+                                    .lineSpacing(3)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .card(18)
+                        } else {
                         VStack(alignment: .leading, spacing: 0) {
                             field("Egzersiz", unit: "dk", text: $exerciseText,
                                   placeholder: "\(model.exerciseMinutes)")
@@ -495,6 +515,7 @@ struct ManualEntryView: View {
                         }
                         .buttonStyle(.plain)
                         .coralButton()
+                        }
                     }
                     .padding(.horizontal, 18)
                     .padding(.bottom, 28)

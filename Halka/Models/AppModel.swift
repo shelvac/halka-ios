@@ -259,7 +259,6 @@ final class AppModel {
     var bloodPdfState: ProcessState = .idle
     var bloodPdfName = ""
     var bloodPdfError: String? = nil
-    var healthShotState: ProcessState = .idle
     /// Belgelerim (US-025): kullanıcının yüklediği PDF'ler.
     var documents: [SupabaseService.DocumentFile] = []
     var documentsBusy = false
