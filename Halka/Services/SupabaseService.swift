@@ -811,42 +811,45 @@ final class SupabaseService {
     }
 
     /// Kullanıcının tanımladığı yiyecek (US-029 devamı): katalogda olmayan
-    /// bir şeyi kullanıcı kendisi ekler. Kayıt ORTAK kataloğa yazılır
-    /// (Simge'nin kararı, 0028) — sonraki aramalarda ve fotoğraf
-    /// eşleşmesinde herkes için bulunur. `created_by` kimin eklediğini
-    /// izler; role varsayılanı 'keyfi' olduğundan otomatik plana giremez.
+    /// bir şeyi kullanıcı kendisi ekler. Katalog ORTAK olduğu için ekleme
+    /// denetimli sunucu fonksiyonundan geçer (0029): küfür filtresi + AI
+    /// "gerçek yiyecek mi / kalori makul mü" kontrolü + günlük kota.
+    /// Uygun bulunmazsa fonksiyonun Türkçe gerekçesi hata olarak fırlatılır.
     func createFood(name: String, portionName: String, portionG: Int,
                     portionKcal: Int) async throws -> FoodOption? {
-        guard let client, let user = await currentUser() else { return nil }
-        let key = Self.searchKey(name)
-        let kcal100 = Self.kcalPer100(portionKcal: portionKcal, portionG: portionG)
-        let payload: [String: AnyJSON] = [
+        guard let client else { return nil }
+        let body: [String: AnyJSON] = [
             "name": .string(name),
-            "search_key": .string(key),
-            "category": .string("diger"),
-            "kcal_100g": .integer(kcal100),
-            "portion_g": .integer(portionG),
             "portion_name": .string(portionName),
-            "created_by": .string(user.id.uuidString.lowercased())
+            "portion_g": .integer(portionG),
+            "portion_kcal": .integer(portionKcal)
         ]
-        struct Row: Decodable { let id: String }
-        do {
-            let rows: [Row] = try await client.from("foods")
-                .insert(payload)
-                .select("id")
-                .execute()
-                .value
-            guard let row = rows.first else { return nil }
-            return FoodOption(id: row.id, name: name, kcal100: kcal100,
-                              portionG: portionG, portionName: portionName)
-        } catch {
-            // Katalog ortak: aynı ad bu arada başkası tarafından eklenmiş
-            // olabilir (benzersizlik küresel). Varsa onu kullan.
-            if let existing = await fetchFoods(searchKeys: [key]).first {
-                return existing
-            }
-            throw error
+        let response = try await client.functions.invoke(
+            "create-food",
+            options: FunctionInvokeOptions(body: body)
+        ) { data, urlResponse in
+            (data, (urlResponse as? HTTPURLResponse)?.statusCode ?? 200)
         }
+        let (data, status) = response
+
+        struct Reply: Decodable {
+            struct Food: Decodable {
+                let id: String
+                let name: String
+                let kcal_100g: Int
+                let portion_g: Int
+                let portion_name: String
+            }
+            let food: Food?
+            let error: String?
+        }
+        let decoded = try? JSONDecoder().decode(Reply.self, from: data)
+        guard status < 400 else {
+            throw MealAnalysisError.failed(decoded?.error ?? "Kaydedilemedi — tekrar dene.")
+        }
+        guard let food = decoded?.food else { return nil }
+        return FoodOption(id: food.id, name: food.name, kcal100: food.kcal_100g,
+                          portionG: food.portion_g, portionName: food.portion_name)
     }
 
     /// Hızlı ekle çipleri: anahtarları verilen yemekleri tek istekte getirir.
