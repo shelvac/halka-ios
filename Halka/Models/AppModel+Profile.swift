@@ -19,6 +19,7 @@ extension AppModel {
         }
         guard let loaded = fetched else { return }
         profile = loaded
+        profileLoaded = true
         if !loaded.fullName.isEmpty {
             applyFullName(loaded.fullName)
         }

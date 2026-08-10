@@ -26,8 +26,11 @@ extension AppModel {
         guard supabaseReady else { return }
         bodyMeasurements = await SupabaseService.shared.fetchBodyMeasurements()
         // Profildeki güncel kiloyu son tartımla hizala: iki yerde farklı sayı
-        // görünmesi kafa karıştırır.
-        if let weight = latestMeasurement?.weightKg, profile.weightKg != weight {
+        // görünmesi kafa karıştırır. YALNIZCA profil gerçekten yüklendiyse:
+        // boş bir bellek profiliyle kaydetmek sunucudaki veriyi eziyordu
+        // (Simge'nin doğum/boy/aktivite alanları böyle silindi).
+        if profileLoaded,
+           let weight = latestMeasurement?.weightKg, profile.weightKg != weight {
             profile.weightKg = weight
             var updated = profile
             updated.weightKg = weight

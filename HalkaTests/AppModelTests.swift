@@ -734,12 +734,16 @@ final class AppModelTests: XCTestCase {
         let model = AppModel()
         model.ringsLoaded = true
         model.mealStateLoaded = true
+        model.profileLoaded = true
         model.water = 1500
         model.eaten = ["0-1"]
         model.logout()
         // Sonraki kullanıcı kendi verisini okumadan yazmaya başlamamalı.
         XCTAssertFalse(model.ringsLoaded)
         XCTAssertFalse(model.mealStateLoaded)
+        // Profil okunmadan yazan akış (kilo eşitlemesi) çalışmamalı — boş
+        // profille kaydetmek sunucudaki dolu alanları eziyordu.
+        XCTAssertFalse(model.profileLoaded)
         XCTAssertEqual(model.water, 0)
         XCTAssertTrue(model.eaten.isEmpty)
     }

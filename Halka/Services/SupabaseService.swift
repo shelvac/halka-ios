@@ -203,15 +203,23 @@ final class SupabaseService {
         guard let client, let user = await currentUser() else { return }
 
         // PostgREST'e karışık tipli sözlük gönderilemiyor; JSON'a çevirip yolluyoruz.
+        //
+        // BOŞ ALAN GÖNDERİLMEZ (null yazılmaz): bellekteki profil herhangi
+        // bir nedenle eksikse (yükleme hatası, oturum yarışı) sunucudaki
+        // dolu alanları silmemeli. Simge'nin doğum/boy/aktivite verisi tam
+        // böyle uçtu — kilo eşitlemesi boş profille çalışıp gerisini ezdi.
+        // Profil ekranı alan silmeye izin vermiyor; atlamak güvenli.
         var payload: [String: AnyJSON] = [:]
-        payload["full_name"] = .string(profile.fullName)
-        payload["birth_date"] = profile.birthDate
-            .map { .string(Self.dayFormatter.string(from: $0)) } ?? .null
-        payload["sex"] = profile.sex.map { .string($0.rawValue) } ?? .null
-        payload["height_cm"] = profile.heightCm.map { .double($0) } ?? .null
-        payload["weight_kg"] = profile.weightKg.map { .double($0) } ?? .null
-        payload["target_weight_kg"] = profile.targetWeightKg.map { .double($0) } ?? .null
-        payload["activity_level"] = profile.activityLevel.map { .string($0.rawValue) } ?? .null
+        if !profile.fullName.isEmpty { payload["full_name"] = .string(profile.fullName) }
+        if let birth = profile.birthDate {
+            payload["birth_date"] = .string(Self.dayFormatter.string(from: birth))
+        }
+        if let sex = profile.sex { payload["sex"] = .string(sex.rawValue) }
+        if let height = profile.heightCm { payload["height_cm"] = .double(height) }
+        if let weight = profile.weightKg { payload["weight_kg"] = .double(weight) }
+        if let target = profile.targetWeightKg { payload["target_weight_kg"] = .double(target) }
+        if let activity = profile.activityLevel { payload["activity_level"] = .string(activity.rawValue) }
+        guard !payload.isEmpty || profile.isComplete else { return }
         if profile.isComplete {
             payload["profile_completed_at"] =
                 .string(ISO8601DateFormatter().string(from: profile.completedAt ?? Date()))

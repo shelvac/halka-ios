@@ -27,6 +27,9 @@ final class AppModel {
     var profile = Profile()
     var profileBusy = false
     var profileError: String? = nil
+    /// Profil bu oturumda sunucudan başarıyla okundu mu? Okunmadan
+    /// profil YAZAN hiçbir otomatik akış çalışmamalı (`ringsLoaded` deseni).
+    var profileLoaded = false
     /// Profil fotoğrafı — buluttan indirilip bellekte tutulur (US-016).
     var avatarImage: UIImage? = nil
 
@@ -366,6 +369,7 @@ final class AppModel {
     func resetUserState() {
         // Kimlik ve profil
         profile = Profile()
+        profileLoaded = false
         avatarImage = nil
         userName = "Simge"
         userFullName = "Simge Helvacı"
