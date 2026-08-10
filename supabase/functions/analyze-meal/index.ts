@@ -37,11 +37,9 @@ let catalogCache: { names: string[]; at: number } | null = null;
 async function catalogNames(admin: ReturnType<typeof createClient>): Promise<string[]> {
   const FRESH_MS = 10 * 60 * 1000;
   if (catalogCache && Date.now() - catalogCache.at < FRESH_MS) return catalogCache.names;
-  // Sözlük yalnız küratörlü katalog: kullanıcı yemekleri kişiseldir ve
-  // önbellek tüm kullanıcılar için ortak — birinin özel kaydı diğerinin
-  // sözlüğüne sızmamalı.
-  const { data } = await admin.from("foods").select("name")
-    .is("created_by", null).order("name").limit(1000);
+  // Sözlük tüm katalog: kullanıcı eklemeleri de ortak (Simge'nin kararı,
+  // 0028) — herkesin eklediği yiyecek herkes için tanınabilir.
+  const { data } = await admin.from("foods").select("name").order("name").limit(1000);
   const names = (data ?? []).map((r: { name: string }) => r.name);
   if (names.length) catalogCache = { names, at: Date.now() };
   return names;
@@ -191,24 +189,19 @@ Deno.serve(async (req) => {
       const grams = Math.max(1, Math.round(Number(item.grams) || 0));
 
       const columns = "id,name,kcal_100g,protein_100g,carb_100g,fat_100g,portion_g,portion_name";
-      // admin RLS'i aşar: kullanıcının KENDİ tanımladıkları eşleşmeli,
-      // başkalarınınkiler asla.
-      const scope = `created_by.is.null,created_by.eq.${user.id}`;
       let { data: rows } = await admin.from("foods")
-        .select(columns).or(scope).eq("search_key", key).limit(1);
+        .select(columns).eq("search_key", key).limit(1);
 
       // Bulanık eşleşme yalnızca model listeden seçemediğinde. Serbest
       // metinde `%yogurt%` "Yoğurt çorbası"na düşebiliyordu; bu yüzden
       // önce kelime başı aranıyor, ancak o da yoksa içeren kayda bakılıyor.
       if (!rows?.length && !chosen) {
         const prefix = await admin.from("foods")
-          .select(columns).or(scope)
-          .ilike("search_key", `${key}%`).order("search_key").limit(1);
+          .select(columns).ilike("search_key", `${key}%`).order("search_key").limit(1);
         rows = prefix.data ?? [];
         if (!rows.length) {
           const contains = await admin.from("foods")
-            .select(columns).or(scope)
-            .ilike("search_key", `%${key}%`).order("search_key").limit(1);
+            .select(columns).ilike("search_key", `%${key}%`).order("search_key").limit(1);
           rows = contains.data ?? [];
         }
       }

@@ -811,32 +811,42 @@ final class SupabaseService {
     }
 
     /// Kullanıcının tanımladığı yiyecek (US-029 devamı): katalogda olmayan
-    /// bir şeyi kullanıcı kendisi ekler, YALNIZCA kendisi görür (RLS),
-    /// sonraki aramalarda ve fotoğraf eşleşmesinde bulunur.
+    /// bir şeyi kullanıcı kendisi ekler. Kayıt ORTAK kataloğa yazılır
+    /// (Simge'nin kararı, 0028) — sonraki aramalarda ve fotoğraf
+    /// eşleşmesinde herkes için bulunur. `created_by` kimin eklediğini
+    /// izler; role varsayılanı 'keyfi' olduğundan otomatik plana giremez.
     func createFood(name: String, portionName: String, portionG: Int,
                     portionKcal: Int) async throws -> FoodOption? {
         guard let client, let user = await currentUser() else { return nil }
+        let key = Self.searchKey(name)
         let kcal100 = Self.kcalPer100(portionKcal: portionKcal, portionG: portionG)
         let payload: [String: AnyJSON] = [
             "name": .string(name),
-            "search_key": .string(Self.searchKey(name)),
+            "search_key": .string(key),
             "category": .string("diger"),
             "kcal_100g": .integer(kcal100),
             "portion_g": .integer(portionG),
             "portion_name": .string(portionName),
-            // role varsayılanı 'keyfi': kullanıcı yemeği plana otomatik
-            // giremez ama günlüğe eklenebilir. created_by RLS anahtarı.
             "created_by": .string(user.id.uuidString.lowercased())
         ]
         struct Row: Decodable { let id: String }
-        let rows: [Row] = try await client.from("foods")
-            .insert(payload)
-            .select("id")
-            .execute()
-            .value
-        guard let row = rows.first else { return nil }
-        return FoodOption(id: row.id, name: name, kcal100: kcal100,
-                          portionG: portionG, portionName: portionName)
+        do {
+            let rows: [Row] = try await client.from("foods")
+                .insert(payload)
+                .select("id")
+                .execute()
+                .value
+            guard let row = rows.first else { return nil }
+            return FoodOption(id: row.id, name: name, kcal100: kcal100,
+                              portionG: portionG, portionName: portionName)
+        } catch {
+            // Katalog ortak: aynı ad bu arada başkası tarafından eklenmiş
+            // olabilir (benzersizlik küresel). Varsa onu kullan.
+            if let existing = await fetchFoods(searchKeys: [key]).first {
+                return existing
+            }
+            throw error
+        }
     }
 
     /// Hızlı ekle çipleri: anahtarları verilen yemekleri tek istekte getirir.

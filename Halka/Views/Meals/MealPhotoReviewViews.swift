@@ -353,7 +353,7 @@ struct FoodSearchSheet: View {
                     .padding(.vertical, 6)
                     .card(18)
 
-                    Text("Bu yiyecek yalnızca senin kataloğunda görünür; aramada ve fotoğraf eşleşmesinde artık bulunur. Kalori bilgisini paketin etiketinden yazabilirsin.")
+                    Text("Eklediğin yiyecek ortak kataloğa yazılır: aramada ve fotoğraf eşleşmesinde herkes için bulunur. Kalori bilgisini paketin etiketinden yazabilirsin.")
                         .font(.h(11, .semibold))
                         .foregroundStyle(Color.sub)
                         .fixedSize(horizontal: false, vertical: true)
