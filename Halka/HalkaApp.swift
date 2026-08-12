@@ -59,7 +59,8 @@ struct MainTabView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        @Bindable var model = model
+        return ZStack(alignment: .bottom) {
             Color.bgApp.ignoresSafeArea()
 
             Group {
@@ -76,6 +77,11 @@ struct MainTabView: View {
             FloatingTabBar()
         }
         .task { await model.refreshFromHealthKit() }
+        // US-026: profili eksik kullanıcı önce karşılama akışını görür.
+        .fullScreenCover(isPresented: $model.showOnboarding) {
+            OnboardingView()
+                .environment(model)
+        }
     }
 }
 

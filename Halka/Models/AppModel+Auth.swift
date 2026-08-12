@@ -35,6 +35,12 @@ extension AppModel {
         await loadProfile()
         role = .user
         screen = .app
+        // US-026: profili eksikse karşılama akışı — hedef hesapları bu
+        // veriler olmadan kurulamıyor. Tamamlanınca bir daha gösterilmez
+        // (profile_completed_at sunucuda). Yalnızca profil GERÇEKTEN
+        // okunduysa: geçici bir yükleme hatasında tamamlanmış kullanıcıya
+        // yeniden onboarding göstermek yanlış olurdu.
+        showOnboarding = supabaseReady && profileLoaded && !profile.isComplete
         // Halka verisi ve Apple Health'i arka planda tazele — giriş beklemesin.
         // Sıra önemli: önce kayıtlar okunur, sonra Health tazelenir.
         // `persistRings` zaten `ringsLoaded` olmadan yazmıyor, ama sıralamayı

@@ -437,6 +437,29 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(message.contains("teapot is on fire"))
     }
 
+    // MARK: Onboarding (US-026)
+
+    /// Akış kaldığı yerden sürer: ilk eksik alanın adımından başlar.
+    func testOnboardingResumesAtFirstIncompleteStep() {
+        var p = Profile()
+        XCTAssertEqual(OnboardingStep.firstIncomplete(for: p), .birth)
+        p.birthDate = Date()
+        XCTAssertEqual(OnboardingStep.firstIncomplete(for: p), .sex)
+        p.sex = .female
+        XCTAssertEqual(OnboardingStep.firstIncomplete(for: p), .body)
+        p.heightCm = 166
+        // Boy girildi ama kilo eksik: hâlâ aynı adım.
+        XCTAssertEqual(OnboardingStep.firstIncomplete(for: p), .body)
+        p.weightKg = 62
+        XCTAssertEqual(OnboardingStep.firstIncomplete(for: p), .target)
+        p.targetWeightKg = 58
+        XCTAssertEqual(OnboardingStep.firstIncomplete(for: p), .activity)
+        p.activityLevel = .light
+        XCTAssertEqual(OnboardingStep.firstIncomplete(for: p), .health)
+        // Health adımı atlanabilir; profil bu noktada zaten tamam.
+        XCTAssertTrue(p.isComplete)
+    }
+
     // MARK: Takviyeler (kalıcı, kişiye özel)
 
     @MainActor
