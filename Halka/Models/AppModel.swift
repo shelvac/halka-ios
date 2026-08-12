@@ -19,8 +19,10 @@ final class AppModel {
     var authInfo: String? = nil
     var forgotSent = false
     var pendingEmail = ""        // doğrulama bekleyen hesap
-    var userName = "Simge"            // selamlamada görünen ad (buluttan güncellenir)
-    var userFullName = "Simge Helvacı"
+    // Ad buluttan gelir; varsayılan BOŞ — "Simge" sabitiyle başka hesapta
+    // yanlış ad/baş harf görünüyordu.
+    var userName = ""                 // selamlamada görünen ad
+    var userFullName = ""
 
     // MARK: Profil (US-016)
     /// Buluttan yüklenen profil. Boşken hedefler varsayılan değerlere düşer.
@@ -384,8 +386,8 @@ final class AppModel {
         profileLoaded = false
         showOnboarding = false
         avatarImage = nil
-        userName = "Simge"
-        userFullName = "Simge Helvacı"
+        userName = ""
+        userFullName = ""
         pendingEmail = ""
         profileError = nil
 

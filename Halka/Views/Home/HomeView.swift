@@ -29,7 +29,7 @@ struct HomeView: View {
                 Text(model.todayHeaderTitle)
                     .font(.h(13, .bold))
                     .foregroundStyle(Color.sub)
-                Text("Merhaba, \(model.userName)")
+                Text(model.userName.isEmpty ? "Merhaba" : "Merhaba, \(model.userName)")
                     .font(.h(26))
                     .foregroundStyle(Color.ink)
                     .kerning(-0.5)

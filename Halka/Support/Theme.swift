@@ -164,16 +164,6 @@ struct InitialsAvatar: View {
 }
 
 /// The user's peach "S" avatar.
-struct MeAvatar: View {
-    var size: CGFloat = 44
-    var body: some View {
-        Circle()
-            .fill(Color.avatarPeach)
-            .frame(width: size, height: size)
-            .overlay(Text("S").font(.h(size * 0.37)).foregroundStyle(Color.brown))
-    }
-}
-
 /// US-016 — Kullanıcının profil fotoğrafı; yoksa adının baş harfi.
 /// Fotoğraf kırpılmadan kareye oturtulur (`.fill` + kırpma), böylece dikey
 /// çekilmiş kareler yamulmaz.

@@ -37,7 +37,10 @@ struct HealthView: View {
                 .kerning(-0.5)
             Spacer()
             Button { model.healthPane = .profile } label: {
-                MeAvatar(size: 38)
+                // Gerçek profil fotoğrafı / baş harf — sabit "S" çizen eski
+                // demo bileşeni (MeAvatar) kimin girdiğine bakmıyordu.
+                ProfileAvatar(image: model.avatarImage,
+                              fullName: model.userFullName, size: 38)
             }
             .buttonStyle(.plain)
         }
@@ -532,6 +535,30 @@ struct BloodPane: View {
                     .card(20)
                     .padding(.top, 12)
                 }
+
+                // Belgelerim erişimi her iki durumda da görünür olmalı —
+                // liste gelince kısayolun kaybolması "Belgelerim çıkmadı"
+                // şikâyetine yol açtı.
+                Button { showDocuments = true } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "doc.text.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.coral)
+                        Text("Belgelerim — yüklediğin PDF'ler")
+                            .font(.h(12.5, .bold))
+                            .foregroundStyle(Color.inkBody)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .heavy))
+                            .foregroundStyle(Color.chevron)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 13)
+                    .frame(maxWidth: .infinity)
+                    .card(16)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 12)
 
                 Text("Değerler PDF'inden yapay zekâ ile okundu — kritik bir karar öncesi raporun aslını Belgelerim'den doğrula. Bu liste tıbbi tavsiye değildir.")
                     .font(.h(10.5, .bold))
