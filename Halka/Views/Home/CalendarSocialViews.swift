@@ -233,6 +233,12 @@ struct SocialPane: View {
     var body: some View {
         @Bindable var model = model
         VStack(spacing: 12) {
+            // Kullanıcı adı yoksa önce o seçilir (Instagram usulü benzersiz)
+            // — aranabilir olmak için şart.
+            if model.profile.username.isEmpty {
+                UsernameClaimCard()
+            }
+
             // Kod kartı: arkadaşlık kodla kurulur — kodunu paylaşan
             // rızasını göstermiş olur; e-postayla kişi aranamaz.
             myCodeCard
@@ -324,9 +330,14 @@ struct SocialPane: View {
                 HStack(spacing: 11) {
                     InitialsAvatar(text: String(result.name.prefix(1)).uppercased(),
                                    index: i, size: 32)
-                    Text(result.name)
-                        .font(.h(13))
-                        .foregroundStyle(Color.ink)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("@\(result.username)")
+                            .font(.h(13))
+                            .foregroundStyle(Color.ink)
+                        Text(result.name)
+                            .font(.h(10.5, .bold))
+                            .foregroundStyle(Color.sub)
+                    }
                     Spacer()
                     switch result.status {
                     case .friend:
@@ -374,9 +385,16 @@ struct SocialPane: View {
                 HStack(spacing: 11) {
                     InitialsAvatar(text: String(request.name.prefix(1)).uppercased(),
                                    index: i, size: 32)
-                    Text(request.name)
-                        .font(.h(13))
-                        .foregroundStyle(Color.ink)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(request.username.isEmpty ? request.name : "@\(request.username)")
+                            .font(.h(13))
+                            .foregroundStyle(Color.ink)
+                        if !request.username.isEmpty {
+                            Text(request.name)
+                                .font(.h(10.5, .bold))
+                                .foregroundStyle(Color.sub)
+                        }
+                    }
                     Spacer()
                     Button { model.respondRequest(request, accept: true) } label: {
                         Text("Kabul")
@@ -420,6 +438,11 @@ struct SocialPane: View {
                     .foregroundStyle(.white)
                     .kerning(3)
                     .monospacedDigit()
+                if !model.profile.username.isEmpty {
+                    Text("@\(model.profile.username)")
+                        .font(.h(11, .bold))
+                        .foregroundStyle(.white.opacity(0.75))
+                }
                 Text("Arkadaşın bu kodu girince eşleşirsiniz — yalnızca günlük aktivite özetinizi görürsünüz.")
                     .font(.h(10.5, .semibold))
                     .foregroundStyle(.white.opacity(0.6))
@@ -489,9 +512,16 @@ struct SocialPane: View {
                                 }
                             }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(friend.name)
-                                .font(.h(13))
-                                .foregroundStyle(Color.ink)
+                            HStack(spacing: 5) {
+                                Text(friend.name)
+                                    .font(.h(13))
+                                    .foregroundStyle(Color.ink)
+                                if !friend.username.isEmpty {
+                                    Text("@\(friend.username)")
+                                        .font(.h(10.5, .bold))
+                                        .foregroundStyle(Color.faint)
+                                }
+                            }
                             Text(Self.statsLine(friend))
                                 .font(.h(10.5, .bold))
                                 .foregroundStyle(Color.sub)
@@ -535,5 +565,81 @@ struct SocialPane: View {
         f.numberStyle = .decimal
         f.locale = Locale(identifier: "tr_TR")
         return f.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+}
+
+// MARK: - Kullanıcı adı seçimi (mevcut kullanıcılar için — yeniler onboarding'de)
+
+struct UsernameClaimCard: View {
+    @Environment(AppModel.self) private var model
+    @State private var text = ""
+    @State private var available: Bool? = nil
+    @State private var error: String? = nil
+    @State private var busy = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Kullanıcı adını seç")
+                .font(.h(14))
+                .foregroundStyle(Color.ink)
+            Text("Arkadaşların seni bu adla arayıp bulur — benzersizdir.")
+                .font(.h(11, .semibold))
+                .foregroundStyle(Color.sub)
+            HStack(spacing: 8) {
+                HStack(spacing: 4) {
+                    Text("@").font(.h(14)).foregroundStyle(Color.sub)
+                    TextField("kullaniciadi", text: $text)
+                        .font(.h(13, .semibold))
+                        .foregroundStyle(Color.ink)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.asciiCapable)
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 42)
+                .background(Color.bgField)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                Button {
+                    busy = true
+                    error = nil
+                    Task {
+                        defer { busy = false }
+                        error = await model.claimUsername(text)
+                    }
+                } label: {
+                    Text("Kaydet")
+                        .font(.h(12, .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 15)
+                        .frame(height: 42)
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.coral))
+                }
+                .buttonStyle(.plain)
+                .disabled(busy || !SupabaseService.isValidUsername(text) || available == false)
+                .opacity(SupabaseService.isValidUsername(text) && available != false ? 1 : 0.5)
+            }
+            if let error {
+                Text(error).font(.h(11, .bold)).foregroundStyle(Color.coralDark)
+            } else if !text.isEmpty && !SupabaseService.isValidUsername(text) {
+                Text("3-20 karakter; küçük harf, rakam, nokta ve alt çizgi.")
+                    .font(.h(10.5, .bold)).foregroundStyle(Color.sub)
+            } else if available == false {
+                Text("Bu kullanıcı adı alınmış — başka bir ad dene.")
+                    .font(.h(10.5, .bold)).foregroundStyle(Color.coralDark)
+            } else if available == true {
+                Text("Uygun ✓").font(.h(10.5, .bold)).foregroundStyle(Color.greenDark)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card(20)
+        .task(id: text) {
+            available = nil
+            guard SupabaseService.isValidUsername(text) else { return }
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            available = await SupabaseService.shared.usernameAvailable(text)
+        }
     }
 }

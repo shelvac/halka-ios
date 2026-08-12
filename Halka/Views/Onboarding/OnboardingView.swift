@@ -10,10 +10,11 @@ import SwiftUI
 /// bir daha gösterilmez. Hiçbir adımda sahte/varsayılan veri yazılmaz:
 /// "Devam" ancak kullanıcı cevap verince aktifleşir.
 enum OnboardingStep: Int, CaseIterable {
-    case birth, sex, body, target, activity, health
+    case username, birth, sex, body, target, activity, health
 
     /// Kaldığı yerden devam: ilk eksik alanın adımı.
     static func firstIncomplete(for profile: Profile) -> OnboardingStep {
+        if profile.username.isEmpty { return .username }
         if profile.birthDate == nil { return .birth }
         if profile.sex == nil { return .sex }
         if profile.heightCm == nil || profile.weightKg == nil { return .body }
@@ -24,6 +25,7 @@ enum OnboardingStep: Int, CaseIterable {
 
     var title: String {
         switch self {
+        case .username: return "Kullanıcı adını seç"
         case .birth: return "Doğum tarihin?"
         case .sex: return "Cinsiyetin?"
         case .body: return "Boyun ve kilon?"
@@ -35,6 +37,7 @@ enum OnboardingStep: Int, CaseIterable {
 
     var subtitle: String {
         switch self {
+        case .username: return "Arkadaşların seni bu adla bulur — benzersizdir, sonra da değiştirilebilir."
         case .birth: return "Kalori ve hedef hesapları yaşına göre yapılır."
         case .sex: return "Bazal metabolizma formülü cinsiyete göre değişir."
         case .body: return "Halkaların ve planların temeli bu iki sayı."
@@ -58,6 +61,10 @@ struct OnboardingView: View {
     @State private var targetText = ""
     @State private var activity: Profile.ActivityLevel? = nil
     @State private var fieldError: String? = nil
+    @State private var usernameText = ""
+    /// nil = kontrol edilmedi/ediliyor; true/false = uygunluk sonucu.
+    @State private var usernameAvailable: Bool? = nil
+    @State private var claiming = false
 
     var body: some View {
         ZStack {
@@ -92,6 +99,7 @@ struct OnboardingView: View {
         .onAppear {
             // Kalınan adımdan devam; girilmiş alanlar geri doldurulur.
             step = OnboardingStep.firstIncomplete(for: model.profile)
+            usernameText = model.profile.username
             if let date = model.profile.birthDate { birthDate = date; birthTouched = true }
             sex = model.profile.sex
             if let h = model.profile.heightCm { heightText = String(Int(h)) }
@@ -136,6 +144,49 @@ struct OnboardingView: View {
     @ViewBuilder
     private var stepContent: some View {
         switch step {
+        case .username:
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Text("@")
+                        .font(.h(16))
+                        .foregroundStyle(Color.sub)
+                    TextField("kullaniciadi", text: $usernameText)
+                        .font(.h(15))
+                        .foregroundStyle(Color.ink)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.asciiCapable)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: Color.ink.opacity(0.05), radius: 4, y: 2)
+
+                if !usernameText.isEmpty {
+                    if !SupabaseService.isValidUsername(usernameText) {
+                        Text("3-20 karakter; küçük harf, rakam, nokta ve alt çizgi.")
+                            .font(.h(11, .bold))
+                            .foregroundStyle(Color.sub)
+                    } else if usernameAvailable == false {
+                        Text("Bu kullanıcı adı alınmış — başka bir ad dene.")
+                            .font(.h(11, .bold))
+                            .foregroundStyle(Color.coralDark)
+                    } else if usernameAvailable == true {
+                        Text("Uygun ✓")
+                            .font(.h(11, .bold))
+                            .foregroundStyle(Color.greenDark)
+                    }
+                }
+            }
+            .task(id: usernameText) {
+                usernameAvailable = nil
+                guard SupabaseService.isValidUsername(usernameText) else { return }
+                try? await Task.sleep(for: .milliseconds(350))
+                guard !Task.isCancelled else { return }
+                usernameAvailable = await SupabaseService.shared
+                    .usernameAvailable(usernameText)
+            }
         case .birth:
             DatePicker("", selection: $birthDate,
                        in: ...Calendar.current.date(byAdding: .year, value: -13, to: Date())!,
@@ -226,6 +277,8 @@ struct OnboardingView: View {
     /// "Devam" yalnızca cevap verilince — sahte/varsayılan veri yazılmaz.
     private var stepAnswered: Bool {
         switch step {
+        case .username: return SupabaseService.isValidUsername(usernameText)
+                            && usernameAvailable != false && !claiming
         case .birth: return birthTouched
         case .sex: return sex != nil
         case .body: return parse(heightText) != nil && parse(weightText) != nil
@@ -237,8 +290,23 @@ struct OnboardingView: View {
 
     private func advance() {
         fieldError = nil
+        // Kullanıcı adı benzersizliği sunucuda kesinleşir — başarıda ilerlenir.
+        if step == .username {
+            claiming = true
+            Task {
+                defer { claiming = false }
+                if let error = await model.claimUsername(usernameText) {
+                    fieldError = error
+                } else {
+                    step = .birth
+                }
+            }
+            return
+        }
         var draft = model.profile
         switch step {
+        case .username:
+            break
         case .birth:
             draft.birthDate = birthDate
         case .sex:

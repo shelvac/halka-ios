@@ -77,6 +77,17 @@ extension AppModel {
         }
     }
 
+    /// Benzersiz kullanıcı adını alır; hata mesajı döner (nil = başarı).
+    func claimUsername(_ raw: String) async -> String? {
+        switch await SupabaseService.shared.setUsername(raw) {
+        case .success(let normalized):
+            profile.username = normalized
+            return nil
+        case .failure(let message):
+            return message
+        }
+    }
+
     func removeFriend(_ friend: FriendOverview) {
         friends.removeAll { $0.id == friend.id }
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil

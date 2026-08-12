@@ -129,6 +129,7 @@ final class SupabaseService {
     /// ISO-8601 (timestamptz) olarak döndürdüğü için ayrıştırma burada yapılır.
     private struct ProfileRow: Decodable {
         let full_name: String?
+        let username: String?
         let avatar_path: String?
         let birth_date: String?
         let sex: String?
@@ -162,7 +163,7 @@ final class SupabaseService {
         let rows: [ProfileRow]
         do {
             rows = try await client.from("users")
-                .select("full_name,avatar_path,birth_date,sex,height_cm,weight_kg,target_weight_kg,activity_level,profile_completed_at,kvkk_accepted_at,health_consent_at")
+                .select("full_name,username,avatar_path,birth_date,sex,height_cm,weight_kg,target_weight_kg,activity_level,profile_completed_at,kvkk_accepted_at,health_consent_at")
                 .eq("id", value: user.id.uuidString)
                 .limit(1)
                 .execute()
@@ -176,6 +177,7 @@ final class SupabaseService {
 
         var profile = Profile()
         profile.fullName = row.full_name ?? ""
+        profile.username = row.username ?? ""
         profile.avatarPath = row.avatar_path
         profile.birthDate = row.birth_date.flatMap { Self.dayFormatter.date(from: $0) }
         profile.sex = row.sex.flatMap(Profile.Sex.init(rawValue:))
@@ -1034,6 +1036,7 @@ final class SupabaseService {
         struct Row: Decodable {
             let friend_id: String
             let name: String
+            let username: String?
             let exercise_min: Int
             let water_ml: Int
             let steps: Int
@@ -1048,6 +1051,7 @@ final class SupabaseService {
             return rows.compactMap { row in
                 guard let id = UUID(uuidString: row.friend_id) else { return nil }
                 return FriendOverview(id: id, name: row.name,
+                                      username: row.username ?? "",
                                       exerciseMin: row.exercise_min,
                                       waterML: row.water_ml,
                                       steps: row.steps, kcal: row.nutrition_kcal,
@@ -1066,10 +1070,45 @@ final class SupabaseService {
             .execute()
     }
 
-    /// İsimle kullanıcı arama (0032) — yalnızca ad + arkadaşlık durumu döner.
+    /// Kullanıcı adı biçimi (sunucudaki username_valid ile aynı kural).
+    static func isValidUsername(_ raw: String) -> Bool {
+        let normalized = raw.trimmingCharacters(in: .whitespaces).lowercased()
+        return normalized.range(of: "^[a-z0-9._]{3,20}$",
+                                options: .regularExpression) != nil
+    }
+
+    func usernameAvailable(_ username: String) async -> Bool {
+        guard let client else { return false }
+        return (try? await client
+            .rpc("username_available", params: ["p": username])
+            .execute()
+            .value) ?? false
+    }
+
+    /// Benzersiz kullanıcı adını alır; başarıda normalize edilmiş adı döner.
+    func setUsername(_ username: String) async -> Result<String, String> {
+        guard let client else { return .failure("Sunucu bağlantısı yok.") }
+        struct Reply: Decodable { let ok: Bool; let username: String?; let err: String? }
+        do {
+            let reply: Reply = try await client
+                .rpc("set_username", params: ["p": username])
+                .execute()
+                .value
+            return reply.ok ? .success(reply.username ?? username.lowercased())
+                            : .failure(reply.err ?? "Kaydedilemedi.")
+        } catch {
+            AuthLog.warn("setUsername", error)
+            return .failure("Kaydedilemedi — tekrar dene.")
+        }
+    }
+
+    /// Kullanıcı adıyla arama (0033) — ad + @kullanıcıadı + durum döner.
     func searchUsers(_ query: String) async -> [UserSearchResult] {
         guard let client else { return [] }
-        struct Row: Decodable { let user_id: String; let name: String; let status: String }
+        struct Row: Decodable {
+            let user_id: String; let name: String
+            let username: String?; let status: String
+        }
         do {
             let rows: [Row] = try await client
                 .rpc("search_users", params: ["p_query": query])
@@ -1078,6 +1117,7 @@ final class SupabaseService {
             return rows.compactMap { row in
                 guard let id = UUID(uuidString: row.user_id) else { return nil }
                 return UserSearchResult(id: id, name: row.name,
+                                        username: row.username ?? "",
                                         status: UserSearchResult.Status(rawValue: row.status) ?? .none)
             }
         } catch {
@@ -1114,14 +1154,16 @@ final class SupabaseService {
 
     func fetchIncomingRequests() async -> [FriendRequest] {
         guard let client else { return [] }
-        struct Row: Decodable { let from_id: String; let name: String }
+        struct Row: Decodable { let from_id: String; let name: String; let username: String? }
         do {
             let rows: [Row] = try await client
                 .rpc("incoming_friend_requests")
                 .execute()
                 .value
             return rows.compactMap { row in
-                UUID(uuidString: row.from_id).map { FriendRequest(id: $0, name: row.name) }
+                UUID(uuidString: row.from_id).map {
+                    FriendRequest(id: $0, name: row.name, username: row.username ?? "")
+                }
             }
         } catch {
             AuthLog.warn("fetchIncomingRequests", error)

@@ -250,6 +250,7 @@ struct UserSearchResult: Identifiable, Equatable {
     enum Status: String { case friend, sent, incoming, none }
     let id: UUID
     var name: String
+    var username: String
     var status: Status
 }
 
@@ -257,6 +258,7 @@ struct UserSearchResult: Identifiable, Equatable {
 struct FriendRequest: Identifiable, Equatable {
     let id: UUID          // gönderenin kullanıcı kimliği
     var name: String
+    var username: String
 }
 
 /// Arkadaşın günlük aktivite özeti (E7) — `friend_overview` RPC'sinden.
@@ -264,6 +266,7 @@ struct FriendRequest: Identifiable, Equatable {
 struct FriendOverview: Identifiable, Equatable {
     let id: UUID
     var name: String
+    var username: String = ""
     var exerciseMin: Int
     var waterML: Int
     var steps: Int

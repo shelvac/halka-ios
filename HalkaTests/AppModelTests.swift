@@ -437,6 +437,17 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(message.contains("teapot is on fire"))
     }
 
+    /// Kullanıcı adı biçimi — sunucudaki kuralın aynası.
+    func testUsernameValidation() {
+        XCTAssertTrue(SupabaseService.isValidUsername("simge"))
+        XCTAssertTrue(SupabaseService.isValidUsername("simge.helvaci_1"))
+        XCTAssertTrue(SupabaseService.isValidUsername("  Simge  "))   // kırpılır+küçültülür
+        XCTAssertFalse(SupabaseService.isValidUsername("ab"))          // çok kısa
+        XCTAssertFalse(SupabaseService.isValidUsername("simge helvacı")) // boşluk/Türkçe karakter
+        XCTAssertFalse(SupabaseService.isValidUsername("simge@x"))
+        XCTAssertFalse(SupabaseService.isValidUsername(String(repeating: "a", count: 21)))
+    }
+
     // MARK: Arkadaşlar (E7)
 
     @MainActor
@@ -461,6 +472,9 @@ final class AppModelTests: XCTestCase {
     /// Akış kaldığı yerden sürer: ilk eksik alanın adımından başlar.
     func testOnboardingResumesAtFirstIncompleteStep() {
         var p = Profile()
+        // Instagram usulü: önce benzersiz kullanıcı adı.
+        XCTAssertEqual(OnboardingStep.firstIncomplete(for: p), .username)
+        p.username = "simge"
         XCTAssertEqual(OnboardingStep.firstIncomplete(for: p), .birth)
         p.birthDate = Date()
         XCTAssertEqual(OnboardingStep.firstIncomplete(for: p), .sex)

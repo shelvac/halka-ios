@@ -8,6 +8,9 @@ import Foundation
 /// ondan hesaplar.
 struct Profile: Codable, Equatable {
     var fullName: String = ""
+    /// Benzersiz kullanıcı adı (@kullaniciadi) — yalnızca set_username
+    /// RPC'siyle yazılır (benzersizlik sunucuda), saveProfile dokunmaz.
+    var username: String = ""
     /// `avatars` bucket'ındaki dosya yolu; boşsa baş harf avatarı gösterilir.
     var avatarPath: String?
     var birthDate: Date?
