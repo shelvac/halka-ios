@@ -49,7 +49,7 @@ struct HomeView: View {
 
     private var segmentControl: some View {
         HStack(spacing: 4) {
-            ForEach(HomeSegment.allCases, id: \.self) { seg in
+            ForEach(HomeSegment.mvpCases, id: \.self) { seg in
                 let active = model.homeSegment == seg
                 Button { model.homeSegment = seg } label: {
                     Text(seg.title)

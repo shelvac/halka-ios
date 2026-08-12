@@ -14,6 +14,12 @@ enum HomeSegment: CaseIterable { case today, calendar, social, dietitian
         case .dietitian: return "Diyetisyen"
         }
     }
+
+    /// MVP kapsamı (Simge'nin kararı): Arkadaşlar ve Diyetisyen demo
+    /// bölümleri lansman sürümünde GÖRÜNMEZ — gerçek altyapıları yapılınca
+    /// bu listeye geri eklenecekler. App Store incelemesine sahte içerikle
+    /// çıkılmaz.
+    static let mvpCases: [HomeSegment] = [.today, .calendar]
 }
 
 // MARK: - Rings
