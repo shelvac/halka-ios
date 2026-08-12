@@ -458,14 +458,15 @@ struct BloodPane: View {
                 }
                 .fileImporter(isPresented: $showImporter, allowedContentTypes: [.pdf]) { result in
                     if case .success(let url) = result {
-                        model.uploadDocument(from: url)
+                        // Dosya Belgelerim'e + değerler Gemini ile listeye.
+                        model.uploadDocument(from: url, parseBlood: true)
                     }
                 }
 
                 if model.bloodPdfState == .processing {
                     HStack(spacing: 11) {
                         SpinnerArc(size: 20)
-                        Text("\(model.bloodPdfName) yükleniyor…")
+                        Text("\(model.bloodPdfName) yükleniyor, değerler okunuyor…")
                             .font(.h(12.5))
                             .foregroundStyle(Color.ink)
                         Spacer()
@@ -474,12 +475,10 @@ struct BloodPane: View {
                     .overlay(alignment: .top) { Rectangle().fill(Color.hairline).frame(height: 1) }
                     .padding(.top, 12)
                 }
-                if model.bloodPdfState == .done {
+                if model.bloodPdfState == .done, let note = model.bloodParseNote {
                     HStack(spacing: 11) {
                         CheckBadge(size: 20)
-                        // Dürüst mesaj: dosya saklandı; değer ayrıştırma
-                        // yapılmıyor (yapılıyormuş gibi de söylenmiyor).
-                        Text("\(model.bloodPdfName) Belgelerim'e kaydedildi — Profil › Belgelerim'den ulaşabilirsin")
+                        Text("\(note) — dosya Belgelerim'de")
                             .font(.h(12.5))
                             .foregroundStyle(Color.greenDark)
                         Spacer()
@@ -489,7 +488,7 @@ struct BloodPane: View {
                     .padding(.top, 12)
                 }
                 if let error = model.bloodPdfError {
-                    Text(error)
+                    Text("Dosya Belgelerim'e kaydedildi ama değerler okunamadı: \(error)")
                         .font(.h(11.5, .semibold))
                         .foregroundStyle(Color.coralDark)
                         .padding(.top, 10)
@@ -500,39 +499,141 @@ struct BloodPane: View {
             .padding(.vertical, 18)
             .card(22)
 
-            // Dürüst durum: sahte 16 test değeri ve uydurma "AI Koç notu"
-            // kaldırıldı. Değer AYRIŞTIRMA henüz yok ve varmış gibi
-            // gösterilmiyor; PDF'ler gerçekten saklanıyor (US-025).
-            VStack(spacing: 8) {
-                Image(systemName: "testtube.2")
-                    .font(.system(size: 22, weight: .light))
-                    .foregroundStyle(Color.chevron)
-                Text("Tahlil değeri takibi yakında")
-                    .font(.h(13))
-                    .foregroundStyle(Color.ink)
-                Text("PDF'ini yükle — Belgelerim'de saklanır ve istediğinde açarsın. Değerlerin otomatik okunup burada izlenmesi üzerinde çalışıyoruz.")
-                    .font(.h(11.5, .semibold))
-                    .foregroundStyle(Color.sub)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-                Button { showDocuments = true } label: {
-                    Text("Belgelerim'i Aç")
-                        .font(.h(12, .bold))
-                        .foregroundStyle(Color.coral)
-                        .padding(.top, 4)
+            // Değerler GERÇEK: PDF'ten Gemini okur, blood_tests'e yazılır.
+            // Rapor yoksa dürüst boş durum — sahte veri asla gösterilmez.
+            if let report = model.bloodReport {
+                let counts = report.counts
+                HStack(spacing: 14) {
+                    countColumn("Rapor tarihi", Self.reportDate(report.takenAt), .ink)
+                    countColumn("Normal", "\(counts.ok)", .greenDark)
+                    countColumn("Takip gerekli", "\(counts.warn)", .goldDark)
+                    Spacer()
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .card(20)
+                .padding(.top, 12)
+
+                ForEach(report.groups) { group in
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(group.name)
+                            .font(.h(12))
+                            .foregroundStyle(Color.brown)
+                            .padding(.top, 10)
+                            .padding(.bottom, 4)
+                        ForEach(Array(group.tests.enumerated()), id: \.element.id) { i, test in
+                            testRow(test, topBorder: i > 0)
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .card(20)
+                    .padding(.top, 12)
+                }
+
+                Text("Değerler PDF'inden yapay zekâ ile okundu — kritik bir karar öncesi raporun aslını Belgelerim'den doğrula. Bu liste tıbbi tavsiye değildir.")
+                    .font(.h(10.5, .bold))
+                    .foregroundStyle(Color.faint)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 10)
+            } else {
+                VStack(spacing: 8) {
+                    Image(systemName: "testtube.2")
+                        .font(.system(size: 22, weight: .light))
+                        .foregroundStyle(Color.chevron)
+                    Text("Henüz tahlil yüklemedin")
+                        .font(.h(13))
+                        .foregroundStyle(Color.ink)
+                    Text("Kan tahlili PDF'ini yükle — değerler otomatik okunup burada listelenir, dosya Belgelerim'de saklanır.")
+                        .font(.h(11.5, .semibold))
+                        .foregroundStyle(Color.sub)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(3)
+                    Button { showDocuments = true } label: {
+                        Text("Belgelerim'i Aç")
+                            .font(.h(12, .bold))
+                            .foregroundStyle(Color.coral)
+                            .padding(.top, 4)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 24)
+                .frame(maxWidth: .infinity)
+                .card(20)
+                .padding(.top, 12)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 24)
-            .frame(maxWidth: .infinity)
-            .card(20)
-            .padding(.top, 12)
         }
         .sheet(isPresented: $showDocuments) {
             DocumentsView()
                 .environment(model)
         }
+    }
+
+    private static func reportDate(_ key: String) -> String {
+        guard let date = SupabaseService.dayFormatter.date(from: key) else { return key }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "tr_TR")
+        f.dateFormat = "d MMM yyyy"
+        return f.string(from: date)
+    }
+
+    private func countColumn(_ title: String, _ value: String, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.h(10, .bold)).foregroundStyle(Color.faint)
+            Text(value).font(.h(15)).foregroundStyle(color)
+        }
+    }
+
+    private func testRow(_ test: BloodTest, topBorder: Bool) -> some View {
+        let colors = statusColors(test.status)
+        return HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(test.name)
+                    .font(.h(13, .bold))
+                    .foregroundStyle(Color.inkBody)
+                if test.hasRange {
+                    Text("Referans: \(refText(test))")
+                        .font(.h(10, .bold))
+                        .foregroundStyle(Color.faint)
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.hairline2).frame(height: 5)
+                            Circle()
+                                .fill(test.status == "Normal" ? Color.green : Color(hex: 0xD9962E))
+                                .frame(width: 10, height: 10)
+                                .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                                .offset(x: geo.size.width * test.refPosition - 5)
+                        }
+                    }
+                    .frame(maxWidth: 150)
+                    .frame(height: 10)
+                    .padding(.top, 3)
+                }
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 4) {
+                (Text(test.display).font(.h(15)).foregroundColor(.ink)
+                 + Text(" \(test.unit)").font(.h(10, .bold)).foregroundColor(.faint))
+                if test.hasRange {
+                    StatusChip(text: test.status, bg: colors.bg, fg: colors.fg)
+                }
+            }
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .top) {
+            if topBorder { Rectangle().fill(Color.hairline).frame(height: 1) }
+        }
+    }
+
+    private func refText(_ test: BloodTest) -> String {
+        func fmt(_ v: Double) -> String {
+            v.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(v)) : String(v)
+        }
+        return "\(fmt(test.refLow)) – \(fmt(test.refHigh)) \(test.unit)"
     }
 }
 

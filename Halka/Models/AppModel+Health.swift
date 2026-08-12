@@ -98,14 +98,13 @@ extension AppModel {
         documentsBusy = false
     }
 
-    /// fileImporter'dan gelen PDF'i Storage'a yükler.
+    /// fileImporter'dan gelen PDF'i Storage'a yükler; `parseBlood` ile
+    /// tahlil değerleri de Gemini'ye okutulup listeye yazılır (US-025).
     ///
-    /// Eskiden burada 2 saniyelik sahte bir "ayrıştırılıyor" animasyonu
-    /// vardı; dosya hiçbir yere gitmiyordu. Artık dosya gerçekten
-    /// kullanıcının RLS korumalı klasörüne kaydediliyor. Değer AYRIŞTIRMA
-    /// yapılmıyor ve yapılıyormuş gibi de söylenmiyor.
-    func uploadDocument(from url: URL) {
+    /// Ayrıştırma düşse bile dosya Belgelerim'de kalır — iki iş bağımsız.
+    func uploadDocument(from url: URL, parseBlood: Bool = false) {
         bloodPdfError = nil
+        bloodParseNote = nil
         bloodPdfName = url.lastPathComponent
         bloodPdfState = .processing
         Task { [weak self] in
@@ -118,16 +117,31 @@ extension AppModel {
                     throw NSError(domain: "Docs", code: 1, userInfo:
                         [NSLocalizedDescriptionKey: "Dosya 10 MB'dan büyük."])
                 }
-                _ = try await SupabaseService.shared.uploadDocument(
+                let path = try await SupabaseService.shared.uploadDocument(
                     data, filename: url.lastPathComponent)
-                self.bloodPdfState = .done
                 await self.loadDocuments()
+                if parseBlood {
+                    do {
+                        let count = try await SupabaseService.shared
+                            .parseBloodPdf(data: data, pdfPath: path)
+                        self.bloodReport = await SupabaseService.shared.fetchBloodReport()
+                        self.bloodParseNote = "\(count) test değeri okundu"
+                    } catch {
+                        // Dosya kaydedildi; yalnızca ayrıştırma düştü.
+                        self.bloodPdfError = error.localizedDescription
+                    }
+                }
+                self.bloodPdfState = .done
             } catch {
                 AuthLog.warn("uploadDocument", error)
                 self.bloodPdfState = .idle
                 self.bloodPdfError = "PDF yüklenemedi: \(error.localizedDescription)"
             }
         }
+    }
+
+    func loadBloodReport() async {
+        bloodReport = await SupabaseService.shared.fetchBloodReport()
     }
 
     func deleteDocument(_ file: SupabaseService.DocumentFile) {

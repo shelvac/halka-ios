@@ -176,9 +176,13 @@ struct BloodTest: Identifiable {
     var unit: String
     var refLow: Double
     var refHigh: Double
+    /// Rapor iki uçlu referans vermediyse durum/bant gösterilmez —
+    /// bilmediğimiz aralıkta "Normal" demek yanıltıcı olurdu.
+    var hasRange: Bool = true
 
     var status: String {
-        value < refLow ? "Düşük" : value > refHigh ? "Yüksek" : "Normal"
+        guard hasRange else { return "—" }
+        return value < refLow ? "Düşük" : value > refHigh ? "Yüksek" : "Normal"
     }
     /// Position of the value inside the reference band, clamped like the prototype.
     var refPosition: Double {
@@ -196,6 +200,24 @@ struct BloodGroup: Identifiable {
     let id = UUID()
     var name: String
     var tests: [BloodTest]
+}
+
+/// Son tahlil raporu — `blood_tests` tablosundan (PDF'ten AI ayrıştırması).
+struct BloodReport {
+    var takenAt: String          // "yyyy-MM-dd"
+    var lab: String?
+    var groups: [BloodGroup]
+
+    var counts: (total: Int, ok: Int, warn: Int) {
+        var ok = 0, warn = 0, total = 0
+        for group in groups {
+            for test in group.tests where test.hasRange {
+                total += 1
+                if test.status == "Normal" { ok += 1 } else { warn += 1 }
+            }
+        }
+        return (total, ok, warn)
+    }
 }
 
 /// Takviye/ilaç — `supplements` tablosunda kalıcı (0001 şeması).

@@ -496,6 +496,25 @@ final class AppModelTests: XCTestCase {
         let high = BloodTest(name: "MPV", value: 13.3, unit: "fL", refLow: 7.2, refHigh: 11.7)
         XCTAssertEqual(high.status, "Yüksek")
         XCTAssertEqual(high.refPosition, 0.98, accuracy: 0.001) // clamp üst sınırı
+        // Referans aralığı olmayan test için durum uydurulmaz.
+        let noRange = BloodTest(name: "HbA1c", value: 5.2, unit: "%",
+                                refLow: 0, refHigh: 0, hasRange: false)
+        XCTAssertEqual(noRange.status, "—")
+    }
+
+    /// Rapor sayaçları yalnızca aralığı bilinen testleri sayar.
+    func testBloodReportCountsSkipTestsWithoutRange() {
+        let report = BloodReport(takenAt: "2026-08-10", lab: "Lab", groups: [
+            BloodGroup(name: "Biyokimya", tests: [
+                BloodTest(name: "Glukoz", value: 90, unit: "mg/dL", refLow: 70, refHigh: 100),
+                BloodTest(name: "MPV", value: 13, unit: "fL", refLow: 7.2, refHigh: 11.7),
+                BloodTest(name: "X", value: 1, unit: "", refLow: 0, refHigh: 0, hasRange: false)
+            ])
+        ])
+        let counts = report.counts
+        XCTAssertEqual(counts.total, 2)
+        XCTAssertEqual(counts.ok, 1)
+        XCTAssertEqual(counts.warn, 1)
     }
 
     // MARK: Menüden öğün kaldırma

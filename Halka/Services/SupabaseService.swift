@@ -998,6 +998,78 @@ final class SupabaseService {
             .execute()
     }
 
+    // MARK: Kan tahlili değerleri (blood_tests) — PDF'ten AI ayrıştırması.
+
+    /// PDF'i sunucuda Gemini'ye okutur; değerler blood_tests'e yazılır.
+    /// Kaç değer okunduğunu döner. Kota sunucuda (5/gün).
+    func parseBloodPdf(data: Data, pdfPath: String) async throws -> Int {
+        guard let client else { throw MealAnalysisError.failed("Sunucu bağlantısı yok.") }
+        let body: [String: AnyJSON] = [
+            "pdf": .string(data.base64EncodedString()),
+            "pdf_path": .string(pdfPath)
+        ]
+        let response = try await client.functions.invoke(
+            "parse-blood-pdf",
+            options: FunctionInvokeOptions(body: body)
+        ) { data, urlResponse in
+            (data, (urlResponse as? HTTPURLResponse)?.statusCode ?? 200)
+        }
+        let (payload, status) = response
+        struct Reply: Decodable { let count: Int?; let error: String? }
+        let decoded = try? JSONDecoder().decode(Reply.self, from: payload)
+        guard status < 400 else {
+            let text = decoded?.error ?? "Tahlil okunamadı."
+            throw status == 429 ? MealAnalysisError.quota(text)
+                                : MealAnalysisError.failed(text)
+        }
+        return decoded?.count ?? 0
+    }
+
+    /// En son raporun değerleri, gruplanmış hâlde.
+    func fetchBloodReport() async -> BloodReport? {
+        guard let client, let user = await currentUser() else { return nil }
+        struct Row: Decodable {
+            let taken_at: String
+            let lab: String?
+            let group_name: String?
+            let name: String
+            let value: Double
+            let unit: String
+            let ref_low: Double?
+            let ref_high: Double?
+        }
+        do {
+            let rows: [Row] = try await client.from("blood_tests")
+                .select("taken_at,lab,group_name,name,value,unit,ref_low,ref_high")
+                .eq("user_id", value: user.id.uuidString)
+                .order("taken_at", ascending: false)
+                .limit(200)
+                .execute()
+                .value
+            guard let latest = rows.first?.taken_at else { return nil }
+            let report = rows.filter { $0.taken_at == latest }
+            let order = ["Hemogram", "Biyokimya", "Hormonlar",
+                         "Vitaminler", "Lipid", "Diğer"]
+            var byGroup: [String: [BloodTest]] = [:]
+            for row in report {
+                let test = BloodTest(name: row.name, value: row.value, unit: row.unit,
+                                     refLow: row.ref_low ?? 0,
+                                     refHigh: row.ref_high ?? 0,
+                                     hasRange: row.ref_low != nil && row.ref_high != nil
+                                               && (row.ref_high ?? 0) > (row.ref_low ?? 0))
+                byGroup[row.group_name ?? "Diğer", default: []].append(test)
+            }
+            let groups = byGroup
+                .sorted { (order.firstIndex(of: $0.key) ?? .max, $0.key)
+                        < (order.firstIndex(of: $1.key) ?? .max, $1.key) }
+                .map { BloodGroup(name: $0.key, tests: $0.value) }
+            return BloodReport(takenAt: latest, lab: report.first?.lab, groups: groups)
+        } catch {
+            AuthLog.warn("fetchBloodReport", error)
+            return nil
+        }
+    }
+
     // MARK: Takviyeler (supplements, 0001) — kişiye özel, kalıcı.
 
     private struct SupplementRow: Decodable {

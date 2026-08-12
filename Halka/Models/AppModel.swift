@@ -288,6 +288,10 @@ final class AppModel {
     var documents: [SupabaseService.DocumentFile] = []
     var documentsBusy = false
     var documentsError: String? = nil
+    /// Son tahlil raporunun değerleri (PDF'ten AI ayrıştırması).
+    var bloodReport: BloodReport? = nil
+    /// "12 değer okundu" gibi son ayrıştırma özeti.
+    var bloodParseNote: String? = nil
 
     // MARK: Social
     var friends: [Friend] = Demo.initialFriends()
@@ -443,6 +447,8 @@ final class AppModel {
         bloodPdfState = .idle
         bloodPdfName = ""
         bloodPdfError = nil
+        bloodReport = nil
+        bloodParseNote = nil
         messages = Demo.initialMessages()
         coachDraft = ""
         coachTyping = false
