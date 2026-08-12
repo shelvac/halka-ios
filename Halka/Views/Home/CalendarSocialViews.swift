@@ -233,19 +233,22 @@ struct SocialPane: View {
     var body: some View {
         @Bindable var model = model
         VStack(spacing: 12) {
-            challengeCard
-            leaderboardCard
+            // Kod kartı: arkadaşlık kodla kurulur — kodunu paylaşan
+            // rızasını göstermiş olur; e-postayla kişi aranamaz.
+            myCodeCard
 
             HStack(spacing: 8) {
-                TextField("Arkadaş kullanıcı adı…", text: $model.friendNameDraft)
+                TextField("Arkadaşının kodu (örn. X7K2P9)", text: $model.friendCodeDraft)
                     .font(.h(13, .semibold))
                     .foregroundStyle(Color.ink)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.characters)
                     .padding(.horizontal, 16)
                     .frame(height: 46)
                     .background(Color.white)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .shadow(color: Color.ink.opacity(0.05), radius: 4, y: 2)
-                Button { model.addFriend() } label: {
+                Button { model.submitFriendCode() } label: {
                     Text("+ Ekle")
                         .font(.h(13))
                         .foregroundStyle(.white)
@@ -258,57 +261,49 @@ struct SocialPane: View {
                 .buttonStyle(.plain)
             }
 
-            DashedAction(title: "+ Yeni challenge başlat")
+            if let note = model.friendAddNote {
+                Text(note)
+                    .font(.h(12, .bold))
+                    .foregroundStyle(Color.greenDark)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if let error = model.friendAddError {
+                Text(error)
+                    .font(.h(12, .bold))
+                    .foregroundStyle(Color.coralDark)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            friendsCard
         }
+        .task { await model.refreshFriends() }
     }
 
-    private var challengeCard: some View {
-        VStack(spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("AKTİF CHALLENGE")
-                        .font(.h(10))
-                        .foregroundStyle(Color.gold)
-                        .kerning(1.5)
-                    Text("2L Su · 7 Gün")
-                        .font(.h(16))
-                        .foregroundStyle(.white)
-                        .padding(.top, 2)
-                    Text("3 katılımcı · 2 gün kaldı")
-                        .font(.h(11, .semibold))
-                        .foregroundStyle(.white.opacity(0.6))
-                }
-                Spacer()
-                ZStack {
-                    Circle().stroke(Color.white.opacity(0.15), lineWidth: 5)
-                    Circle()
-                        .trim(from: 0, to: 5.0 / 7.0)
-                        .stroke(Color.waterBlue, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                }
-                .frame(width: 36, height: 36)
+    private var myCodeCard: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("SENİN KODUN")
+                    .font(.h(10))
+                    .foregroundStyle(Color.gold)
+                    .kerning(1.5)
+                Text(model.friendCode.isEmpty ? "······" : model.friendCode)
+                    .font(.h(22))
+                    .foregroundStyle(.white)
+                    .kerning(3)
+                    .monospacedDigit()
+                Text("Arkadaşın bu kodu girince eşleşirsiniz — yalnızca günlük aktivite özetinizi görürsünüz.")
+                    .font(.h(10.5, .semibold))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .lineSpacing(2)
             }
-            VStack(spacing: 9) {
-                ForEach(Demo.challengeRows, id: \.0) { row in
-                    HStack(spacing: 10) {
-                        Text(row.0)
-                            .font(.h(11))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .frame(width: 60, alignment: .leading)
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(Color.white.opacity(0.12))
-                                Capsule()
-                                    .fill(row.0 == "Sen" ? Color.gold : Color.waterBlue)
-                                    .frame(width: geo.size.width * CGFloat(row.1) / 7)
-                            }
-                        }
-                        .frame(height: 6)
-                        Text("\(row.1)/7")
-                            .font(.h(10.5))
-                            .foregroundStyle(.white.opacity(0.6))
-                            .frame(width: 28, alignment: .trailing)
-                    }
+            Spacer()
+            if !model.friendCode.isEmpty {
+                ShareLink(item: "halka'da arkadaş olalım! Kodum: \(model.friendCode)") {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(Color.white.opacity(0.15)))
                 }
             }
         }
@@ -318,57 +313,98 @@ struct SocialPane: View {
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
-    private var leaderboardCard: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("Liderlik Tablosu")
-                    .font(.h(15))
+    @ViewBuilder
+    private var friendsCard: some View {
+        if model.friends.isEmpty {
+            VStack(spacing: 6) {
+                Image(systemName: "person.2")
+                    .font(.system(size: 22, weight: .light))
+                    .foregroundStyle(Color.chevron)
+                Text("Henüz arkadaşın yok")
+                    .font(.h(13))
                     .foregroundStyle(Color.ink)
-                Spacer()
-                Text("\(model.currentMonthName) · halka puanı")
-                    .font(.h(10))
+                Text("Kodunu paylaş ya da arkadaşının kodunu gir — birbirinizin günlük hareketini görüp motive olun.")
+                    .font(.h(11.5, .semibold))
                     .foregroundStyle(Color.sub)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
             }
-            .padding(.top, 10)
-            .padding(.bottom, 4)
-
-            ForEach(Array(model.leaderboard.enumerated()), id: \.element.id) { i, friend in
-                let rankColor: Color = i == 0 ? .goldDark : i == 1 ? .sub : i == 2 ? .bronze : .chevron
-                HStack(spacing: 11) {
-                    Text("\(i + 1)")
-                        .font(.h(13))
-                        .foregroundStyle(rankColor)
-                        .frame(width: 20)
-                    InitialsAvatar(text: String(friend.name.prefix(1)).uppercased(), index: i, size: 36)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(friend.name)
-                            .font(.h(13))
-                            .foregroundStyle(Color.ink)
-                        Text("\(friend.streak) gün seri")
-                            .font(.h(10, .bold))
-                            .foregroundStyle(Color.sub)
-                    }
-                    Spacer()
-                    Text("\(friend.points)")
-                        .font(.h(14))
+            .padding(.horizontal, 20)
+            .padding(.vertical, 26)
+            .frame(maxWidth: .infinity)
+            .card(20)
+        } else {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Arkadaşların")
+                        .font(.h(15))
                         .foregroundStyle(Color.ink)
+                    Spacer()
+                    Text("bugünün özeti")
+                        .font(.h(10))
+                        .foregroundStyle(Color.sub)
                 }
-                .padding(.vertical, 12)
-                .padding(.horizontal, friend.isMe ? 10 : 0)
-                .background(
-                    friend.isMe
-                        ? AnyView(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.coralBg))
-                        : AnyView(Color.clear)
-                )
-                .overlay(alignment: .top) {
-                    if i > 0 && !friend.isMe {
-                        Rectangle().fill(Color.hairline).frame(height: 1)
+                .padding(.top, 10)
+                .padding(.bottom, 4)
+
+                ForEach(Array(model.friends.enumerated()), id: \.element.id) { i, friend in
+                    HStack(spacing: 11) {
+                        InitialsAvatar(text: String(friend.name.prefix(1)).uppercased(),
+                                       index: i, size: 36)
+                            .overlay(alignment: .bottomTrailing) {
+                                // Bugün uygulamayı açtıysa yeşil nokta.
+                                if friend.activeToday {
+                                    Circle().fill(Color.green)
+                                        .frame(width: 10, height: 10)
+                                        .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                                }
+                            }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(friend.name)
+                                .font(.h(13))
+                                .foregroundStyle(Color.ink)
+                            Text(Self.statsLine(friend))
+                                .font(.h(10.5, .bold))
+                                .foregroundStyle(Color.sub)
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 12)
+                    .overlay(alignment: .top) {
+                        if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
+                    }
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            model.removeFriend(friend)
+                        } label: {
+                            Label("Arkadaşlıktan çıkar", systemImage: "person.badge.minus")
+                        }
                     }
                 }
             }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 8)
+            .card(22)
         }
-        .padding(.horizontal, 18)
-        .padding(.bottom, 8)
-        .card(22)
+    }
+
+    private static func statsLine(_ friend: FriendOverview) -> String {
+        guard friend.activeToday || friend.exerciseMin > 0 || friend.steps > 0
+                || friend.waterML > 0 || friend.kcal > 0 else {
+            return "Bugün henüz aktivite yok"
+        }
+        var parts: [String] = []
+        if friend.exerciseMin > 0 { parts.append("\(friend.exerciseMin) dk egzersiz") }
+        if friend.steps > 0 { parts.append("\(Self.grouped(friend.steps)) adım") }
+        if friend.waterML > 0 { parts.append("\(Self.grouped(friend.waterML)) ml su") }
+        if friend.kcal > 0 { parts.append("\(Self.grouped(friend.kcal)) kcal") }
+        return parts.isEmpty ? "Bugün uygulamayı açtı" : parts.joined(separator: " · ")
+    }
+
+    private static func grouped(_ value: Int) -> String {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.locale = Locale(identifier: "tr_TR")
+        return f.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 }

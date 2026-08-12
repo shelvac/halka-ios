@@ -60,6 +60,7 @@ extension AppModel {
             await self?.loadBodyMeasurements()
             await self?.loadSupplements()
             await self?.loadBloodReport()
+            await self?.loadSocial()
             await self?.refreshFromHealthKit()
         }
     }

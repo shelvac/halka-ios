@@ -296,8 +296,14 @@ final class AppModel {
     var bloodParseNote: String? = nil
 
     // MARK: Social
-    var friends: [Friend] = Demo.initialFriends()
-    var friendNameDraft = ""
+    /// Arkadaşlar (E7) — sunucudan, gerçek. Demo liste kaldırıldı.
+    var friends: [FriendOverview] = []
+    /// Benim paylaşacağım arkadaş kodu.
+    var friendCode = ""
+    var friendCodeDraft = ""
+    var friendAddNote: String? = nil
+    var friendAddError: String? = nil
+    var friendsBusy = false
 
     // MARK: Dietitian marketplace
     var marketView: MarketView = .list
@@ -396,6 +402,13 @@ final class AppModel {
         exerciseBase = 0
         extraExerciseMin = 0
         activeDayKey = todayKey
+        // Arkadaşlar kullanıcıya özel (E7).
+        friends = []
+        friendCode = ""
+        friendCodeDraft = ""
+        friendAddNote = nil
+        friendAddError = nil
+
         // Antrenman programları kullanıcıya özel (0030).
         programs = []
         workoutLog = []

@@ -7,17 +7,9 @@ extension AppModel {
     // MARK: Social
 
     /// Leaderboard: friends + the user, ranked by ring points.
-    var leaderboard: [Friend] {
-        (friends + [Friend(name: "Sen", points: 875, streak: 12, isMe: true)])
-            .sorted { $0.points > $1.points }
-    }
-
-    func addFriend() {
-        let name = friendNameDraft.trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty else { return }
-        friends.append(Friend(name: name, points: 0, streak: 0))
-        friendNameDraft = ""
-    }
+    // Not: demo leaderboard/challenge ve sahte arkadaş ekleme kaldırıldı —
+    // Arkadaşlar artık gerçek (E7): arkadaş kodu + friend_overview RPC.
+    // Gerçek akışlar AppModel+Social.swift'te.
 
     // MARK: Marketplace
 

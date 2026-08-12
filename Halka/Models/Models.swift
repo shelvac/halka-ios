@@ -19,7 +19,9 @@ enum HomeSegment: CaseIterable { case today, calendar, social, dietitian
     /// bölümleri lansman sürümünde GÖRÜNMEZ — gerçek altyapıları yapılınca
     /// bu listeye geri eklenecekler. App Store incelemesine sahte içerikle
     /// çıkılmaz.
-    static let mvpCases: [HomeSegment] = [.today, .calendar]
+    /// Arkadaşlar E7 ile gerçek oldu ve MVP'ye geri döndü; Diyetisyen
+    /// hâlâ demo, kapsam dışı.
+    static let mvpCases: [HomeSegment] = [.today, .calendar, .social]
 }
 
 // MARK: - Rings
@@ -243,12 +245,16 @@ enum ProcessState { case idle, processing, done }
 
 // MARK: - Social
 
-struct Friend: Identifiable {
-    let id = UUID()
+/// Arkadaşın günlük aktivite özeti (E7) — `friend_overview` RPC'sinden.
+/// Yalnızca bu alanlar paylaşılır; öğün/ölçüm/tahlil asla.
+struct FriendOverview: Identifiable, Equatable {
+    let id: UUID
     var name: String
-    var points: Int
-    var streak: Int
-    var isMe: Bool = false
+    var exerciseMin: Int
+    var waterML: Int
+    var steps: Int
+    var kcal: Int
+    var activeToday: Bool
 }
 
 // MARK: - Dietitian marketplace

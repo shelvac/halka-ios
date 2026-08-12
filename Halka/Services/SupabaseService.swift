@@ -998,6 +998,74 @@ final class SupabaseService {
             .execute()
     }
 
+    // MARK: Arkadaşlar (E7) — kod ile eşleşme, günlük özet.
+
+    func fetchFriendCode() async -> String? {
+        guard let client, let user = await currentUser() else { return nil }
+        struct Row: Decodable { let friend_code: String? }
+        let rows: [Row]? = try? await client.from("users")
+            .select("friend_code")
+            .eq("id", value: user.id.uuidString)
+            .limit(1)
+            .execute()
+            .value
+        return rows?.first?.friend_code
+    }
+
+    /// Kodla arkadaş ekler; başarıda arkadaşın adını döner.
+    func addFriend(code: String) async -> Result<String, String> {
+        guard let client else { return .failure("Sunucu bağlantısı yok.") }
+        struct Reply: Decodable { let ok: Bool; let name: String?; let err: String? }
+        do {
+            let reply: Reply = try await client
+                .rpc("add_friend", params: ["p_code": code])
+                .execute()
+                .value
+            return reply.ok ? .success(reply.name ?? "Arkadaşın")
+                            : .failure(reply.err ?? "Eklenemedi.")
+        } catch {
+            AuthLog.warn("addFriend", error)
+            return .failure("Eklenemedi — bağlantını kontrol edip tekrar dene.")
+        }
+    }
+
+    func fetchFriends() async -> [FriendOverview] {
+        guard let client else { return [] }
+        struct Row: Decodable {
+            let friend_id: String
+            let name: String
+            let exercise_min: Int
+            let water_ml: Int
+            let steps: Int
+            let nutrition_kcal: Int
+            let active_today: Bool
+        }
+        do {
+            let rows: [Row] = try await client
+                .rpc("friend_overview")
+                .execute()
+                .value
+            return rows.compactMap { row in
+                guard let id = UUID(uuidString: row.friend_id) else { return nil }
+                return FriendOverview(id: id, name: row.name,
+                                      exerciseMin: row.exercise_min,
+                                      waterML: row.water_ml,
+                                      steps: row.steps, kcal: row.nutrition_kcal,
+                                      activeToday: row.active_today)
+            }
+        } catch {
+            AuthLog.warn("fetchFriends", error)
+            return []
+        }
+    }
+
+    func removeFriend(id: UUID) async {
+        guard let client else { return }
+        _ = try? await client
+            .rpc("remove_friend", params: ["p_friend": id.uuidString.lowercased()])
+            .execute()
+    }
+
     // MARK: Kan tahlili değerleri (blood_tests) — PDF'ten AI ayrıştırması.
 
     /// PDF'i sunucuda Gemini'ye okutur; değerler blood_tests'e yazılır.

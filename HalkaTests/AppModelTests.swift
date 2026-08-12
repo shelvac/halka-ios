@@ -437,6 +437,25 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(message.contains("teapot is on fire"))
     }
 
+    // MARK: Arkadaşlar (E7)
+
+    @MainActor
+    func testFriendsStartEmptyAndRemoveLocally() {
+        let model = AppModel()
+        XCTAssertTrue(model.friends.isEmpty)          // demo liste kalmadı
+        let friend = FriendOverview(id: UUID(), name: "Hülya", exerciseMin: 30,
+                                    waterML: 1500, steps: 6000, kcal: 900,
+                                    activeToday: true)
+        model.friends = [friend]
+        model.removeFriend(friend)
+        XCTAssertTrue(model.friends.isEmpty)
+
+        // Boş kod gönderilmez, hata durumu değişmez.
+        model.friendCodeDraft = "   "
+        model.submitFriendCode()
+        XCTAssertNil(model.friendAddError)
+    }
+
     // MARK: Onboarding (US-026)
 
     /// Akış kaldığı yerden sürer: ilk eksik alanın adımından başlar.
