@@ -198,13 +198,16 @@ struct BloodGroup: Identifiable {
     var tests: [BloodTest]
 }
 
-struct Supplement: Identifiable {
-    let id = UUID()
+/// Takviye/ilaç — `supplements` tablosunda kalıcı (0001 şeması).
+/// `takenDates` gün anahtarları ("yyyy-MM-dd"); `taken` bugünün türevi.
+struct Supplement: Identifiable, Equatable {
+    var id = UUID()
     var name: String
     var dose: String
     var time: String
     var notify: Bool
     var taken: Bool
+    var takenDates: [String] = []
 }
 
 enum HealthPane { case body, blood, supplements, profile }

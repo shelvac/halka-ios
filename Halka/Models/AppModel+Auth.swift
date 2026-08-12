@@ -52,6 +52,7 @@ extension AppModel {
             await self?.loadCoachMessages()
             self?.planPreferences = await SupabaseService.shared.fetchPlanPreferences()
             await self?.loadBodyMeasurements()
+            await self?.loadSupplements()
             await self?.refreshFromHealthKit()
         }
     }

@@ -277,7 +277,8 @@ final class AppModel {
     var bodyError: String? = nil
     /// Onay bekleyen tartı fotoğrafı (kaydedilince yüklenir).
     var pendingScalePhoto: UIImage? = nil
-    var supplements: [Supplement] = Demo.initialSupplements
+    /// Takviyeler — sunucudan yüklenir (demo liste kaldırıldı), BOŞ başlar.
+    var supplements: [Supplement] = []
     var bloodPdfState: ProcessState = .idle
     var bloodPdfName = ""
     var bloodPdfError: String? = nil
@@ -432,6 +433,7 @@ final class AppModel {
         bodyMeasurements = []
         pendingScalePhoto = nil
         bodyError = nil
+        supplements = []
         documents = []
         documentsBusy = false
         documentsError = nil

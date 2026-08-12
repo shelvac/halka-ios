@@ -11,15 +11,59 @@ extension AppModel {
         return "Bugün \(taken)/\(supplements.count) alındı · \(notif) hatırlatıcı açık"
     }
 
+    func loadSupplements() async {
+        supplements = await SupabaseService.shared.fetchSupplements()
+    }
+
+    func addSupplement(name: String, dose: String, time: String, notify: Bool) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        let supplement = Supplement(name: trimmed, dose: dose, time: time,
+                                    notify: false, taken: false)
+        supplements.append(supplement)
+        persistSupplement(supplement)
+        // Bildirim izni ve planlaması mevcut zil akışından geçsin.
+        if notify { toggleSupplementNotify(supplement.id) }
+    }
+
+    func deleteSupplement(_ id: UUID) {
+        if let supp = supplements.first(where: { $0.id == id }), supp.notify {
+            UNUserNotificationCenter.current()
+                .removePendingNotificationRequests(withIdentifiers: ["supp-\(id.uuidString)"])
+        }
+        supplements.removeAll { $0.id == id }
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+        else { return }
+        Task { await SupabaseService.shared.deleteSupplement(id: id) }
+    }
+
+    private func persistSupplement(_ supplement: Supplement) {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+        else { return }
+        Task { await SupabaseService.shared.saveSupplement(supplement) }
+    }
+
     func toggleSupplementTaken(_ id: UUID) {
         guard let i = supplements.firstIndex(where: { $0.id == id }) else { return }
         supplements[i].taken.toggle()
+        // Uyum geçmişi gün anahtarıyla tutulur — "bugün alındı" yarın
+        // kendiliğinden sıfırlanır, geçmiş kaybolmaz.
+        let today = todayKey
+        if supplements[i].taken {
+            if !supplements[i].takenDates.contains(today) {
+                supplements[i].takenDates.append(today)
+            }
+        } else {
+            supplements[i].takenDates.removeAll { $0 == today }
+        }
+        persistSupplement(supplements[i])
     }
 
     /// Bell toggle: schedules (or cancels) a real daily local notification at the dose time.
     func toggleSupplementNotify(_ id: UUID) {
         guard let i = supplements.firstIndex(where: { $0.id == id }) else { return }
         supplements[i].notify.toggle()
+        persistSupplement(supplements[i])
         let supp = supplements[i]
         let notifID = "supp-\(supp.id.uuidString)"
         let center = UNUserNotificationCenter.current()
@@ -113,16 +157,6 @@ extension AppModel {
     // görüntüye bakmadan +32 dk yazan bir demoydu; gerçek veri yolları
     // (Apple Health ya da elle giriş) varken sahte aktarım kabul edilemez.
 
-    // MARK: Blood panel summary
-
-    var bloodCounts: (total: Int, ok: Int, warn: Int) {
-        var ok = 0, warn = 0, total = 0
-        for group in Demo.bloodGroups {
-            for test in group.tests {
-                total += 1
-                if test.status == "Normal" { ok += 1 } else { warn += 1 }
-            }
-        }
-        return (total, ok, warn)
-    }
+    // Not: sahte "16 test değeri" özeti kaldırıldı (bloodCounts) — değer
+    // ayrıştırma gelene dek ekran dürüst boş durumda.
 }

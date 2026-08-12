@@ -432,16 +432,16 @@ struct BodyPane: View {
 struct BloodPane: View {
     @Environment(AppModel.self) private var model
     @State private var showImporter = false
+    @State private var showDocuments = false
 
     var body: some View {
-        let counts = model.bloodCounts
         VStack(spacing: 0) {
             // Header card
             VStack(spacing: 0) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Kan Tahlili").font(.h(15)).foregroundStyle(Color.ink)
-                        Text("29.11.2025 · Medicana Ataşehir")
+                        Text("PDF'lerin Belgelerim'de güvenle saklanır")
                             .font(.h(11, .bold))
                             .foregroundStyle(Color.sub)
                     }
@@ -495,102 +495,44 @@ struct BloodPane: View {
                         .padding(.top, 10)
                 }
 
-                HStack(spacing: 14) {
-                    countColumn("Toplam test", "\(counts.total)", .ink)
-                    countColumn("Normal", "\(counts.ok)", .greenDark)
-                    countColumn("Takip gerekli", "\(counts.warn)", .goldDark)
-                    Spacer()
-                }
-                .padding(.top, 12)
-                .overlay(alignment: .top) { Rectangle().fill(Color.hairline).frame(height: 1) }
-                .padding(.top, 14)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 18)
             .card(22)
 
-            // Test groups
-            ForEach(Demo.bloodGroups) { group in
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(group.name)
-                        .font(.h(12))
-                        .foregroundStyle(Color.brown)
-                        .padding(.top, 10)
-                        .padding(.bottom, 4)
-                    ForEach(Array(group.tests.enumerated()), id: \.element.id) { i, test in
-                        testRow(test, topBorder: i > 0)
-                    }
+            // Dürüst durum: sahte 16 test değeri ve uydurma "AI Koç notu"
+            // kaldırıldı. Değer AYRIŞTIRMA henüz yok ve varmış gibi
+            // gösterilmiyor; PDF'ler gerçekten saklanıyor (US-025).
+            VStack(spacing: 8) {
+                Image(systemName: "testtube.2")
+                    .font(.system(size: 22, weight: .light))
+                    .foregroundStyle(Color.chevron)
+                Text("Tahlil değeri takibi yakında")
+                    .font(.h(13))
+                    .foregroundStyle(Color.ink)
+                Text("PDF'ini yükle — Belgelerim'de saklanır ve istediğinde açarsın. Değerlerin otomatik okunup burada izlenmesi üzerinde çalışıyoruz.")
+                    .font(.h(11.5, .semibold))
+                    .foregroundStyle(Color.sub)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                Button { showDocuments = true } label: {
+                    Text("Belgelerim'i Aç")
+                        .font(.h(12, .bold))
+                        .foregroundStyle(Color.coral)
+                        .padding(.top, 4)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .card(20)
-                .padding(.top, 12)
+                .buttonStyle(.plain)
             }
-
-            Text("AI Koç notu: MPV hafif yüksek, D vitamini ve B12 bu panelde yok — bir sonraki tahlilde ekletmeni öneririm. Protein alımın düşüktü; ferritin takibi de faydalı olur.")
-                .font(.h(11.5, .semibold))
-                .foregroundStyle(Color.coralNote)
-                .lineSpacing(3)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background(Color.coralBg)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .padding(.top, 12)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 24)
+            .frame(maxWidth: .infinity)
+            .card(20)
+            .padding(.top, 12)
         }
-    }
-
-    private func countColumn(_ title: String, _ value: String, _ color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.h(10, .bold)).foregroundStyle(Color.faint)
-            Text(value).font(.h(15)).foregroundStyle(color)
+        .sheet(isPresented: $showDocuments) {
+            DocumentsView()
+                .environment(model)
         }
-    }
-
-    private func testRow(_ test: BloodTest, topBorder: Bool) -> some View {
-        let colors = statusColors(test.status)
-        return HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(test.name)
-                    .font(.h(13, .bold))
-                    .foregroundStyle(Color.inkBody)
-                Text("Referans: \(refText(test))")
-                    .font(.h(10, .bold))
-                    .foregroundStyle(Color.faint)
-                // Reference band with position dot
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.hairline2).frame(height: 5)
-                        Circle()
-                            .fill(test.status == "Normal" ? Color.green : Color(hex: 0xD9962E))
-                            .frame(width: 10, height: 10)
-                            .overlay(Circle().strokeBorder(.white, lineWidth: 2))
-                            .offset(x: geo.size.width * test.refPosition - 5)
-                    }
-                }
-                .frame(maxWidth: 150)
-                .frame(height: 10)
-                .padding(.top, 3)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
-                (Text(test.display).font(.h(15)).foregroundColor(.ink)
-                 + Text(" \(test.unit)").font(.h(10, .bold)).foregroundColor(.faint))
-                StatusChip(text: test.status, bg: colors.bg, fg: colors.fg)
-            }
-        }
-        .padding(.vertical, 12)
-        .overlay(alignment: .top) {
-            if topBorder { Rectangle().fill(Color.hairline).frame(height: 1) }
-        }
-    }
-
-    private func refText(_ test: BloodTest) -> String {
-        func fmt(_ v: Double) -> String {
-            v.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(v)) : String(v)
-        }
-        return "\(fmt(test.refLow)) – \(fmt(test.refHigh)) \(test.unit)"
     }
 }
 
@@ -598,6 +540,11 @@ struct BloodPane: View {
 
 struct SupplementsPane: View {
     @Environment(AppModel.self) private var model
+    @State private var adding = false
+    @State private var newName = ""
+    @State private var newDose = ""
+    @State private var newTime = "09:00"
+    @State private var newNotify = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -607,7 +554,9 @@ struct SupplementsPane: View {
                     .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(Color.gold)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(model.supplementSummary)
+                    Text(model.supplements.isEmpty
+                         ? "Takviye ve ilaçlarını buradan takip et"
+                         : model.supplementSummary)
                         .font(.h(13))
                         .foregroundStyle(.white)
                     Text("Zili açık olanlara saatinde bildirim gider")
@@ -620,6 +569,28 @@ struct SupplementsPane: View {
             .padding(.vertical, 16)
             .background(Color.ink)
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+            // Demo liste kaldırıldı: boş başlar, kullanıcının kendi
+            // takviyeleri sunucuda kalıcı (supplements, 0001).
+            if model.supplements.isEmpty {
+                VStack(spacing: 6) {
+                    Image(systemName: "pills")
+                        .font(.system(size: 20, weight: .light))
+                        .foregroundStyle(Color.chevron)
+                    Text("Henüz takviye eklemedin")
+                        .font(.h(12.5, .bold))
+                        .foregroundStyle(Color.sub)
+                    Text("Vitamin, mineral veya ilacını ekle; günlük alım takibi ve hatırlatıcı buradan çalışır.")
+                        .font(.h(11, .semibold))
+                        .foregroundStyle(Color.faint)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 22)
+                .frame(maxWidth: .infinity)
+                .card(18)
+                .padding(.top, 10)
+            }
 
             ForEach(model.supplements) { supp in
                 HStack(spacing: 12) {
@@ -662,11 +633,97 @@ struct SupplementsPane: View {
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .shadow(color: Color.ink.opacity(0.05), radius: 4, y: 2)
                 .padding(.top, 10)
+                .contextMenu {
+                    Button(role: .destructive) {
+                        model.deleteSupplement(supp.id)
+                    } label: {
+                        Label("Sil", systemImage: "trash")
+                    }
+                }
             }
 
-            DashedAction(title: "+ Takviye / ilaç ekle")
-                .padding(.top, 10)
+            Button { adding = true } label: {
+                DashedAction(title: "+ Takviye / ilaç ekle")
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 10)
         }
+        .sheet(isPresented: $adding) { addSheet }
+    }
+
+    private var addSheet: some View {
+        ZStack {
+            Color.bgApp.ignoresSafeArea()
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Text("Takviye / ilaç ekle")
+                        .font(.h(15))
+                        .foregroundStyle(Color.ink)
+                    Spacer()
+                }
+                .overlay(alignment: .trailing) {
+                    Button("Vazgeç") { adding = false }
+                        .font(.h(13))
+                        .foregroundStyle(Color.sub)
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 18)
+                .padding(.bottom, 14)
+
+                VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        addField("Ad", text: $newName, placeholder: "D Vitamini")
+                        Rectangle().fill(Color.hairline).frame(height: 1)
+                        addField("Doz", text: $newDose, placeholder: "1000 IU · 1 kapsül")
+                        Rectangle().fill(Color.hairline).frame(height: 1)
+                        addField("Saat", text: $newTime, placeholder: "09:00")
+                        Rectangle().fill(Color.hairline).frame(height: 1)
+                        Toggle(isOn: $newNotify) {
+                            Text("Saatinde hatırlat")
+                                .font(.h(12.5, .bold))
+                                .foregroundStyle(Color.inkBody)
+                        }
+                        .tint(Color.coral)
+                        .padding(.vertical, 10)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+                    .card(18)
+
+                    Button {
+                        model.addSupplement(name: newName, dose: newDose,
+                                            time: newTime, notify: newNotify)
+                        newName = ""; newDose = ""; newTime = "09:00"; newNotify = false
+                        adding = false
+                    } label: {
+                        Text("Ekle").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.plain)
+                    .coralButton()
+                    .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                .padding(.horizontal, 18)
+                Spacer()
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
+    private func addField(_ label: String, text: Binding<String>,
+                          placeholder: String) -> some View {
+        HStack(spacing: 10) {
+            Text(label)
+                .font(.h(12.5, .bold))
+                .foregroundStyle(Color.inkBody)
+            Spacer()
+            TextField(placeholder, text: text)
+                .multilineTextAlignment(.trailing)
+                .font(.h(13, .semibold))
+                .foregroundStyle(Color.ink)
+                .frame(width: 170)
+        }
+        .padding(.vertical, 12)
     }
 }
 

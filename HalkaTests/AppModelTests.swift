@@ -437,6 +437,34 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(message.contains("teapot is on fire"))
     }
 
+    // MARK: Takviyeler (kalıcı, kişiye özel)
+
+    @MainActor
+    func testSupplementsStartEmptyAndTrackTakenDates() {
+        let model = AppModel()
+        XCTAssertTrue(model.supplements.isEmpty)       // demo liste kalmadı
+
+        model.addSupplement(name: "D Vitamini", dose: "1000 IU",
+                            time: "09:00", notify: false)
+        XCTAssertEqual(model.supplements.count, 1)
+        let id = model.supplements[0].id
+
+        model.toggleSupplementTaken(id)
+        XCTAssertTrue(model.supplements[0].taken)
+        XCTAssertEqual(model.supplements[0].takenDates, [model.todayKey])
+
+        model.toggleSupplementTaken(id)
+        XCTAssertFalse(model.supplements[0].taken)
+        XCTAssertTrue(model.supplements[0].takenDates.isEmpty)
+
+        model.deleteSupplement(id)
+        XCTAssertTrue(model.supplements.isEmpty)
+
+        // Boş ad eklenmez.
+        model.addSupplement(name: "   ", dose: "", time: "09:00", notify: false)
+        XCTAssertTrue(model.supplements.isEmpty)
+    }
+
     // MARK: Kan tahlili durumları
 
     func testBloodTestStatusThresholds() {

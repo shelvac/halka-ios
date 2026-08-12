@@ -998,6 +998,69 @@ final class SupabaseService {
             .execute()
     }
 
+    // MARK: Takviyeler (supplements, 0001) — kişiye özel, kalıcı.
+
+    private struct SupplementRow: Decodable {
+        let id: String
+        let name: String
+        let dose: String
+        let time_of_day: String
+        let notify: Bool
+        let taken_dates: [String]
+    }
+
+    func fetchSupplements() async -> [Supplement] {
+        guard let client, let user = await currentUser() else { return [] }
+        let today = Self.dayFormatter.string(from: Date())
+        do {
+            let rows: [SupplementRow] = try await client.from("supplements")
+                .select("id,name,dose,time_of_day,notify,taken_dates")
+                .eq("user_id", value: user.id.uuidString)
+                .order("time_of_day")
+                .execute()
+                .value
+            return rows.map {
+                Supplement(id: UUID(uuidString: $0.id) ?? UUID(),
+                           name: $0.name, dose: $0.dose, time: $0.time_of_day,
+                           notify: $0.notify,
+                           taken: $0.taken_dates.contains(today),
+                           takenDates: $0.taken_dates)
+            }
+        } catch {
+            AuthLog.warn("fetchSupplements", error)
+            return []
+        }
+    }
+
+    func saveSupplement(_ supplement: Supplement) async {
+        guard let client, let user = await currentUser() else { return }
+        let payload: [String: AnyJSON] = [
+            "id": .string(supplement.id.uuidString.lowercased()),
+            "user_id": .string(user.id.uuidString.lowercased()),
+            "name": .string(supplement.name),
+            "dose": .string(supplement.dose),
+            "time_of_day": .string(supplement.time),
+            "notify": .bool(supplement.notify),
+            "taken_dates": .array(supplement.takenDates.map { .string($0) })
+        ]
+        do {
+            try await client.from("supplements")
+                .upsert(payload, onConflict: "id")
+                .execute()
+        } catch {
+            AuthLog.warn("saveSupplement", error)
+        }
+    }
+
+    func deleteSupplement(id: UUID) async {
+        guard let client, let user = await currentUser() else { return }
+        _ = try? await client.from("supplements")
+            .delete()
+            .eq("id", value: id.uuidString.lowercased())
+            .eq("user_id", value: user.id.uuidString)
+            .execute()
+    }
+
     // MARK: Kullanıcı antrenman programları (workout_programs, 0030)
 
     private struct ProgramRow: Codable {
