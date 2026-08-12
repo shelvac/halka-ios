@@ -261,6 +261,41 @@ struct SocialPane: View {
                 .buttonStyle(.plain)
             }
 
+            // İsimle arama: bulunan kişiye İSTEK gider, kabul edince
+            // eşleşilir — kodun aksine isimde örtük rıza yok, sessiz
+            // ekleme/izleme olmasın.
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.faint)
+                TextField("Ya da isimle ara (en az 3 harf)…", text: $model.friendSearchQuery)
+                    .font(.h(13, .semibold))
+                    .foregroundStyle(Color.ink)
+                    .autocorrectionDisabled()
+                if !model.friendSearchQuery.isEmpty {
+                    Button { model.friendSearchQuery = "" } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.chevron)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 46)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .shadow(color: Color.ink.opacity(0.05), radius: 4, y: 2)
+            .task(id: model.friendSearchQuery) {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                await model.searchFriendCandidates()
+            }
+
+            if !model.friendSearchResults.isEmpty {
+                searchResultsCard
+            }
+
             if let note = model.friendAddNote {
                 Text(note)
                     .font(.h(12, .bold))
@@ -274,9 +309,103 @@ struct SocialPane: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
+            if !model.friendRequests.isEmpty {
+                requestsCard
+            }
+
             friendsCard
         }
         .task { await model.refreshFriends() }
+    }
+
+    private var searchResultsCard: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(model.friendSearchResults.enumerated()), id: \.element.id) { i, result in
+                HStack(spacing: 11) {
+                    InitialsAvatar(text: String(result.name.prefix(1)).uppercased(),
+                                   index: i, size: 32)
+                    Text(result.name)
+                        .font(.h(13))
+                        .foregroundStyle(Color.ink)
+                    Spacer()
+                    switch result.status {
+                    case .friend:
+                        Text("Arkadaşsınız")
+                            .font(.h(10.5, .bold))
+                            .foregroundStyle(Color.greenDark)
+                    case .sent:
+                        Text("İstek gönderildi")
+                            .font(.h(10.5, .bold))
+                            .foregroundStyle(Color.sub)
+                    case .incoming, .none:
+                        Button { model.sendRequest(to: result) } label: {
+                            Text(result.status == .incoming ? "Kabul et" : "İstek Gönder")
+                                .font(.h(11, .bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .background(Capsule().fill(Color.coral))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 10)
+                .overlay(alignment: .top) {
+                    if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
+        .card(18)
+    }
+
+    private var requestsCard: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Arkadaşlık istekleri")
+                    .font(.h(14))
+                    .foregroundStyle(Color.ink)
+                Spacer()
+            }
+            .padding(.top, 10)
+            .padding(.bottom, 4)
+            ForEach(Array(model.friendRequests.enumerated()), id: \.element.id) { i, request in
+                HStack(spacing: 11) {
+                    InitialsAvatar(text: String(request.name.prefix(1)).uppercased(),
+                                   index: i, size: 32)
+                    Text(request.name)
+                        .font(.h(13))
+                        .foregroundStyle(Color.ink)
+                    Spacer()
+                    Button { model.respondRequest(request, accept: true) } label: {
+                        Text("Kabul")
+                            .font(.h(11, .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(Capsule().fill(Color.green))
+                    }
+                    .buttonStyle(.plain)
+                    Button { model.respondRequest(request, accept: false) } label: {
+                        Text("Reddet")
+                            .font(.h(11, .bold))
+                            .foregroundStyle(Color.sub)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(Capsule().fill(Color.bgField))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.vertical, 10)
+                .overlay(alignment: .top) {
+                    if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+        .card(18)
     }
 
     private var myCodeCard: some View {

@@ -245,6 +245,20 @@ enum ProcessState { case idle, processing, done }
 
 // MARK: - Social
 
+/// İsimle arama sonucu (E7): ad + arkadaşlık durumu. Başka alan sızmaz.
+struct UserSearchResult: Identifiable, Equatable {
+    enum Status: String { case friend, sent, incoming, none }
+    let id: UUID
+    var name: String
+    var status: Status
+}
+
+/// Bana gelen arkadaşlık isteği.
+struct FriendRequest: Identifiable, Equatable {
+    let id: UUID          // gönderenin kullanıcı kimliği
+    var name: String
+}
+
 /// Arkadaşın günlük aktivite özeti (E7) — `friend_overview` RPC'sinden.
 /// Yalnızca bu alanlar paylaşılır; öğün/ölçüm/tahlil asla.
 struct FriendOverview: Identifiable, Equatable {

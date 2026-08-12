@@ -304,6 +304,10 @@ final class AppModel {
     var friendAddNote: String? = nil
     var friendAddError: String? = nil
     var friendsBusy = false
+    /// İsimle arama (0032): sorgu, sonuçlar ve bana gelen istekler.
+    var friendSearchQuery = ""
+    var friendSearchResults: [UserSearchResult] = []
+    var friendRequests: [FriendRequest] = []
 
     // MARK: Dietitian marketplace
     var marketView: MarketView = .list
@@ -408,6 +412,9 @@ final class AppModel {
         friendCodeDraft = ""
         friendAddNote = nil
         friendAddError = nil
+        friendSearchQuery = ""
+        friendSearchResults = []
+        friendRequests = []
 
         // Antrenman programları kullanıcıya özel (0030).
         programs = []

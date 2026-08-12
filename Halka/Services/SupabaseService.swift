@@ -1066,6 +1066,69 @@ final class SupabaseService {
             .execute()
     }
 
+    /// İsimle kullanıcı arama (0032) — yalnızca ad + arkadaşlık durumu döner.
+    func searchUsers(_ query: String) async -> [UserSearchResult] {
+        guard let client else { return [] }
+        struct Row: Decodable { let user_id: String; let name: String; let status: String }
+        do {
+            let rows: [Row] = try await client
+                .rpc("search_users", params: ["p_query": query])
+                .execute()
+                .value
+            return rows.compactMap { row in
+                guard let id = UUID(uuidString: row.user_id) else { return nil }
+                return UserSearchResult(id: id, name: row.name,
+                                        status: UserSearchResult.Status(rawValue: row.status) ?? .none)
+            }
+        } catch {
+            AuthLog.warn("searchUsers", error)
+            return []
+        }
+    }
+
+    /// İstek gönderir; karşı taraf zaten istek gönderdiyse anında eşleşir.
+    func sendFriendRequest(to id: UUID) async -> Result<Bool, String> {
+        guard let client else { return .failure("Sunucu bağlantısı yok.") }
+        struct Reply: Decodable { let ok: Bool; let matched: Bool?; let err: String? }
+        do {
+            let reply: Reply = try await client
+                .rpc("send_friend_request", params: ["p_to": id.uuidString.lowercased()])
+                .execute()
+                .value
+            return reply.ok ? .success(reply.matched ?? false)
+                            : .failure(reply.err ?? "İstek gönderilemedi.")
+        } catch {
+            AuthLog.warn("sendFriendRequest", error)
+            return .failure("İstek gönderilemedi — tekrar dene.")
+        }
+    }
+
+    func respondFriendRequest(from id: UUID, accept: Bool) async {
+        guard let client else { return }
+        struct Params: Encodable { let p_from: String; let p_accept: Bool }
+        _ = try? await client
+            .rpc("respond_friend_request",
+                 params: Params(p_from: id.uuidString.lowercased(), p_accept: accept))
+            .execute()
+    }
+
+    func fetchIncomingRequests() async -> [FriendRequest] {
+        guard let client else { return [] }
+        struct Row: Decodable { let from_id: String; let name: String }
+        do {
+            let rows: [Row] = try await client
+                .rpc("incoming_friend_requests")
+                .execute()
+                .value
+            return rows.compactMap { row in
+                UUID(uuidString: row.from_id).map { FriendRequest(id: $0, name: row.name) }
+            }
+        } catch {
+            AuthLog.warn("fetchIncomingRequests", error)
+            return []
+        }
+    }
+
     // MARK: Kan tahlili değerleri (blood_tests) — PDF'ten AI ayrıştırması.
 
     /// PDF'i sunucuda Gemini'ye okutur; değerler blood_tests'e yazılır.

@@ -16,7 +16,44 @@ extension AppModel {
     func refreshFriends() async {
         friendsBusy = true
         friends = await SupabaseService.shared.fetchFriends()
+        friendRequests = await SupabaseService.shared.fetchIncomingRequests()
         friendsBusy = false
+    }
+
+    /// İsimle arama — en az 3 harf (sunucu da aynı sınırı koyar).
+    func searchFriendCandidates() async {
+        let query = friendSearchQuery.trimmingCharacters(in: .whitespaces)
+        guard query.count >= 3 else { friendSearchResults = []; return }
+        friendSearchResults = await SupabaseService.shared.searchUsers(query)
+    }
+
+    func sendRequest(to result: UserSearchResult) {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+        else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            switch await SupabaseService.shared.sendFriendRequest(to: result.id) {
+            case .success(let matched):
+                self.friendAddError = nil
+                self.friendAddNote = matched
+                    ? "\(result.name) ile eşleştiniz 🎉"
+                    : "\(result.name) kişisine istek gönderildi — kabul edince eşleşeceksiniz."
+                await self.searchFriendCandidates()
+                if matched { await self.refreshFriends() }
+            case .failure(let message):
+                self.friendAddError = message
+            }
+        }
+    }
+
+    func respondRequest(_ request: FriendRequest, accept: Bool) {
+        friendRequests.removeAll { $0.id == request.id }
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+        else { return }
+        Task { [weak self] in
+            await SupabaseService.shared.respondFriendRequest(from: request.id, accept: accept)
+            if accept { await self?.refreshFriends() }
+        }
     }
 
     func submitFriendCode() {
