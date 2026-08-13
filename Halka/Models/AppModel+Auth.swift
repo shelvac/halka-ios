@@ -212,7 +212,7 @@ extension AppModel {
     func signInWithProvider(_ provider: Provider) async {
         authError = nil
         authInfo = nil
-        guard supabaseReady else { login(); return }
+        guard supabaseReady else { screen = .app; return }   // demo modu
         authBusy = true
         defer { authBusy = false }
         let enabled = await SupabaseService.shared.enabledProviders()
