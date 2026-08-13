@@ -7,17 +7,55 @@ import Foundation
 
 extension AppModel {
 
-    /// Girişte bir kez: kendi kodum + arkadaş listem.
+    /// Girişte bir kez: kendi kodum + arkadaş listem + sıralama + challenge'lar.
     func loadSocial() async {
         friendCode = await SupabaseService.shared.fetchFriendCode() ?? ""
         friends = await SupabaseService.shared.fetchFriends()
+        leaderboard = await SupabaseService.shared.fetchLeaderboard()
+        challenges = await SupabaseService.shared.fetchChallenges()
     }
 
     func refreshFriends() async {
         friendsBusy = true
         friends = await SupabaseService.shared.fetchFriends()
         friendRequests = await SupabaseService.shared.fetchIncomingRequests()
+        leaderboard = await SupabaseService.shared.fetchLeaderboard()
+        challenges = await SupabaseService.shared.fetchChallenges()
         friendsBusy = false
+    }
+
+    // MARK: Challenge (0034)
+
+    /// Challenge kurar; hata mesajı döner (nil = başarı).
+    func createChallenge(kind: ChallengeKind, target: Int, days: Int,
+                         invitees: [UUID]) async -> String? {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+        else { return nil }
+        let title = kind.autoTitle(target: target, days: days)
+        switch await SupabaseService.shared.createChallenge(
+            kind: kind, target: target, days: days, title: title, invitees: invitees) {
+        case .success:
+            challenges = await SupabaseService.shared.fetchChallenges()
+            return nil
+        case .failure(let error):
+            return error.message
+        }
+    }
+
+    func respondChallenge(_ challenge: ChallengeOverview, accept: Bool) {
+        if accept {
+            if let i = challenges.firstIndex(where: { $0.id == challenge.id }) {
+                challenges[i].myStatus = "katildi"
+            }
+        } else {
+            challenges.removeAll { $0.id == challenge.id }
+        }
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+        else { return }
+        Task { [weak self] in
+            await SupabaseService.shared.respondChallenge(id: challenge.id, accept: accept)
+            if accept { self?.challenges = await SupabaseService.shared.fetchChallenges() }
+        }
     }
 
     /// İsimle arama — en az 3 harf (sunucu da aynı sınırı koyar).

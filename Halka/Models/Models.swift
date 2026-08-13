@@ -269,3 +269,112 @@ struct FriendOverview: Identifiable, Equatable {
     var activeToday: Bool
 }
 
+// MARK: - Liderlik tablosu + challenge (0034)
+
+/// Aylık halka puanı sırası — `friend_leaderboard` RPC'sinden.
+struct LeaderRow: Identifiable, Equatable {
+    let id: UUID
+    var name: String
+    var username: String
+    var points: Int
+    var streak: Int
+    var isMe: Bool
+}
+
+enum ChallengeKind: String, Codable, CaseIterable, Identifiable {
+    case su, adim, egzersiz
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .su: return "Su"
+        case .adim: return "Adım"
+        case .egzersiz: return "Egzersiz"
+        }
+    }
+
+    /// Günlük hedef için birim ve makul varsayılan/adım değerleri.
+    var unit: String {
+        switch self {
+        case .su: return "ml"
+        case .adim: return "adım"
+        case .egzersiz: return "dk"
+        }
+    }
+    var defaultTarget: Int {
+        switch self {
+        case .su: return 2000
+        case .adim: return 8000
+        case .egzersiz: return 30
+        }
+    }
+    var targetStep: Int {
+        switch self {
+        case .su: return 250
+        case .adim: return 1000
+        case .egzersiz: return 5
+        }
+    }
+
+    /// "2L Su · 7 Gün" tarzı otomatik başlık.
+    func autoTitle(target: Int, days: Int) -> String {
+        let amount: String
+        switch self {
+        case .su:
+            amount = target % 1000 == 0
+                ? "\(target / 1000)L Su"
+                : String(format: "%.1fL Su", Double(target) / 1000)
+                    .replacingOccurrences(of: ".", with: ",")
+        case .adim:
+            let f = NumberFormatter()
+            f.numberStyle = .decimal
+            f.locale = Locale(identifier: "tr_TR")
+            amount = "\(f.string(from: NSNumber(value: target)) ?? "\(target)") Adım"
+        case .egzersiz:
+            amount = "\(target) dk Egzersiz"
+        }
+        return "\(amount) · \(days) Gün"
+    }
+}
+
+struct ChallengeMemberOverview: Identifiable, Equatable {
+    let id: UUID
+    var name: String
+    var username: String
+    var status: String           // davetli / katildi
+    var daysDone: Int
+    var isMe: Bool
+}
+
+/// Üyesi olduğum challenge — ilerleme sunucuda rings_daily'den türetilir.
+struct ChallengeOverview: Identifiable, Equatable {
+    let id: UUID
+    var title: String
+    var kind: ChallengeKind
+    var dailyTarget: Int
+    var startDay: String         // "yyyy-MM-dd"
+    var endDay: String
+    var myStatus: String         // davetli / katildi
+    var members: [ChallengeMemberOverview]
+
+    var daysTotal: Int {
+        guard let s = Self.day(startDay), let e = Self.day(endDay) else { return 0 }
+        return max(0, (Calendar.current.dateComponents([.day], from: s, to: e).day ?? 0) + 1)
+    }
+    /// Bugün dahil kalan gün; bittiyse 0.
+    var daysLeft: Int {
+        guard let e = Self.day(endDay) else { return 0 }
+        let today = Calendar.current.startOfDay(for: Date())
+        return max(0, (Calendar.current.dateComponents([.day], from: today, to: e).day ?? -1) + 1)
+    }
+    var isFinished: Bool { daysLeft == 0 }
+    var isInvite: Bool { myStatus == "davetli" }
+
+    private static func day(_ s: String) -> Date? {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = .current
+        return f.date(from: s)
+    }
+}
+

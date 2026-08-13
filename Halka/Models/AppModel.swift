@@ -306,6 +306,9 @@ final class AppModel {
     var friendSearchQuery = ""
     var friendSearchResults: [UserSearchResult] = []
     var friendRequests: [FriendRequest] = []
+    /// Aylık halka puanı sıralaması + challenge'lar (0034).
+    var leaderboard: [LeaderRow] = []
+    var challenges: [ChallengeOverview] = []
 
     // MARK: Auth actions
 
@@ -376,6 +379,8 @@ final class AppModel {
         friendSearchQuery = ""
         friendSearchResults = []
         friendRequests = []
+        leaderboard = []
+        challenges = []
 
         // Antrenman programları kullanıcıya özel (0030).
         programs = []

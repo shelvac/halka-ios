@@ -403,6 +403,7 @@ extension AppModel {
         // Okumadan yazma. Bu tek satır, açılışta bellekteki sıfırların
         // sunucudaki suyu/öğünü ezmesini engelliyor.
         guard supabaseReady, ringsLoaded else { return }
+        let score = todayScore
         do {
             try await SupabaseService.shared.saveRings(
                 day: today,
@@ -411,7 +412,8 @@ extension AppModel {
                 sleepHours: sleepHours,
                 nutritionKcal: nutritionToday,
                 steps: hkSteps,
-                activeEnergy: hkActiveEnergy)
+                activeEnergy: hkActiveEnergy,
+                score: score)
             // Yerel geçmişi de tazele ki takvim anında doğru göstersin.
             ringHistory[todayKey] = SupabaseService.RingsRow(
                 day: todayKey,
@@ -420,9 +422,57 @@ extension AppModel {
                 sleep_hours: sleepHours,
                 nutrition_kcal: nutritionToday,
                 steps: hkSteps,
-                active_energy_kcal: hkActiveEnergy)
+                active_energy_kcal: hkActiveEnergy,
+                score: score)
         } catch {
             AuthLog.warn("saveRings", error)
         }
+    }
+
+    // MARK: Halka puanı (0034)
+
+    /// Bugünün halka puanı — hedeflere UYUM yüzdesinden hesaplanır ki farklı
+    /// hedefli arkadaşlar adil yarışsın. Liderlik tablosu bu değerin aylık
+    /// toplamını okur.
+    var todayScore: Int {
+        Self.ringScore(exercise: exerciseMinutes, exerciseGoal: goal(for: .exercise),
+                       water: water, waterGoal: goal(for: .water),
+                       kcal: nutritionToday, kcalGoal: goal(for: .nutrition),
+                       steps: hkSteps, stepsGoal: goal(for: .steps))
+    }
+
+    /// Günlük puan (0-110): egzersiz 30 + su 25 + beslenme 25 + adım 20,
+    /// üç halka birden kapanırsa +10.
+    ///
+    /// Beslenme farklı: halkayı "doldurmak" değil hedef BANDINDA kalmak
+    /// puan getirir (±%10 tam puan, sapma %50'ye yaklaştıkça sıfırlanır) —
+    /// yoksa fazla yemek puan kazandırırdı.
+    nonisolated static func ringScore(exercise: Int, exerciseGoal: Double,
+                                      water: Int, waterGoal: Double,
+                                      kcal: Int, kcalGoal: Double,
+                                      steps: Int, stepsGoal: Double) -> Int {
+        func ratio(_ value: Int, _ goal: Double) -> Double {
+            goal > 0 ? min(1, Double(value) / goal) : 0
+        }
+        var nutrition = 0.0
+        var nutritionInBand = false
+        if kcal > 0, kcalGoal > 0 {
+            let deviation = abs(Double(kcal) - kcalGoal) / kcalGoal
+            if deviation <= 0.10 {
+                nutrition = 25
+                nutritionInBand = true
+            } else if deviation < 0.50 {
+                nutrition = 25 * (1 - (deviation - 0.10) / 0.40)
+            }
+        }
+        var total = ratio(exercise, exerciseGoal) * 30
+                  + ratio(water, waterGoal) * 25
+                  + nutrition
+                  + ratio(steps, stepsGoal) * 20
+        if exerciseGoal > 0, Double(exercise) >= exerciseGoal,
+           waterGoal > 0, Double(water) >= waterGoal, nutritionInBand {
+            total += 10
+        }
+        return Int(total.rounded())
     }
 }

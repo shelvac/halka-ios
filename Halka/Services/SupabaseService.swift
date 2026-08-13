@@ -244,6 +244,8 @@ final class SupabaseService {
         let nutrition_kcal: Int
         var steps: Int = 0
         var active_energy_kcal: Int = 0
+        /// Günlük halka puanı (0-110, istemci hesaplar — 0034).
+        var score: Int = 0
     }
 
     /// Bir tarih aralığındaki günlük kayıtlar (takvim geçmişi için).
@@ -253,7 +255,7 @@ final class SupabaseService {
     func fetchRings(from start: Date, to end: Date) async throws -> [String: RingsRow] {
         guard let client, let user = await currentUser() else { return [:] }
         let rows: [RingsRow] = try await client.from("rings_daily")
-            .select("day,exercise_min,water_ml,sleep_hours,nutrition_kcal,steps,active_energy_kcal")
+            .select("day,exercise_min,water_ml,sleep_hours,nutrition_kcal,steps,active_energy_kcal,score")
             .eq("user_id", value: user.id.uuidString)
             .gte("day", value: Self.dayFormatter.string(from: start))
             .lte("day", value: Self.dayFormatter.string(from: end))
@@ -266,7 +268,8 @@ final class SupabaseService {
     /// upsert kullanılıyor — aynı gün defalarca güncellenebilir.
     func saveRings(day: Date, exerciseMin: Int, waterML: Int,
                    sleepHours: Double, nutritionKcal: Int,
-                   steps: Int = 0, activeEnergy: Int = 0) async throws {
+                   steps: Int = 0, activeEnergy: Int = 0,
+                   score: Int = 0) async throws {
         guard let client, let user = await currentUser() else { return }
         let payload: [String: AnyJSON] = [
             "user_id": .string(user.id.uuidString.lowercased()),
@@ -276,7 +279,8 @@ final class SupabaseService {
             "sleep_hours": .double(sleepHours),
             "nutrition_kcal": .integer(nutritionKcal),
             "steps": .integer(steps),
-            "active_energy_kcal": .integer(activeEnergy)
+            "active_energy_kcal": .integer(activeEnergy),
+            "score": .integer(score)
         ]
         try await client.from("rings_daily")
             .upsert(payload, onConflict: "user_id,day")
@@ -1173,6 +1177,105 @@ final class SupabaseService {
             AuthLog.warn("fetchIncomingRequests", error)
             return []
         }
+    }
+
+    // MARK: Liderlik tablosu + challenge'lar (0034)
+
+    /// Aylık halka puanı sıralaması — ben + arkadaşlarım.
+    func fetchLeaderboard() async -> [LeaderRow] {
+        guard let client else { return [] }
+        struct Row: Decodable {
+            let user_id: String; let name: String; let username: String?
+            let points: Int; let streak: Int; let is_me: Bool
+        }
+        do {
+            let rows: [Row] = try await client
+                .rpc("friend_leaderboard")
+                .execute()
+                .value
+            return rows.compactMap { row in
+                guard let id = UUID(uuidString: row.user_id) else { return nil }
+                return LeaderRow(id: id, name: row.name,
+                                 username: row.username ?? "",
+                                 points: row.points, streak: row.streak,
+                                 isMe: row.is_me)
+            }
+        } catch {
+            AuthLog.warn("fetchLeaderboard", error)
+            return []
+        }
+    }
+
+    /// Üyesi olduğum challenge'lar; ilerleme sunucuda rings_daily'den türetilir.
+    func fetchChallenges() async -> [ChallengeOverview] {
+        guard let client else { return [] }
+        struct MemberRow: Decodable {
+            let user_id: String; let name: String; let username: String?
+            let status: String; let is_me: Bool; let days_done: Int
+        }
+        struct Row: Decodable {
+            let id: String; let title: String; let kind: String
+            let daily_target: Int; let start_day: String; let end_day: String
+            let my_status: String; let members: [MemberRow]?
+        }
+        do {
+            let rows: [Row] = try await client
+                .rpc("challenge_overview")
+                .execute()
+                .value
+            return rows.compactMap { row in
+                guard let id = UUID(uuidString: row.id),
+                      let kind = ChallengeKind(rawValue: row.kind) else { return nil }
+                let members = (row.members ?? []).compactMap { m -> ChallengeMemberOverview? in
+                    guard let mid = UUID(uuidString: m.user_id) else { return nil }
+                    return ChallengeMemberOverview(id: mid, name: m.name,
+                                                   username: m.username ?? "",
+                                                   status: m.status,
+                                                   daysDone: m.days_done,
+                                                   isMe: m.is_me)
+                }
+                return ChallengeOverview(id: id, title: row.title, kind: kind,
+                                         dailyTarget: row.daily_target,
+                                         startDay: row.start_day, endDay: row.end_day,
+                                         myStatus: row.my_status, members: members)
+            }
+        } catch {
+            AuthLog.warn("fetchChallenges", error)
+            return []
+        }
+    }
+
+    func createChallenge(kind: ChallengeKind, target: Int, days: Int,
+                         title: String, invitees: [UUID]) async -> Result<Void, MessageError> {
+        guard let client else { return .failure(MessageError(message: "Sunucu bağlantısı yok.")) }
+        struct Params: Encodable {
+            let p_kind: String; let p_target: Int; let p_days: Int
+            let p_title: String; let p_invitees: [String]
+        }
+        struct Reply: Decodable { let ok: Bool; let err: String? }
+        do {
+            let reply: Reply = try await client
+                .rpc("create_challenge",
+                     params: Params(p_kind: kind.rawValue, p_target: target,
+                                    p_days: days, p_title: title,
+                                    p_invitees: invitees.map { $0.uuidString.lowercased() }))
+                .execute()
+                .value
+            return reply.ok ? .success(())
+                            : .failure(MessageError(message: reply.err ?? "Kurulamadı."))
+        } catch {
+            AuthLog.warn("createChallenge", error)
+            return .failure(MessageError(message: "Kurulamadı — bağlantını kontrol edip tekrar dene."))
+        }
+    }
+
+    func respondChallenge(id: UUID, accept: Bool) async {
+        guard let client else { return }
+        struct Params: Encodable { let p_challenge: String; let p_accept: Bool }
+        _ = try? await client
+            .rpc("respond_challenge",
+                 params: Params(p_challenge: id.uuidString.lowercased(), p_accept: accept))
+            .execute()
     }
 
     // MARK: Kan tahlili değerleri (blood_tests) — PDF'ten AI ayrıştırması.

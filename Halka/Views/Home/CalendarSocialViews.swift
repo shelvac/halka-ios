@@ -229,6 +229,7 @@ struct CalendarPane: View {
 
 struct SocialPane: View {
     @Environment(AppModel.self) private var model
+    @State private var showChallengeSheet = false
 
     var body: some View {
         @Bindable var model = model
@@ -242,6 +243,36 @@ struct SocialPane: View {
             // Kod kartı: arkadaşlık kodla kurulur — kodunu paylaşan
             // rızasını göstermiş olur; e-postayla kişi aranamaz.
             myCodeCard
+
+            // Challenge'lar (0034): önce davetler, sonra aktif/biten kartlar.
+            ForEach(model.challenges.filter(\.isInvite)) { invite in
+                ChallengeInviteCard(challenge: invite)
+            }
+            ForEach(model.challenges.filter { !$0.isInvite }) { challenge in
+                ChallengeCard(challenge: challenge)
+            }
+            if !model.friends.isEmpty {
+                Button { showChallengeSheet = true } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "flag.checkered")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("Yeni challenge kur")
+                            .font(.h(12.5))
+                    }
+                    .foregroundStyle(Color.coral)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.coralBg)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Aylık halka puanı sıralaması — arkadaş yoksa tek kişilik
+            // tablo göstermenin anlamı yok.
+            if model.leaderboard.count > 1 {
+                LeaderboardCard()
+            }
 
             HStack(spacing: 8) {
                 TextField("Arkadaşının kodu (örn. X7K2P9)", text: $model.friendCodeDraft)
@@ -322,6 +353,7 @@ struct SocialPane: View {
             friendsCard
         }
         .task { await model.refreshFriends() }
+        .sheet(isPresented: $showChallengeSheet) { ChallengeCreateSheet() }
     }
 
     private var searchResultsCard: some View {

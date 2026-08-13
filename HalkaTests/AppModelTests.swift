@@ -431,6 +431,99 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.friendAddError)
     }
 
+    // MARK: Halka puanı + challenge (0034)
+
+    /// Puan hedefe UYUM ölçer: hedefin yarısı = puanın yarısı, aşmak
+    /// fazladan puan getirmez (tavan), hedefler kişiye özel olduğu için
+    /// farklı hedefli iki kişi aynı uyumla aynı puanı alır.
+    func testRingScoreMeasuresAdherenceNotAbsolutes() {
+        // Tam uyum + bant içi beslenme: 30+25+25+20+10 = 110.
+        XCTAssertEqual(AppModel.ringScore(exercise: 30, exerciseGoal: 30,
+                                          water: 2000, waterGoal: 2000,
+                                          kcal: 1500, kcalGoal: 1500,
+                                          steps: 8000, stepsGoal: 8000), 110)
+        // Farklı hedef, aynı uyum → aynı puan.
+        XCTAssertEqual(AppModel.ringScore(exercise: 75, exerciseGoal: 75,
+                                          water: 3000, waterGoal: 3000,
+                                          kcal: 2400, kcalGoal: 2400,
+                                          steps: 14000, stepsGoal: 14000), 110)
+        // Hedefi aşmak fazladan puan getirmez.
+        XCTAssertEqual(AppModel.ringScore(exercise: 300, exerciseGoal: 30,
+                                          water: 4000, waterGoal: 2000,
+                                          kcal: 1500, kcalGoal: 1500,
+                                          steps: 30000, stepsGoal: 8000), 110)
+        // Yarım uyum, beslenme yok: 15 + 12,5 + 0 + 10 → 38 (yuvarlanır).
+        XCTAssertEqual(AppModel.ringScore(exercise: 15, exerciseGoal: 30,
+                                          water: 1000, waterGoal: 2000,
+                                          kcal: 0, kcalGoal: 1500,
+                                          steps: 4000, stepsGoal: 8000), 38)
+        // Hiçbir şey yapılmadıysa 0; hedef 0 ise bölme çökmesi yok.
+        XCTAssertEqual(AppModel.ringScore(exercise: 0, exerciseGoal: 30,
+                                          water: 0, waterGoal: 2000,
+                                          kcal: 0, kcalGoal: 1500,
+                                          steps: 0, stepsGoal: 8000), 0)
+        XCTAssertEqual(AppModel.ringScore(exercise: 10, exerciseGoal: 0,
+                                          water: 0, waterGoal: 0,
+                                          kcal: 0, kcalGoal: 0,
+                                          steps: 0, stepsGoal: 0), 0)
+    }
+
+    /// Beslenmede halkayı "doldurmak" değil bantta kalmak puan getirir:
+    /// aşırı yemek de aşırı az yemek de puan kaybettirir.
+    func testRingScoreNutritionBand() {
+        func nutritionOnly(_ kcal: Int) -> Int {
+            AppModel.ringScore(exercise: 0, exerciseGoal: 30,
+                               water: 0, waterGoal: 2000,
+                               kcal: kcal, kcalGoal: 2000,
+                               steps: 0, stepsGoal: 8000)
+        }
+        XCTAssertEqual(nutritionOnly(2000), 25)   // tam hedef
+        XCTAssertEqual(nutritionOnly(2200), 25)   // +%10 bant içi
+        XCTAssertEqual(nutritionOnly(1800), 25)   // -%10 bant içi
+        XCTAssertEqual(nutritionOnly(2600), 13)   // +%30 → yarı puan (12,5 → 13)
+        XCTAssertEqual(nutritionOnly(3000), 0)    // +%50 → sıfır
+        XCTAssertEqual(nutritionOnly(0), 0)       // hiç kayıt yok → puan yok
+        // Bonus yalnız üç halka birden kapanınca; fazla yemekle gelmez.
+        XCTAssertEqual(AppModel.ringScore(exercise: 30, exerciseGoal: 30,
+                                          water: 2000, waterGoal: 2000,
+                                          kcal: 3000, kcalGoal: 2000,
+                                          steps: 0, stepsGoal: 8000), 55)
+    }
+
+    @MainActor
+    func testChallengeModelDaysAndInvites() {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        let today = f.string(from: Date())
+        let plus6 = f.string(from: Calendar.current.date(byAdding: .day, value: 6, to: Date())!)
+        let me = ChallengeMemberOverview(id: UUID(), name: "Simge", username: "simge",
+                                         status: "katildi", daysDone: 3, isMe: true)
+        var challenge = ChallengeOverview(id: UUID(), title: "2L Su · 7 Gün", kind: .su,
+                                          dailyTarget: 2000, startDay: today, endDay: plus6,
+                                          myStatus: "davetli", members: [me])
+        XCTAssertEqual(challenge.daysTotal, 7)
+        XCTAssertEqual(challenge.daysLeft, 7)      // bugün dahil
+        XCTAssertFalse(challenge.isFinished)
+        XCTAssertTrue(challenge.isInvite)
+
+        let model = AppModel()
+        model.challenges = [challenge]
+        // Kabul: durum yerinde güncellenir (davet kartı karta dönüşür).
+        model.respondChallenge(challenge, accept: true)
+        XCTAssertEqual(model.challenges.first?.myStatus, "katildi")
+        // Ret/ayrılma: listeden düşer.
+        challenge.myStatus = "katildi"
+        model.respondChallenge(challenge, accept: false)
+        XCTAssertTrue(model.challenges.isEmpty)
+    }
+
+    func testChallengeAutoTitles() {
+        XCTAssertEqual(ChallengeKind.su.autoTitle(target: 2000, days: 7), "2L Su · 7 Gün")
+        XCTAssertEqual(ChallengeKind.su.autoTitle(target: 2500, days: 7), "2,5L Su · 7 Gün")
+        XCTAssertEqual(ChallengeKind.adim.autoTitle(target: 8000, days: 14), "8.000 Adım · 14 Gün")
+        XCTAssertEqual(ChallengeKind.egzersiz.autoTitle(target: 30, days: 7), "30 dk Egzersiz · 7 Gün")
+    }
+
     // MARK: Onboarding (US-026)
 
     /// Akış kaldığı yerden sürer: ilk eksik alanın adımından başlar.
