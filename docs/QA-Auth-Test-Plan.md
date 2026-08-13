@@ -192,7 +192,7 @@ Her ağ çağrısında `authBusy = true` → butonda `ProgressView`, `disabled(t
 | L-11 | Giriş → uygulamayı **tamamen kapat** → yeniden aç | ✅ Şifre sorulmaz, doğrudan ana ekran (Keychain oturumu) |
 | L-12 | Profil → **Çıkış Yap** → geri dön | ✅ Giriş ekranı; geri hareketiyle içeri dönülemez |
 | L-13 🔒 | Çıkış sonrası cihazda oturum kalıntısı | ✅ Yeni açılışta oturum yok; token'lar Keychain'den silinmiş |
-| L-14 | Rol segmenti **Diyetisyen** seçip giriş | ✅ Premium paywall ekranı açılır |
+| L-14 | ~~Rol segmenti **Diyetisyen** seçip giriş~~ | Diyetisyen rolü MVP'den çıkarıldı — giriş ekranında rol seçimi yok |
 
 ## 2.3 Şifremi Unuttum (Forgot Password)
 

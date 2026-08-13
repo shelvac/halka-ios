@@ -32,14 +32,8 @@ struct RootView: View {
                 ForgotPasswordView().transition(.opacity)
             case .newPassword:
                 NewPasswordView().transition(.opacity)
-            case .premium:
-                PaywallView().transition(.opacity)
             case .app:
-                if model.role == .dietitian {
-                    DietitianPanelView().transition(.opacity)
-                } else {
-                    MainTabView().transition(.opacity)
-                }
+                MainTabView().transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.25), value: model.screen)

@@ -14,7 +14,6 @@ struct HomeView: View {
                 case .today: TodayView()
                 case .calendar: CalendarPane()
                 case .social: SocialPane()
-                case .dietitian: DietitianMarketPane()
                 }
             }
             .padding(.horizontal, 20)

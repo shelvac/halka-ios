@@ -2,25 +2,20 @@ import Foundation
 
 // MARK: - Navigation
 
-enum Screen { case splash, login, register, verifyEmail, forgot, newPassword, premium, app }
-enum Role { case user, dietitian }
+enum Screen { case splash, login, register, verifyEmail, forgot, newPassword, app }
 enum Tab { case home, coach, meal, workout, health }
-enum HomeSegment: CaseIterable { case today, calendar, social, dietitian
+enum HomeSegment: CaseIterable { case today, calendar, social
     var title: String {
         switch self {
         case .today: return "Bugün"
         case .calendar: return "Takvim"
         case .social: return "Arkadaşlar"
-        case .dietitian: return "Diyetisyen"
         }
     }
 
-    /// MVP kapsamı (Simge'nin kararı): Arkadaşlar ve Diyetisyen demo
-    /// bölümleri lansman sürümünde GÖRÜNMEZ — gerçek altyapıları yapılınca
-    /// bu listeye geri eklenecekler. App Store incelemesine sahte içerikle
-    /// çıkılmaz.
-    /// Arkadaşlar E7 ile gerçek oldu ve MVP'ye geri döndü; Diyetisyen
-    /// hâlâ demo, kapsam dışı.
+    /// MVP kapsamı (Simge'nin kararı): Diyetisyen pazaryeri demosu koddan
+    /// tamamen çıkarıldı — lansman sonrası gerçek altyapısıyla dönerse git
+    /// geçmişinden geri alınır. Arkadaşlar E7 ile gerçek oldu.
     static let mvpCases: [HomeSegment] = [.today, .calendar, .social]
 }
 
@@ -274,65 +269,3 @@ struct FriendOverview: Identifiable, Equatable {
     var activeToday: Bool
 }
 
-// MARK: - Dietitian marketplace
-
-struct DietitianReview: Identifiable {
-    let id = UUID()
-    var name: String
-    var stars: Int
-    var date: String
-    var text: String
-}
-
-struct Dietitian: Identifiable {
-    let id = UUID()
-    var name: String
-    var specialty: String
-    var rating: String
-    var price: String
-    var bio: String
-    var stats: [(String, String)]
-    var reviews: [DietitianReview]
-    var initial: String { String(name.replacingOccurrences(of: "Dyt. ", with: "").prefix(1)) }
-}
-
-struct MyDietitian {
-    var name: String
-    var specialty: String
-    var price: String
-    var sessionsLeft: Int
-    var initial: String
-    var avatarIndex: Int
-}
-
-enum MarketView { case list, profile, checkout }
-enum PayState { case idle, processing, done }
-
-// MARK: - Dietitian panel (premium)
-
-struct Client: Identifiable {
-    let id = UUID()
-    var name: String
-    var weight: Double
-    var delta: Double
-    var compliance: Int
-    var lastMeal: String
-    var allergies: [String]
-    var note: String
-
-    var initials: String {
-        name.split(separator: " ").compactMap { $0.first.map(String.init) }.prefix(2).joined().uppercased()
-    }
-    var weightText: String {
-        weight > 0 ? String(weight).replacingOccurrences(of: ".", with: ",") : "—"
-    }
-    var deltaText: String {
-        weight > 0 ? "\(delta > 0 ? "+" : "")\(String(delta).replacingOccurrences(of: ".", with: ","))" + " kg" : "yeni"
-    }
-}
-
-enum ClientTab: String, CaseIterable {
-    case general = "Genel", body = "Vücut", blood = "Değerler", supplements = "Takviye", diet = "Diyet"
-}
-
-enum PanelView { case list, client }

@@ -33,7 +33,6 @@ extension AppModel {
         // tercihleri ekranda kalıyordu.
         resetUserState()
         await loadProfile()
-        role = .user
         screen = .app
         // US-026: profili eksikse karşılama akışı — hedef hesapları bu
         // veriler olmadan kurulamıyor. Tamamlanınca bir daha gösterilmez
@@ -69,7 +68,7 @@ extension AppModel {
     func signIn(email: String, password: String) async {
         authError = nil
         authInfo = nil
-        guard supabaseReady else { login(); return }   // demo modu
+        guard supabaseReady else { screen = .app; return }   // demo modu
         guard !email.trimmingCharacters(in: .whitespaces).isEmpty, !password.isEmpty else {
             authError = "E-posta ve şifreni gir."
             return
@@ -84,12 +83,7 @@ extension AppModel {
                 screen = .verifyEmail
                 return
             }
-            if loginRole == .dietitian {
-                await loadProfile()
-                screen = .premium
-            } else {
-                await enterApp()
-            }
+            await enterApp()
         } catch {
             authError = await Self.signInMessage(error, email: email)
         }
@@ -118,7 +112,7 @@ extension AppModel {
     func signUp(name: String, email: String, password: String) async {
         authError = nil
         authInfo = nil
-        guard supabaseReady else { login(); return }   // demo modu
+        guard supabaseReady else { screen = .app; return }   // demo modu
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         guard !trimmedName.isEmpty else { authError = "Adını gir."; return }
         guard !email.trimmingCharacters(in: .whitespaces).isEmpty else {

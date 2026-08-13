@@ -123,42 +123,6 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(recipe.ingredients, ["Ev yemeği", "salata"])
     }
 
-    // MARK: Alerji çakışma tespiti (diyetisyen paneli)
-
-    @MainActor
-    func testLactoseIntoleranceMatchesDairyMeals() {
-        let model = AppModel()
-        let ayse = model.clients[0] // Fındık + Laktoz intoleransı
-        XCTAssertEqual(model.allergyHits(meal: "Yoğurt + ceviz", client: ayse),
-                       ["Laktoz intoleransı"])
-        XCTAssertEqual(model.allergyHits(meal: "Meyve + fındık", client: ayse),
-                       ["Fındık"])
-        XCTAssertTrue(model.allergyHits(meal: "Izgara hindi + sebze", client: ayse).isEmpty)
-    }
-
-    @MainActor
-    func testSeafoodAllergyMatchesFishKeywords() {
-        let model = AppModel()
-        let mehmet = model.clients[1] // Deniz ürünleri
-        XCTAssertFalse(model.allergyHits(meal: "Fırında somon + sebze", client: mehmet).isEmpty)
-        XCTAssertFalse(model.allergyHits(meal: "Ton balıklı salata", client: mehmet).isEmpty)
-        XCTAssertTrue(model.allergyHits(meal: "Izgara tavuk + bulgur", client: mehmet).isEmpty)
-    }
-
-    @MainActor
-    func testWeekWideAllergyWarningsForFirstClient() {
-        let model = AppModel()
-        model.selectedClient = 0
-        XCTAssertFalse(model.allergyWarnings.isEmpty)
-        // Düzenlenen öğün çakışmayı giderirse uyarı da kalkar.
-        for day in 0..<7 {
-            for slot in 0..<4 {
-                model.setDietMeal(day: day, slot: slot, text: "Izgara hindi + pirinç")
-            }
-        }
-        XCTAssertTrue(model.allergyWarnings.isEmpty)
-    }
-
     // MARK: AI Koç akışları
 
     // MARK: Egzersiz

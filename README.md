@@ -37,25 +37,24 @@ Native SwiftUI implementation of the **Sağlık App** design exported from Claud
 
 | Area | Screens / flows |
 | --- | --- |
-| Auth | Splash (auto-advance 2.6 s, tap-through) → Login with Kullanıcı/Diyetisyen role toggle → Register with KVKK consent → Premium paywall (₺1.190/yıl · ₺149/ay) |
+| Auth | Splash (auto-advance 2.6 s, tap-through) → Login → Register with KVKK consent |
 | Özet | 4 nested rings (Egzersiz/Su/Uyku/Beslenme), +250 ml su with 6 s **Geri al**, Öğün ekle → photo flow, Egzersiz shortcut, goal cards, weekly ring strip, 12-day streak card |
 | Takvim | August 2026 ring history grid (Mon-first, future days disabled), per-day detail with % chips |
 | Arkadaşlar | 2L Su · 7 Gün challenge card, leaderboard (halka puanı, own row highlighted), add friend, new-challenge placeholder |
-| Diyetisyen | Marketplace (3 experts) → profile with bio/stats/starred reviews → checkout (order summary, saved card, processing → done) → active dietitian page (package, sessions left, next appointment, notes, today's plan) → "Diyetisyeni değiştir" |
 | AI Koç | Chat with typing indicator; weekly workout flow (3/4/5 days), weekly meal flow (goal → meal times → 7-day menu that also updates the Yemek tab's meal times); motivation/weight/topic replies; quick chips |
 | Yemek | Day chips, plan rows with eaten check (strikethrough + ring update), meal detail (recipe, market list, steps), catalog with "Bugünün menüsüne yaz", photo → Vision-AI estimate → save with timestamp → deletable, calorie log (plan + photo sources), day market list with checkboxes |
 | Egzersiz | Program builder (name/region/level), exercise library (search + region filter, pick mode), program detail, live workout (stopwatch via `TimelineView`, per-exercise checks), finish → history + exercise ring minutes |
 | Sağlık | Vücut (weight card, BMI band with marker, 14 metrics with status chips, PDF upload simulation), Değerlerim (16 blood tests with reference-position dots, counts, AI Koç note, PDF upload), Takviyeler (taken checks, **real local notifications** on the bell toggle), profile (Apple Health card + screenshot-fallback AI import crediting the exercise ring, settings, logout) |
-| Diyetisyen paneli | Client roster with quick-add + stats; client detail with weight-trend bars and 5 tabs — Genel (allergy chips ±, health note), Vücut, Değerler (+ commentary), Takviye (compliance %), Diyet (weekly editor with **live allergy-conflict warnings** per field + week-wide summary, kcal target, "Diyet Programını Gönder") |
 
 All demo data (menus, recipes, blood panel from the 29.11.2025 Medicana report, body
-metrics, dietitians, reviews, clients, allergen keyword map) is ported 1:1 from the
-prototype into `Models/DemoData.swift`.
+metrics) is ported 1:1 from the prototype into `Models/DemoData.swift`. The dietitian
+marketplace/panel demo was cut from the MVP and removed from the codebase
+(recoverable from git history).
 
 ## Architecture notes
 
 - **State**: one `@MainActor @Observable` `AppModel` (`Models/AppModel.swift`) split into
-  domain extensions (`+Coach`, `+Meals`, `+Workout`, `+Health`, `+Dietitian`). All state
+  domain extensions (`+Coach`, `+Meals`, `+Workout`, `+Health`, `+Social`). All state
   is in-memory demo data, mirroring the prototype. Swap in Supabase/HealthKit per the
   roadmap (`project/iOS Yol Haritasi.dc.html`) behind the same model API.
 - **Design tokens**: `Support/Theme.swift` carries the prototype's exact hex palette and

@@ -13,13 +13,13 @@ enum LegalText {
          "Kimlik ve iletişim verileri (ad soyad, e-posta), sağlık verileri (kilo, vücut kompozisyonu, kan tahlili sonuçları, uyku ve egzersiz kayıtları, öğün ve kalori kayıtları, takviye kullanımı), cihaz ve kullanım verileri (uygulama içi etkileşimler, çökme kayıtları)."),
 
         ("İşleme Amaçları",
-         "Hesabın oluşturulması ve güvenliğinin sağlanması; halka takibi, beslenme ve egzersiz planlarının üretilmesi; AI koç önerilerinin oluşturulması; talep etmen hâlinde seçtiğin diyetisyenle verilerinin paylaşılması; uygulamanın iyileştirilmesi ve hata giderme."),
+         "Hesabın oluşturulması ve güvenliğinin sağlanması; halka takibi, beslenme ve egzersiz planlarının üretilmesi; AI koç önerilerinin oluşturulması; uygulamanın iyileştirilmesi ve hata giderme."),
 
         ("Hukuki Sebep — Açık Rıza",
          "Sağlık verileri KVKK m.6 uyarınca özel nitelikli kişisel veridir ve yalnızca AÇIK RIZANLA işlenir. Rızanı vermemen hâlinde sağlık takibi özellikleri çalışmaz; rızanı dilediğin an Profil > KVKK & Gizlilik bölümünden geri çekebilirsin. Geri çekme, o ana kadarki işlemelerin hukuka uygunluğunu etkilemez."),
 
         ("Aktarım ve Saklama",
-         "Veriler, altyapı sağlayıcımız Supabase'in Avrupa Birliği (Frankfurt) bölgesindeki sunucularında saklanır. Yurt dışına aktarım, açık rızan ve standart sözleşme hükümlerine dayanır. Yemek fotoğrafı yüklediğinde, yalnızca o fotoğraf kalori tahmini için yurt dışındaki bir yapay zekâ sağlayıcısına (Google) gönderilir; tahmin döndükten sonra fotoğraf hiçbir yerde saklanmaz — ne bizde ne sağlayıcıda. Fotoğrafa adın, e-postan veya sağlık verilerin eşlik etmez. Verilerine yalnızca sen ve — paket satın aldıysan — seçtiğin diyetisyen erişebilir; erişim, veritabanı düzeyinde satır bazlı güvenlik politikalarıyla teknik olarak kısıtlanmıştır."),
+         "Veriler, altyapı sağlayıcımız Supabase'in Avrupa Birliği (Frankfurt) bölgesindeki sunucularında saklanır. Yurt dışına aktarım, açık rızan ve standart sözleşme hükümlerine dayanır. Yemek fotoğrafı yüklediğinde, yalnızca o fotoğraf kalori tahmini için yurt dışındaki bir yapay zekâ sağlayıcısına (Google) gönderilir; tahmin döndükten sonra fotoğraf hiçbir yerde saklanmaz — ne bizde ne sağlayıcıda. Fotoğrafa adın, e-postan veya sağlık verilerin eşlik etmez. Verilerine yalnızca sen erişebilirsin; erişim, veritabanı düzeyinde satır bazlı güvenlik politikalarıyla teknik olarak kısıtlanmıştır."),
 
         ("Saklama Süresi",
          "Veriler hesabın aktif olduğu sürece saklanır. Hesabını sildiğinde sağlık verilerin en geç 30 gün içinde kalıcı olarak silinir; mevzuat gereği saklanması zorunlu kayıtlar yasal süre boyunca muhafaza edilir."),
@@ -28,7 +28,7 @@ enum LegalText {
          "Kişisel verilerinin işlenip işlenmediğini öğrenme, bilgi talep etme, işlenme amacını öğrenme, düzeltilmesini veya silinmesini isteme, aktarıldığı üçüncü kişileri bilme, işlemeye itiraz etme ve zararının giderilmesini talep etme haklarına sahipsin. Taleplerini uygulama içindeki destek kanalından iletebilirsin."),
 
         ("Tıbbi Sorumluluk Reddi",
-         "Uygulama tanı veya tedavi hizmeti sunmaz. AI koç çıktıları ve içerikler tıbbi tavsiye değildir. Diyetisyenler, verdikleri hizmetten kendi mesleki sorumlulukları çerçevesinde sorumludur. Sağlık durumunla ilgili kararlar için hekimine danış.")
+         "Uygulama tanı veya tedavi hizmeti sunmaz. AI koç çıktıları ve içerikler tıbbi tavsiye değildir. Sağlık durumunla ilgili kararlar için hekimine danış.")
     ]
 
     /// Gizlilik Politikası — halka-web'deki yayın sürümüyle aynı metin.
@@ -38,13 +38,13 @@ enum LegalText {
         ("2. İşlenen kişisel veriler",
          "• Kimlik ve iletişim: ad soyad, e-posta adresi, doğum tarihi.\n• Sağlık verileri (özel nitelikli): kilo ve vücut kompozisyonu ölçümleri, kan tahlili sonuçları, uyku ve egzersiz kayıtları, öğün ve kalori kayıtları, takviye/ilaç kullanım bilgileri.\n• Görsel veriler: yüklediğiniz öğün fotoğrafları ve tahlil belgeleri.\n• Cihaz ve kullanım verileri: uygulama içi etkileşimler, hata ve çökme kayıtları."),
         ("3. Verilerin işlenme amaçları",
-         "• Hesabınızın oluşturulması, girişin ve hesap güvenliğinin sağlanması\n• Halka takibi ile beslenme ve egzersiz planlarının üretilmesi\n• Yapay zekâ destekli koç önerilerinin ve kalori tahminlerinin oluşturulması\n• Talebiniz hâlinde seçtiğiniz diyetisyenle verilerinizin paylaşılması\n• Uygulamanın iyileştirilmesi, hataların giderilmesi"),
+         "• Hesabınızın oluşturulması, girişin ve hesap güvenliğinin sağlanması\n• Halka takibi ile beslenme ve egzersiz planlarının üretilmesi\n• Yapay zekâ destekli koç önerilerinin ve kalori tahminlerinin oluşturulması\n• Uygulamanın iyileştirilmesi, hataların giderilmesi"),
         ("4. Hukuki sebep — açık rıza",
          "Sağlık verileri KVKK m.6 uyarınca özel nitelikli kişisel veridir ve yalnızca açık rızanızla işlenir. Rıza vermemeniz hâlinde sağlık takibi özellikleri çalışmaz. Rızanızı dilediğiniz an uygulama içinden veya yukarıdaki e-posta adresinden geri çekebilirsiniz; geri çekme, o ana kadarki işlemelerin hukuka uygunluğunu etkilemez."),
         ("5. Apple Health verileri",
          "İzin vermeniz hâlinde adım, egzersiz süresi, aktif enerji ve uyku verileri Apple Health üzerinden okunur. Bu veriler yalnızca halkalarınızı hesaplamak için kullanılır; reklam veya pazarlama amacıyla kullanılmaz, üçüncü taraflara satılmaz. İzni iOS Ayarlar &gt; Gizlilik & Güvenlik &gt; Sağlık bölümünden istediğiniz an kaldırabilirsiniz."),
         ("6. Aktarım ve saklama",
-         "Veriler, altyapı sağlayıcımız Supabase'in Avrupa Birliği (Frankfurt) bölgesindeki sunucularında saklanır. Yurt dışına aktarım açık rızanıza ve standart sözleşme hükümlerine dayanır. Yemek fotoğrafı yüklediğinizde, yalnızca o görsel kalori tahmini amacıyla yurt dışında yerleşik bir yapay zekâ sağlayıcısına (Google LLC) iletilir. Görsel, tahmin döndükten sonra tarafımızca saklanmaz; sağlayıcıda da kalıcı olarak tutulmaz. Görselle birlikte kimlik bilgileriniz veya diğer sağlık verileriniz gönderilmez. Yalnızca tahminin metin hâli (tanınan yemek adları ve düzeltmeleriniz) hizmet kalitesini ölçmek için kayıt altına alınır. Verilerinize yalnızca siz ve — paket satın aldıysanız — seçtiğiniz diyetisyen erişebilir; erişim, veritabanı düzeyinde satır bazlı güvenlik politikalarıyla teknik olarak kısıtlanmıştır. Şifreler tarafımızca görülemez; oturum bilgileri cihazınızda Keychain'de saklanır."),
+         "Veriler, altyapı sağlayıcımız Supabase'in Avrupa Birliği (Frankfurt) bölgesindeki sunucularında saklanır. Yurt dışına aktarım açık rızanıza ve standart sözleşme hükümlerine dayanır. Yemek fotoğrafı yüklediğinizde, yalnızca o görsel kalori tahmini amacıyla yurt dışında yerleşik bir yapay zekâ sağlayıcısına (Google LLC) iletilir. Görsel, tahmin döndükten sonra tarafımızca saklanmaz; sağlayıcıda da kalıcı olarak tutulmaz. Görselle birlikte kimlik bilgileriniz veya diğer sağlık verileriniz gönderilmez. Yalnızca tahminin metin hâli (tanınan yemek adları ve düzeltmeleriniz) hizmet kalitesini ölçmek için kayıt altına alınır. Verilerinize yalnızca siz erişebilirsiniz; erişim, veritabanı düzeyinde satır bazlı güvenlik politikalarıyla teknik olarak kısıtlanmıştır. Şifreler tarafımızca görülemez; oturum bilgileri cihazınızda Keychain'de saklanır."),
         ("7. Yapay zekâ işlemleri",
          "Öğün fotoğrafı analizi ve koç önerileri için verileriniz, işlem süresince üçüncü taraf bir yapay zekâ sağlayıcısına iletilir. Bu veriler sağlayıcı tarafından model eğitimi için kullanılmaz."),
         ("8. Saklama süresi",
@@ -62,32 +62,30 @@ enum LegalText {
         ("1. Taraflar ve kapsam",
          "Bu koşullar, halka uygulamasını kullanan kişiler (“Kullanıcı”) ile uygulama sahibi arasındaki ilişkiyi düzenler. Uygulamayı indirerek veya kullanarak bu koşulları kabul etmiş olursunuz."),
         ("2. Hizmetin tanımı",
-         "halka; beslenme, egzersiz, uyku, su ve sağlık ölçümlerinin takibine yardımcı olan bir dijital araçtır. Uygulama ayrıca diyetisyenlerle kullanıcıları buluşturan bir pazaryeri sunar."),
+         "halka; beslenme, egzersiz, uyku, su ve sağlık ölçümlerinin takibine yardımcı olan bir dijital araçtır."),
         ("3. Tıbbi sorumluluk reddi",
-         ""),
+         "Uygulama tanı veya tedavi hizmeti sunmaz. Yapay zekâ koç çıktıları ve içerikler tıbbi tavsiye değildir. Sağlık durumunuzla ilgili kararlar için hekiminize danışın."),
         ("4. Hesap ve güvenlik",
          "• Verdiğiniz bilgilerin doğru ve güncel olmasından siz sorumlusunuz.\n• Şifrenizin gizliliğini korumak sizin sorumluluğunuzdadır.\n• Hesabınızı başkasıyla paylaşamaz, devredemezsiniz.\n• 18 yaşından küçükler uygulamayı kullanamaz."),
-        ("5. Diyetisyen hizmetleri",
-         "• Diyetisyenler bağımsız uzmanlardır; verdikleri hizmetten kendi mesleki sorumlulukları çerçevesinde sorumludur.\n• halka, uzmanla kullanıcıyı buluşturan aracı platformdur; danışmanlık içeriğinin doğruluğunu taahhüt etmez.\n• Paket satın aldığınızda, takibin gerektirdiği ölçüde sağlık verileriniz seçtiğiniz diyetisyenle paylaşılır."),
-        ("6. Ücretler, abonelik ve iptal",
-         "• Uygulamanın temel özellikleri ücretsizdir. Premium özellikler ve diyetisyen paketleri ücretlidir; fiyatlar satın alma ekranında gösterilir.\n• Abonelikler App Store üzerinden yönetilir ve iptal edilmedikçe otomatik yenilenir. İptal işlemi cihazınızın App Store hesap ayarlarından yapılır.\n• Diyetisyen paketlerinde, ilk seans gerçekleşmeden önce cayma hakkınız saklıdır (Mesafeli Sözleşmeler Yönetmeliği kapsamında 14 gün)."),
-        ("7. Kullanıcı yükümlülükleri",
+        ("5. Ücretler, abonelik ve iptal",
+         "• Uygulamanın temel özellikleri ücretsizdir. İleride sunulabilecek ücretli özelliklerin fiyatları satın alma ekranında gösterilir.\n• Abonelikler App Store üzerinden yönetilir ve iptal edilmedikçe otomatik yenilenir. İptal işlemi cihazınızın App Store hesap ayarlarından yapılır."),
+        ("6. Kullanıcı yükümlülükleri",
          "• Uygulamayı hukuka aykırı amaçlarla kullanamazsınız.\n• Başkasının verisini izinsiz yükleyemezsiniz.\n• Uygulamanın güvenliğini tehdit eden, tersine mühendislik içeren veya sistemi aşırı yükleyen davranışlarda bulunamazsınız."),
-        ("8. Fikri mülkiyet",
+        ("7. Fikri mülkiyet",
          "Uygulamanın tasarımı, markası, yazılımı ve içerikleri halka'ya aittir. Kendi yüklediğiniz veriler ve fotoğraflar sizindir; bunları hizmeti sunmak amacıyla işlememize izin vermiş olursunuz."),
-        ("9. Sorumluluğun sınırlandırılması",
+        ("8. Sorumluluğun sınırlandırılması",
          "Uygulama “olduğu gibi” sunulur. Kesintisiz veya hatasız çalışacağı taahhüt edilmez. Dolaylı zararlardan, veri kaybından veya üçüncü taraf hizmet kesintilerinden mevzuatın izin verdiği ölçüde sorumluluk kabul edilmez."),
-        ("10. Hesabın sonlandırılması",
+        ("9. Hesabın sonlandırılması",
          "Hesabınızı dilediğiniz an silebilirsiniz. Bu koşulların ihlali hâlinde hesabınız askıya alınabilir veya kapatılabilir."),
-        ("11. Uygulanacak hukuk",
+        ("10. Uygulanacak hukuk",
          "Bu koşullara Türkiye Cumhuriyeti hukuku uygulanır; uyuşmazlıklarda İstanbul mahkemeleri ve icra daireleri yetkilidir."),
-        ("12. İletişim",
+        ("11. İletişim",
          "simgehelvaci@gmail.com")
     ]
 
     static let privacyTitle = "Gizlilik Politikası"
     static let termsTitle = "Kullanım Koşulları"
-    static let lastUpdated = "Son güncelleme: 6 Ağustos 2026"
+    static let lastUpdated = "Son güncelleme: 13 Ağustos 2026"
     static let supportEmail = "halkahealthapp@gmail.com"
 }
 

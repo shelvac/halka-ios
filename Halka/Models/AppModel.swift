@@ -8,8 +8,6 @@ final class AppModel {
 
     // MARK: Auth / routing
     var screen: Screen = .splash
-    var loginRole: Role = .user       // segment on the login screen
-    var role: Role = .user            // active session role
     var tab: Tab = .home
     var homeSegment: HomeSegment = .today
 
@@ -309,45 +307,7 @@ final class AppModel {
     var friendSearchResults: [UserSearchResult] = []
     var friendRequests: [FriendRequest] = []
 
-    // MARK: Dietitian marketplace
-    var marketView: MarketView = .list
-    var selectedDietitian = 0
-    var payState: PayState = .idle
-    var myDietitian: MyDietitian? = nil
-
-    // MARK: Dietitian panel
-    var clients: [Client] = Demo.initialClients()
-    var clientNameDraft = ""
-    var panelView: PanelView = .list
-    var selectedClient = 0
-    var clientTab: ClientTab = .general
-    var allergyDraft = ""
-    var dietDay = 0
-    var dietPlan: [[String]]? = nil   // 7×4, defaults to Demo.menus until edited
-    var dietKcalTarget = "1400"
-    var dietSent = false
-
     // MARK: Auth actions
-
-    func login() {
-        if loginRole == .dietitian {
-            screen = .premium
-        } else {
-            role = .user
-            screen = .app
-        }
-    }
-
-    func startPremium() {
-        role = .dietitian
-        panelView = .list
-        screen = .app
-    }
-
-    func continueFree() {
-        role = .user
-        screen = .app
-    }
 
     /// US-021 — Hesabı sil. Sunucudaki veri cascade ile temizlenir; sonrasında
     /// oturum kapanır ve giriş ekranına dönülür (çıkışla aynı yerel sıfırlama).
@@ -370,7 +330,6 @@ final class AppModel {
         // giriş yapınca bekleyen çıkış yeni oturumu öldürebiliyor, profil
         // "boş" yükleniyordu.
         resetUserState()
-        role = .user
         tab = .home
         homeSegment = .today
         healthPane = .body
