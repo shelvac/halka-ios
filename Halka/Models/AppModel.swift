@@ -335,6 +335,8 @@ final class AppModel {
         healthPane = .body
         authError = nil
         authInfo = nil
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+        else { screen = .login; return }
         Task { [weak self] in
             await SupabaseService.shared.signOut()
             self?.screen = .login
