@@ -79,3 +79,10 @@ jobs:
           echo '```' >> r.md
 
           gh issue comment "$ISSUE" --repo "$REPO" --body-file r.md
+
+      # Rapor yazıldıktan sonra gerçek sonucu yansıt: derleme/test kırıksa
+      # workflow da kırmızı bitmeli. (Eskiden continue-on-error yüzünden hep
+      # yeşildi ve "başarılı" sanılıyordu.)
+      - name: Derleme sonucunu işaretle
+        if: steps.build.outcome != 'success'
+        run: exit 1

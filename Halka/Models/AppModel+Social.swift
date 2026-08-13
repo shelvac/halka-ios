@@ -40,8 +40,8 @@ extension AppModel {
                     : "\(result.name) kişisine istek gönderildi — kabul edince eşleşeceksiniz."
                 await self.searchFriendCandidates()
                 if matched { await self.refreshFriends() }
-            case .failure(let message):
-                self.friendAddError = message
+            case .failure(let error):
+                self.friendAddError = error.message
             }
         }
     }
@@ -71,8 +71,8 @@ extension AppModel {
                 self.friendAddNote = "\(name) eklendi 🎉"
                 self.friendCodeDraft = ""
                 await self.refreshFriends()
-            case .failure(let message):
-                self.friendAddError = message
+            case .failure(let error):
+                self.friendAddError = error.message
             }
         }
     }
@@ -83,8 +83,8 @@ extension AppModel {
         case .success(let normalized):
             profile.username = normalized
             return nil
-        case .failure(let message):
-            return message
+        case .failure(let error):
+            return error.message
         }
     }
 

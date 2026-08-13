@@ -1014,9 +1014,13 @@ final class SupabaseService {
         return rows?.first?.friend_code
     }
 
+    /// Kullanıcıya gösterilecek hata metni — `Result`'ın hata tarafı `Error`
+    /// olmak zorunda, çıplak `String` uymaz.
+    struct MessageError: Error { let message: String }
+
     /// Kodla arkadaş ekler; başarıda arkadaşın adını döner.
-    func addFriend(code: String) async -> Result<String, String> {
-        guard let client else { return .failure("Sunucu bağlantısı yok.") }
+    func addFriend(code: String) async -> Result<String, MessageError> {
+        guard let client else { return .failure(MessageError(message: "Sunucu bağlantısı yok.")) }
         struct Reply: Decodable { let ok: Bool; let name: String?; let err: String? }
         do {
             let reply: Reply = try await client
@@ -1024,10 +1028,10 @@ final class SupabaseService {
                 .execute()
                 .value
             return reply.ok ? .success(reply.name ?? "Arkadaşın")
-                            : .failure(reply.err ?? "Eklenemedi.")
+                            : .failure(MessageError(message: reply.err ?? "Eklenemedi."))
         } catch {
             AuthLog.warn("addFriend", error)
-            return .failure("Eklenemedi — bağlantını kontrol edip tekrar dene.")
+            return .failure(MessageError(message: "Eklenemedi — bağlantını kontrol edip tekrar dene."))
         }
     }
 
@@ -1086,8 +1090,8 @@ final class SupabaseService {
     }
 
     /// Benzersiz kullanıcı adını alır; başarıda normalize edilmiş adı döner.
-    func setUsername(_ username: String) async -> Result<String, String> {
-        guard let client else { return .failure("Sunucu bağlantısı yok.") }
+    func setUsername(_ username: String) async -> Result<String, MessageError> {
+        guard let client else { return .failure(MessageError(message: "Sunucu bağlantısı yok.")) }
         struct Reply: Decodable { let ok: Bool; let username: String?; let err: String? }
         do {
             let reply: Reply = try await client
@@ -1095,10 +1099,10 @@ final class SupabaseService {
                 .execute()
                 .value
             return reply.ok ? .success(reply.username ?? username.lowercased())
-                            : .failure(reply.err ?? "Kaydedilemedi.")
+                            : .failure(MessageError(message: reply.err ?? "Kaydedilemedi."))
         } catch {
             AuthLog.warn("setUsername", error)
-            return .failure("Kaydedilemedi — tekrar dene.")
+            return .failure(MessageError(message: "Kaydedilemedi — tekrar dene."))
         }
     }
 
@@ -1127,8 +1131,8 @@ final class SupabaseService {
     }
 
     /// İstek gönderir; karşı taraf zaten istek gönderdiyse anında eşleşir.
-    func sendFriendRequest(to id: UUID) async -> Result<Bool, String> {
-        guard let client else { return .failure("Sunucu bağlantısı yok.") }
+    func sendFriendRequest(to id: UUID) async -> Result<Bool, MessageError> {
+        guard let client else { return .failure(MessageError(message: "Sunucu bağlantısı yok.")) }
         struct Reply: Decodable { let ok: Bool; let matched: Bool?; let err: String? }
         do {
             let reply: Reply = try await client
@@ -1136,10 +1140,10 @@ final class SupabaseService {
                 .execute()
                 .value
             return reply.ok ? .success(reply.matched ?? false)
-                            : .failure(reply.err ?? "İstek gönderilemedi.")
+                            : .failure(MessageError(message: reply.err ?? "İstek gönderilemedi."))
         } catch {
             AuthLog.warn("sendFriendRequest", error)
-            return .failure("İstek gönderilemedi — tekrar dene.")
+            return .failure(MessageError(message: "İstek gönderilemedi — tekrar dene."))
         }
     }
 
