@@ -517,6 +517,45 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.challenges.isEmpty)
     }
 
+    // MARK: Tahlile göre takviye önerisi
+
+    func testSupplementRuleMatchesCommonLowTests() {
+        XCTAssertEqual(AppModel.supplementRule(forLowTest: "Vitamin D (25-OH)")?.name, "D3 Vitamini")
+        XCTAssertEqual(AppModel.supplementRule(forLowTest: "Vitamin B12")?.name, "B12 Vitamini")
+        XCTAssertEqual(AppModel.supplementRule(forLowTest: "Ferritin")?.name, "Demir")
+        XCTAssertEqual(AppModel.supplementRule(forLowTest: "Serum Demir")?.name, "Demir")
+        XCTAssertEqual(AppModel.supplementRule(forLowTest: "Folik Asit")?.name, "Folik Asit")
+        XCTAssertEqual(AppModel.supplementRule(forLowTest: "Hemoglobin")?.name, "Demir")
+        // Kural listesinde olmayan test için öneri YOK.
+        XCTAssertNil(AppModel.supplementRule(forLowTest: "TSH"))
+        XCTAssertNil(AppModel.supplementRule(forLowTest: "Glukoz"))
+    }
+
+    @MainActor
+    func testSupplementSuggestionsOnlyForLowAndNotAlreadyTaken() {
+        let model = AppModel()
+        model.bloodReport = BloodReport(
+            takenAt: "2026-08-13", lab: nil,
+            groups: [BloodGroup(name: "Vitaminler", tests: [
+                BloodTest(name: "Vitamin D (25-OH)", value: 12, unit: "ng/mL",
+                          refLow: 30, refHigh: 100),                     // düşük → öner
+                BloodTest(name: "Vitamin B12", value: 500, unit: "pg/mL",
+                          refLow: 200, refHigh: 900),                    // normal → önerme
+                BloodTest(name: "Ferritin", value: 400, unit: "ng/mL",
+                          refLow: 13, refHigh: 150),                     // YÜKSEK → asla önerme
+                BloodTest(name: "Folat", value: 2, unit: "ng/mL",
+                          refLow: 3, refHigh: 17)                        // düşük → öner
+            ])], reportCount: 2)
+        var names = model.supplementSuggestions.map(\.name)
+        XCTAssertEqual(names, ["D3 Vitamini", "Folik Asit"])
+
+        // Zaten kullanılan takviye tekrar önerilmez.
+        model.supplements = [Supplement(name: "D3 vitamini damla", dose: "x",
+                                        time: "09:00", notify: false, taken: false)]
+        names = model.supplementSuggestions.map(\.name)
+        XCTAssertEqual(names, ["Folik Asit"])
+    }
+
     func testChallengeAutoTitles() {
         XCTAssertEqual(ChallengeKind.su.autoTitle(target: 2000, days: 7), "2L Su · 7 Gün")
         XCTAssertEqual(ChallengeKind.su.autoTitle(target: 2500, days: 7), "2,5L Su · 7 Gün")

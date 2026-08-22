@@ -506,11 +506,19 @@ struct BloodPane: View {
             // Rapor yoksa dürüst boş durum — sahte veri asla gösterilmez.
             if let report = model.bloodReport {
                 let counts = report.counts
-                HStack(spacing: 14) {
-                    countColumn("Rapor tarihi", Self.reportDate(report.takenAt), .ink)
-                    countColumn("Normal", "\(counts.ok)", .greenDark)
-                    countColumn("Takip gerekli", "\(counts.warn)", .goldDark)
-                    Spacer()
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 14) {
+                        countColumn("Son rapor", Self.reportDate(report.takenAt), .ink)
+                        countColumn("Normal", "\(counts.ok)", .greenDark)
+                        countColumn("Takip gerekli", "\(counts.warn)", .goldDark)
+                        Spacer()
+                    }
+                    if report.reportCount > 1 {
+                        Text("\(report.reportCount) rapor birleştirildi — her test için en güncel değer gösteriliyor; eski rapordan gelenler tarihiyle işaretli.")
+                            .font(.h(10, .bold))
+                            .foregroundStyle(Color.faint)
+                            .lineSpacing(2)
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 14)
@@ -619,9 +627,21 @@ struct BloodPane: View {
         let colors = statusColors(test.status)
         return HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(test.name)
-                    .font(.h(13, .bold))
-                    .foregroundStyle(Color.inkBody)
+                HStack(spacing: 6) {
+                    Text(test.name)
+                        .font(.h(13, .bold))
+                        .foregroundStyle(Color.inkBody)
+                    // Konsolide görünümde eski rapordan gelen değer.
+                    if !test.takenAt.isEmpty,
+                       test.takenAt != model.bloodReport?.takenAt {
+                        Text(Self.reportDate(test.takenAt))
+                            .font(.h(9, .bold))
+                            .foregroundStyle(Color.faint)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.hairline))
+                    }
+                }
                 if test.hasRange {
                     Text("Referans: \(refText(test))")
                         .font(.h(10, .bold))
@@ -697,6 +717,62 @@ struct SupplementsPane: View {
             .padding(.vertical, 16)
             .background(Color.ink)
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+            // Tahlile göre öneriler (kural tabanlı): yalnızca DÜŞÜK
+            // değerler, doz hekime bırakılır.
+            if !model.supplementSuggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Tahlil sonuçlarına göre öneri")
+                        .font(.h(13))
+                        .foregroundStyle(Color.ink)
+                        .padding(.top, 12)
+                        .padding(.bottom, 2)
+                    ForEach(Array(model.supplementSuggestions.enumerated()),
+                            id: \.element.id) { i, suggestion in
+                        HStack(spacing: 11) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Color.gold)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(suggestion.name)
+                                    .font(.h(13))
+                                    .foregroundStyle(Color.inkBody)
+                                Text(suggestion.reason)
+                                    .font(.h(10.5, .bold))
+                                    .foregroundStyle(Color.sub)
+                            }
+                            Spacer()
+                            Button {
+                                model.addSupplement(name: suggestion.name,
+                                                    dose: "Dozu hekimine danış",
+                                                    time: "09:00", notify: false)
+                            } label: {
+                                Text("Ekle")
+                                    .font(.h(11.5))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 7)
+                                    .background(Color.coral)
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.vertical, 10)
+                        .overlay(alignment: .top) {
+                            if i > 0 { Rectangle().fill(Color.hairline).frame(height: 1) }
+                        }
+                    }
+                    Text("Bu öneriler tahlilindeki düşük değerlerden türetildi; tıbbi tavsiye değildir. Başlamadan önce hekimine danış.")
+                        .font(.h(10, .bold))
+                        .foregroundStyle(Color.faint)
+                        .lineSpacing(2)
+                        .padding(.bottom, 12)
+                }
+                .padding(.horizontal, 18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .card(20)
+                .padding(.top, 12)
+            }
 
             // Demo liste kaldırıldı: boş başlar, kullanıcının kendi
             // takviyeleri sunucuda kalıcı (supplements, 0001).

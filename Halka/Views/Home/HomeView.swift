@@ -86,14 +86,8 @@ struct TodayView: View {
             // eklemek, aşağıda aramaya değmez.
             quickActions
                 .padding(.top, 12)
-            // US-027 — beslenme ve egzersizin buluştuğu yer; halkalarda
-            // olmayan tek bilgi bu.
-            //
-            // Buradaki "hedef kartları" ızgarası kaldırıldı: halkanın
-            // yanındaki liste zaten "1.240 / 2.000 ml" diyordu, ızgara aynı
-            // dört sayıyı ikinci kez yazıp ekranın yarısını kaplıyordu.
-            EnergyBalanceCard()
-                .padding(.top, 12)
+            // Enerji dengesi kartı Simge'nin kararıyla kaldırıldı; motor
+            // (AppModel+Energy) koç mesajları için duruyor.
             activityStats
                 .padding(.top, 12)
             weekStrip
@@ -365,10 +359,16 @@ struct TodayView: View {
 
     private var weekStrip: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Bu hafta")
-                .font(.h(13))
-                .foregroundStyle(Color.ink)
-                .padding(.horizontal, 4)
+            HStack {
+                Text("Bu hafta")
+                    .font(.h(13))
+                    .foregroundStyle(Color.ink)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .heavy))
+                    .foregroundStyle(Color.chevron)
+            }
+            .padding(.horizontal, 4)
             HStack {
                 // US-024: hafta gerçek takvimden — eskiden 3-9 Ağustos'a sabitti.
                 ForEach(Array(model.currentWeek.enumerated()), id: \.offset) { i, date in
@@ -387,6 +387,8 @@ struct TodayView: View {
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity)
         .card(20)
+        .contentShape(Rectangle())
+        .onTapGesture { model.homeSegment = .calendar }
     }
 
     /// Marka mesajı. Seri sayısı istatistik satırında gösteriliyor; burada

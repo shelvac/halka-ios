@@ -15,6 +15,63 @@ extension AppModel {
         supplements = await SupabaseService.shared.fetchSupplements()
     }
 
+    // MARK: Tahlile göre takviye önerisi (kural tabanlı — AI değil)
+
+    /// Konsolide tahlildeki DÜŞÜK değerlere göre öneriler. Yalnızca
+    /// düşüklüğü takviyeyle ilişkili yaygın testler kural listesinde;
+    /// YÜKSEK değere asla öneri yapılmaz, doz hekime bırakılır ve her
+    /// öneri "tıbbi tavsiye değildir" çerçevesiyle gösterilir.
+    var supplementSuggestions: [SupplementSuggestion] {
+        guard let report = bloodReport else { return [] }
+        let tr = Locale(identifier: "tr_TR")
+        var result: [SupplementSuggestion] = []
+        for group in report.groups {
+            for test in group.tests where test.hasRange && test.status == "Düşük" {
+                guard let rule = Self.supplementRule(forLowTest: test.name) else { continue }
+                guard !result.contains(where: { $0.name == rule.name }) else { continue }
+                // Zaten kullandığı takviyeyi tekrar önermeyelim.
+                let existing = supplements.contains {
+                    $0.name.lowercased(with: tr).contains(rule.matchKey)
+                }
+                guard !existing else { continue }
+                result.append(SupplementSuggestion(
+                    name: rule.name,
+                    reason: "\(test.name): \(test.display) \(test.unit) — düşük"))
+            }
+        }
+        return result
+    }
+
+    /// Düşük test adı → takviye kuralı. `matchKey` mevcut takviyelerle
+    /// eşleştirme için (tr_TR küçük harf).
+    nonisolated static func supplementRule(forLowTest raw: String)
+        -> (name: String, matchKey: String)? {
+        let name = raw.lowercased(with: Locale(identifier: "tr_TR"))
+        if name.contains("25-oh") || name.contains("25 oh") || name.contains("d vit")
+            || name.contains("vitamin d") || name.contains("vit d") {
+            return ("D3 Vitamini", "d")
+        }
+        if name.contains("b12") || name.contains("kobalamin") {
+            return ("B12 Vitamini", "b12")
+        }
+        if name.contains("ferritin") || name.contains("demir") {
+            return ("Demir", "demir")
+        }
+        if name.contains("folat") || name.contains("folik") {
+            return ("Folik Asit", "fol")
+        }
+        if name.contains("magnezyum") {
+            return ("Magnezyum", "magnezyum")
+        }
+        if name.contains("çinko") || name.contains("zinc") {
+            return ("Çinko", "çinko")
+        }
+        if name.contains("hemoglobin") || name.contains("hematokrit") {
+            return ("Demir", "demir")
+        }
+        return nil
+    }
+
     func addSupplement(name: String, dose: String, time: String, notify: Bool) {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }

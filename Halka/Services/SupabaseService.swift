@@ -1327,7 +1327,18 @@ final class SupabaseService {
                 .execute()
                 .value
             guard let latest = rows.first?.taken_at else { return nil }
-            let report = rows.filter { $0.taken_at == latest }
+            // KONSOLİDE görünüm: tüm raporlar birleştirilir, her test için
+            // EN GÜNCEL değer gösterilir (satırlar tarihçe azalan sıralı,
+            // ilk görülen kazanır). Eski rapordan gelen değerin tarihi
+            // satırda ayrıca gösterilir.
+            var seen = Set<String>()
+            var report: [Row] = []
+            for row in rows {
+                let key = row.name.lowercased(with: Locale(identifier: "tr_TR"))
+                    .trimmingCharacters(in: .whitespaces)
+                if seen.insert(key).inserted { report.append(row) }
+            }
+            let reportCount = Set(rows.map(\.taken_at)).count
             let order = ["Hemogram", "Biyokimya", "Hormonlar",
                          "Vitaminler", "Lipid", "Diğer"]
             var byGroup: [String: [BloodTest]] = [:]
@@ -1336,14 +1347,17 @@ final class SupabaseService {
                                      refLow: row.ref_low ?? 0,
                                      refHigh: row.ref_high ?? 0,
                                      hasRange: row.ref_low != nil && row.ref_high != nil
-                                               && (row.ref_high ?? 0) > (row.ref_low ?? 0))
+                                               && (row.ref_high ?? 0) > (row.ref_low ?? 0),
+                                     takenAt: row.taken_at)
                 byGroup[row.group_name ?? "Diğer", default: []].append(test)
             }
             let groups = byGroup
                 .sorted { (order.firstIndex(of: $0.key) ?? .max, $0.key)
                         < (order.firstIndex(of: $1.key) ?? .max, $1.key) }
                 .map { BloodGroup(name: $0.key, tests: $0.value) }
-            return BloodReport(takenAt: latest, lab: report.first?.lab, groups: groups)
+            return BloodReport(takenAt: latest,
+                               lab: rows.first { $0.taken_at == latest }?.lab,
+                               groups: groups, reportCount: reportCount)
         } catch {
             AuthLog.warn("fetchBloodReport", error)
             return nil

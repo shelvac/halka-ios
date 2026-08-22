@@ -182,6 +182,9 @@ struct BloodTest: Identifiable {
     /// Rapor iki uçlu referans vermediyse durum/bant gösterilmez —
     /// bilmediğimiz aralıkta "Normal" demek yanıltıcı olurdu.
     var hasRange: Bool = true
+    /// Değerin geldiği rapor tarihi ("yyyy-MM-dd") — konsolide görünümde
+    /// eski rapordan gelen satırlar tarihiyle işaretlenir.
+    var takenAt: String = ""
 
     var status: String {
         guard hasRange else { return "—" }
@@ -207,9 +210,11 @@ struct BloodGroup: Identifiable {
 
 /// Son tahlil raporu — `blood_tests` tablosundan (PDF'ten AI ayrıştırması).
 struct BloodReport {
-    var takenAt: String          // "yyyy-MM-dd"
+    var takenAt: String          // en güncel raporun tarihi ("yyyy-MM-dd")
     var lab: String?
     var groups: [BloodGroup]
+    /// Birleştirilen rapor (tarih) sayısı — 1'den büyükse konsolide görünüm.
+    var reportCount: Int = 1
 
     var counts: (total: Int, ok: Int, warn: Int) {
         var ok = 0, warn = 0, total = 0
@@ -221,6 +226,14 @@ struct BloodReport {
         }
         return (total, ok, warn)
     }
+}
+
+/// Tahlildeki düşük değere karşılık kural tabanlı takviye önerisi.
+/// Doz bilinçli olarak YOK — hekime bırakılır.
+struct SupplementSuggestion: Identifiable, Equatable {
+    var id: String { name }
+    let name: String
+    let reason: String
 }
 
 /// Takviye/ilaç — `supplements` tablosunda kalıcı (0001 şeması).
