@@ -2,9 +2,13 @@
 #
 # Neden: Actions log dosyalarına (blob depolama) geliştirme ortamından
 # erişilemiyor; hatayı görebilmek için çıktıyı repoya geri yazıyoruz.
+# Ayrıca sonuç `ci-status` dalına yazılır: GitHub API'si geliştirme
+# ortamından erişilemez olduğunda bile `git fetch` ile okunabilir.
 name: CI Rapor
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       issue:
@@ -13,7 +17,7 @@ on:
         default: "34"
 
 permissions:
-  contents: read
+  contents: write
   issues: write
 
 jobs:
@@ -54,7 +58,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          ISSUE: ${{ inputs.issue }}
+          ISSUE: ${{ inputs.issue || '34' }}
         run: |
           set +e
           echo "## CI raporu · \`$(git rev-parse --short HEAD)\`" > r.md
@@ -79,6 +83,30 @@ jobs:
           echo '```' >> r.md
 
           gh issue comment "$ISSUE" --repo "$REPO" --body-file r.md
+
+      # Sonucu ci-status dalına yaz: geliştirme ortamı API'ye erişemese de
+      # `git fetch origin ci-status && git show FETCH_HEAD:status.txt` ile
+      # sonuç ve hata özeti okunabilir.
+      - name: ci-status dalını güncelle
+        if: always()
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          RES=fail
+          [ "${{ steps.build.outcome }}" = "success" ] && RES=ok
+          mkdir -p /tmp/ci-status && cd /tmp/ci-status
+          {
+            echo "$RES $GITHUB_SHA $(date -u +%FT%TZ)"
+            echo "---"
+            grep -E "error:|XCTAssert.*failed|failed -|Executed .* tests" \
+              "$GITHUB_WORKSPACE/build.log" 2>/dev/null | tail -30 || true
+          } > status.txt
+          git init -q -b ci-status .
+          git add status.txt
+          git -c user.name=halka-ci -c user.email=ci@halka.app \
+            commit -qm "ci status $GITHUB_SHA"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ci-status
 
       # Rapor yazıldıktan sonra gerçek sonucu yansıt: derleme/test kırıksa
       # workflow da kırmızı bitmeli. (Eskiden continue-on-error yüzünden hep
