@@ -950,11 +950,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.projectionGate, .needsProfile)
     }
 
-    func testSignedFormattingAlwaysShowsDirection() {
-        XCTAssertEqual(EnergyFormat.signed(-470), "−470")
-        XCTAssertEqual(EnergyFormat.signed(180), "+180")
-        XCTAssertEqual(EnergyFormat.kg(2.74), "2,7")
-    }
+    // (EnergyFormat testi kaldırıldı — enerji dengesi kartı Simge'nin
+    // kararıyla arayüzden çıkınca biçimleyici de silindi.)
 
     // MARK: Okumadan yazma koruması (veri kaybı)
 
