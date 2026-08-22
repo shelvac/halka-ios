@@ -1,0 +1,11 @@
+ok dd9bcd63e5e1a8c02603f1874074eefbe746a46f 2026-08-22T12:19:10Z
+---
+	 Executed 84 tests, with 0 failures (0 unexpected) in 0.572 (2.389) seconds
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.027 (0.329) seconds
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.041 (0.043) seconds
+	 Executed 17 tests, with 0 failures (0 unexpected) in 2.447 (3.462) seconds
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.039 (0.077) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+	 Executed 131 tests, with 0 failures (0 unexpected) in 3.132 (12.030) seconds
+	 Executed 131 tests, with 0 failures (0 unexpected) in 3.132 (12.031) seconds
