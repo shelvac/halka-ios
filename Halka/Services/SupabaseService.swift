@@ -1658,7 +1658,7 @@ final class SupabaseService {
     func fetchPlanExercises() async -> [PlanExercise] {
         guard let client else { return [] }
         guard let rows: [PlanExercise] = try? await client.from("exercises")
-            .select("id,name,name_tr,region,equipment,needs,level,category,mechanic")
+            .select("id,name,name_tr,region,equipment,needs,level,category,mechanic,images")
             .eq("category", value: "Kuvvet")
             .limit(2000)
             .execute()

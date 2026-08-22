@@ -132,9 +132,14 @@ struct Exercise: Identifiable, Equatable, Codable {
     var name: String
     var region: String
     var reps: String
+    /// Gösterim kareleri (free-exercise-db, kamu malı) — eski kayıtlarda yok.
+    var images: [String]? = nil
+    var equipment: String? = nil
+    var level: String? = nil
 
     // id yerelde üretilir, sunucuya yazılmaz (items jsonb sade kalsın).
-    enum CodingKeys: String, CodingKey { case name, region, reps }
+    // Yeni alanlar opsiyonel: eski programlar sorunsuz çözülür.
+    enum CodingKeys: String, CodingKey { case name, region, reps, images, equipment, level }
 }
 
 /// Kullanıcının kendi kurduğu program — `workout_programs` tablosunda

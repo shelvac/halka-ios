@@ -517,6 +517,42 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.challenges.isEmpty)
     }
 
+    // MARK: Hareket görselleri (F1)
+
+    func testExerciseMediaURLEncodesPath() {
+        XCTAssertEqual(ExerciseMedia.url("3_4_Sit-Up/0.jpg")?.absoluteString,
+                       "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/3_4_Sit-Up/0.jpg")
+        XCTAssertNil(ExerciseMedia.url(""))
+    }
+
+    /// Eski program kayıtları (images alanı olmayan jsonb) sorunsuz çözülmeli.
+    func testExerciseDecodesLegacyJSONWithoutImages() throws {
+        let legacy = Data(#"{"name":"Squat","region":"Ön Bacak","reps":"3 × 10"}"#.utf8)
+        let exercise = try JSONDecoder().decode(Exercise.self, from: legacy)
+        XCTAssertEqual(exercise.name, "Squat")
+        XCTAssertNil(exercise.images)
+
+        // Yeni alanlar gidiş-dönüşte korunur.
+        var full = exercise
+        full.images = ["Squat/0.jpg", "Squat/1.jpg"]
+        full.equipment = "Barbell"
+        let restored = try JSONDecoder().decode(Exercise.self,
+                                                from: JSONEncoder().encode(full))
+        XCTAssertEqual(restored.images, ["Squat/0.jpg", "Squat/1.jpg"])
+        XCTAssertEqual(restored.equipment, "Barbell")
+    }
+
+    @MainActor
+    func testExerciseInfoLookupByName() {
+        let model = AppModel()
+        model.libraryExercises = [
+            Exercise(name: "Squat", region: "Ön Bacak", reps: "3 × 10",
+                     images: ["Squat/0.jpg"])
+        ]
+        XCTAssertEqual(model.exerciseInfo(named: "Squat")?.images, ["Squat/0.jpg"])
+        XCTAssertNil(model.exerciseInfo(named: "Deadlift"))
+    }
+
     // MARK: Tahlile göre takviye önerisi
 
     func testSupplementRuleMatchesCommonLowTests() {
@@ -1337,7 +1373,7 @@ final class PlanGeneratorTests: XCTestCase {
                           mechanic: String = "compound") -> PlanExercise {
         PlanExercise(id: id, name: id, nameTR: nil, region: region,
                      equipment: "Ekipmansız", needs: needs, level: level,
-                     category: "Kuvvet", mechanic: mechanic)
+                     category: "Kuvvet", mechanic: mechanic, images: nil)
     }
 
     private var gym: [PlanExercise] {

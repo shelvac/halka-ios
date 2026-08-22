@@ -22,11 +22,13 @@ struct PlanExercise: Identifiable, Equatable, Decodable {
     let level: String
     let category: String
     let mechanic: String?
+    /// free-exercise-db görsel yolları ("Slug/0.jpg" — başlangıç/bitiş karesi).
+    let images: [String]?
 
     var displayName: String { nameTR ?? name }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, region, equipment, needs, level, category, mechanic
+        case id, name, region, equipment, needs, level, category, mechanic, images
         case nameTR = "name_tr"
     }
 }

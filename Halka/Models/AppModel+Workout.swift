@@ -32,12 +32,19 @@ extension AppModel {
             let fetched = await SupabaseService.shared.fetchPlanExercises()
             libraryExercises = fetched.map {
                 Exercise(name: $0.displayName, region: $0.region,
-                         reps: $0.mechanic == "isolation" ? "3 × 12" : "3 × 10")
+                         reps: $0.mechanic == "isolation" ? "3 × 12" : "3 × 10",
+                         images: $0.images, equipment: $0.equipment, level: $0.level)
             }
             .sorted { $0.name.compare($1.name, locale: Locale(identifier: "tr_TR"))
                         == .orderedAscending }
         }
         programs = await SupabaseService.shared.fetchWorkoutPrograms()
+    }
+
+    /// Ada göre kütüphane kaydı — AI planındaki veya eski (görselsiz)
+    /// programdaki bir hareketin görsel/detayına ulaşmak için.
+    func exerciseInfo(named name: String) -> Exercise? {
+        libraryExercises.first { $0.name == name }
     }
 
     func isInDraft(_ exercise: Exercise) -> Bool {

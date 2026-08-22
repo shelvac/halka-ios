@@ -3,6 +3,7 @@ import SwiftUI
 /// Üretilen haftalık menü ve antrenman programı (US-032 · US-033).
 struct PlanResultView: View {
     @Environment(AppModel.self) private var model
+    @State private var detailExercise: Exercise?
     @Environment(\.dismiss) private var dismiss
 
     @State private var tab: Pane
@@ -69,6 +70,7 @@ struct PlanResultView: View {
             // Hafta pazartesiden başlıyor ama kullanıcı bugünü merak ediyor.
             selectedDay = model.todayWeekdayIndex
         }
+        .sheet(item: $detailExercise) { ExerciseDetailSheet(exercise: $0) }
         .onChange(of: model.planParts) { if !panes.contains(tab) { tab = panes[0] } }
     }
 
@@ -311,7 +313,14 @@ struct PlanResultView: View {
             .padding(.bottom, 8)
 
             ForEach(session.exercises) { exercise in
+                // Görsel + detay: kütüphaneden ada göre eşleşir (F1).
+                let info = model.exerciseInfo(named: exercise.name)
                 HStack(spacing: 10) {
+                    if let info {
+                        ExerciseThumb(exercise: info)
+                            .frame(width: 56, height: 42)
+                            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(exercise.name)
                             .font(.h(12.5, .bold))
@@ -334,6 +343,8 @@ struct PlanResultView: View {
                 .overlay(alignment: .top) {
                     Rectangle().fill(Color.hairline).frame(height: 1)
                 }
+                .contentShape(Rectangle())
+                .onTapGesture { if let info { detailExercise = info } }
             }
 
             HStack(spacing: 8) {

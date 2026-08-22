@@ -414,7 +414,7 @@ struct ProgramCreateView: View {
             } else {
                 ForEach(Array(model.programDraft.items.enumerated()), id: \.element.id) { i, exercise in
                     HStack(spacing: 12) {
-                        ImagePlaceholder(label: exercise.name)
+                        ExerciseThumb(exercise: exercise)
                             .frame(width: 64, height: 46)
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         VStack(alignment: .leading, spacing: 2) {
@@ -479,6 +479,7 @@ struct ProgramCreateView: View {
 
 struct ExerciseLibraryView: View {
     @Environment(AppModel.self) private var model
+    @State private var detailExercise: Exercise?
 
     var body: some View {
         @Bindable var model = model
@@ -527,7 +528,7 @@ struct ExerciseLibraryView: View {
             ForEach(model.filteredLibrary) { exercise in
                 let added = model.isInDraft(exercise)
                 HStack(spacing: 12) {
-                    ImagePlaceholder(label: exercise.name)
+                    ExerciseThumb(exercise: exercise)
                         .frame(width: 72, height: 52)
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
@@ -556,6 +557,10 @@ struct ExerciseLibraryView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .shadow(color: Color.ink.opacity(0.05), radius: 4, y: 2)
                 .padding(.bottom, 8)
+                // Satıra dokununca hareket detayı (+ Ekle düğmesi kendi
+                // dokunuşunu korur).
+                .contentShape(Rectangle())
+                .onTapGesture { detailExercise = exercise }
             }
 
             if model.libraryPickMode && !model.programDraft.items.isEmpty {
@@ -572,6 +577,7 @@ struct ExerciseLibraryView: View {
                 .padding(.top, 6)
             }
         }
+        .sheet(item: $detailExercise) { ExerciseDetailSheet(exercise: $0) }
     }
 }
 
@@ -579,6 +585,7 @@ struct ExerciseLibraryView: View {
 
 struct ProgramDetailView: View {
     @Environment(AppModel.self) private var model
+    @State private var detailExercise: Exercise?
 
     var body: some View {
         guard let program = model.selectedProgram else { return AnyView(EmptyView()) }
@@ -604,8 +611,12 @@ struct ProgramDetailView: View {
             .padding(.bottom, 14)
 
             ForEach(program.items) { exercise in
+                // Eski kayıtlar görselsiz: kütüphaneden ada göre tamamla.
+                let info = exercise.images?.isEmpty == false
+                    ? exercise
+                    : (model.exerciseInfo(named: exercise.name) ?? exercise)
                 HStack(spacing: 12) {
-                    ImagePlaceholder(label: exercise.name)
+                    ExerciseThumb(exercise: info)
                         .frame(width: 72, height: 52)
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
@@ -615,7 +626,12 @@ struct ProgramDetailView: View {
                             .foregroundStyle(Color.sub)
                     }
                     Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .heavy))
+                        .foregroundStyle(Color.chevron)
                 }
+                .contentShape(Rectangle())
+                .onTapGesture { detailExercise = info }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
                 .background(Color.white)
@@ -630,7 +646,8 @@ struct ProgramDetailView: View {
             .buttonStyle(.plain)
             .coralButton()
             .padding(.top, 10)
-        })
+        }
+        .sheet(item: $detailExercise) { ExerciseDetailSheet(exercise: $0) })
     }
 
     private func metaChip(_ text: String) -> some View {
@@ -681,7 +698,9 @@ struct WorkoutRunView: View {
                     Button { model.toggleRunDone(i) } label: {
                         HStack(spacing: 12) {
                             RoundCheck(on: done)
-                            ImagePlaceholder(label: exercise.name)
+                            ExerciseThumb(exercise: exercise.images?.isEmpty == false
+                                          ? exercise
+                                          : (model.exerciseInfo(named: exercise.name) ?? exercise))
                                 .frame(width: 64, height: 46)
                                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                             VStack(alignment: .leading, spacing: 2) {
